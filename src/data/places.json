@@ -1,0 +1,1482 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-12T04:33:42.199Z",
+  "records": [
+    {
+      "id": "ar",
+      "iso2": "AR",
+      "worldAtlasId": "032",
+      "wikidataId": "Q414",
+      "name": "Argentina",
+      "capitals": [
+        "Buenos Aires"
+      ],
+      "languages": [
+        "Spanish"
+      ],
+      "callingCodes": [
+        "+54"
+      ],
+      "currencies": [
+        "Argentine convertible peso"
+      ],
+      "drivingSides": [
+        "left",
+        "right"
+      ],
+      "continents": [
+        "South America"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "au",
+      "iso2": "AU",
+      "worldAtlasId": "036",
+      "wikidataId": "Q408",
+      "name": "Australia",
+      "capitals": [
+        "Canberra"
+      ],
+      "languages": [
+        "English"
+      ],
+      "callingCodes": [
+        "+61"
+      ],
+      "currencies": [
+        "Australian dollar"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Oceania"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "br",
+      "iso2": "BR",
+      "worldAtlasId": "076",
+      "wikidataId": "Q155",
+      "name": "Brazil",
+      "capitals": [
+        "Brasília"
+      ],
+      "languages": [
+        "Portuguese"
+      ],
+      "callingCodes": [
+        "+55"
+      ],
+      "currencies": [
+        "Brazilian real"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "South America"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ca",
+      "iso2": "CA",
+      "worldAtlasId": "124",
+      "wikidataId": "Q16",
+      "name": "Canada",
+      "capitals": [
+        "Ottawa"
+      ],
+      "languages": [
+        "English",
+        "French"
+      ],
+      "callingCodes": [
+        "+1"
+      ],
+      "currencies": [
+        "Canadian dollar"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "North America"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cl",
+      "iso2": "CL",
+      "worldAtlasId": "152",
+      "wikidataId": "Q298",
+      "name": "Chile",
+      "capitals": [
+        "Santiago"
+      ],
+      "languages": [
+        "Spanish"
+      ],
+      "callingCodes": [
+        "+56"
+      ],
+      "currencies": [
+        "Chilean peso"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "South America"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cu",
+      "iso2": "CU",
+      "worldAtlasId": "192",
+      "wikidataId": "Q241",
+      "name": "Cuba",
+      "capitals": [
+        "Havana"
+      ],
+      "languages": [
+        "Spanish"
+      ],
+      "callingCodes": [
+        "+53"
+      ],
+      "currencies": [
+        "Cuban peso"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "North America"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "eg",
+      "iso2": "EG",
+      "worldAtlasId": "818",
+      "wikidataId": "Q79",
+      "name": "Egypt",
+      "capitals": [
+        "Cairo"
+      ],
+      "languages": [
+        "Arabic"
+      ],
+      "callingCodes": [
+        "+20"
+      ],
+      "currencies": [
+        "Egyptian pound"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Africa"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fi",
+      "iso2": "FI",
+      "worldAtlasId": "246",
+      "wikidataId": "Q33",
+      "name": "Finland",
+      "capitals": [
+        "Helsinki"
+      ],
+      "languages": [
+        "Finnish",
+        "Swedish"
+      ],
+      "callingCodes": [
+        "+358"
+      ],
+      "currencies": [
+        "Q4916"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fr",
+      "iso2": "FR",
+      "worldAtlasId": "250",
+      "wikidataId": "Q142",
+      "name": "France",
+      "capitals": [
+        "Paris"
+      ],
+      "languages": [
+        "French"
+      ],
+      "callingCodes": [
+        "+33"
+      ],
+      "currencies": [
+        "CFP Franc",
+        "Q4916"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "de",
+      "iso2": "DE",
+      "worldAtlasId": "276",
+      "wikidataId": "Q183",
+      "name": "Germany",
+      "capitals": [
+        "Berlin"
+      ],
+      "languages": [
+        "German"
+      ],
+      "callingCodes": [
+        "+49"
+      ],
+      "currencies": [
+        "Q4916"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gr",
+      "iso2": "GR",
+      "worldAtlasId": "300",
+      "wikidataId": "Q41",
+      "name": "Greece",
+      "capitals": [
+        "Athens"
+      ],
+      "languages": [
+        "Greek"
+      ],
+      "callingCodes": [
+        "+30"
+      ],
+      "currencies": [
+        "Q4916"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "is",
+      "iso2": "IS",
+      "worldAtlasId": "352",
+      "wikidataId": "Q189",
+      "name": "Iceland",
+      "capitals": [
+        "Reykjavík"
+      ],
+      "languages": [
+        "Icelandic"
+      ],
+      "callingCodes": [
+        "+354"
+      ],
+      "currencies": [
+        "Icelandic króna"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "in",
+      "iso2": "IN",
+      "worldAtlasId": "356",
+      "wikidataId": "Q668",
+      "name": "India",
+      "capitals": [
+        "New Delhi"
+      ],
+      "languages": [
+        "English",
+        "Hindi"
+      ],
+      "callingCodes": [
+        "+91"
+      ],
+      "currencies": [
+        "Indian rupee"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Asia"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "id",
+      "iso2": "ID",
+      "worldAtlasId": "360",
+      "wikidataId": "Q252",
+      "name": "Indonesia",
+      "capitals": [
+        "Jakarta"
+      ],
+      "languages": [
+        "Indonesian"
+      ],
+      "callingCodes": [
+        "+62"
+      ],
+      "currencies": [
+        "rupiah"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Asia"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ie",
+      "iso2": "IE",
+      "worldAtlasId": "372",
+      "wikidataId": "Q27",
+      "name": "Ireland",
+      "capitals": [
+        "Dublin"
+      ],
+      "languages": [
+        "English",
+        "Irish"
+      ],
+      "callingCodes": [
+        "+353"
+      ],
+      "currencies": [
+        "Q4916"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "it",
+      "iso2": "IT",
+      "worldAtlasId": "380",
+      "wikidataId": "Q38",
+      "name": "Italy",
+      "capitals": [
+        "Rome"
+      ],
+      "languages": [
+        "Italian"
+      ],
+      "callingCodes": [
+        "+39"
+      ],
+      "currencies": [
+        "Q4916"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jp",
+      "iso2": "JP",
+      "worldAtlasId": "392",
+      "wikidataId": "Q17",
+      "name": "Japan",
+      "capitals": [
+        "Tokyo"
+      ],
+      "languages": [
+        "Japanese"
+      ],
+      "callingCodes": [
+        "+81"
+      ],
+      "currencies": [
+        "yen"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Asia"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mg",
+      "iso2": "MG",
+      "worldAtlasId": "450",
+      "wikidataId": "Q1019",
+      "name": "Madagascar",
+      "capitals": [
+        "Antananarivo"
+      ],
+      "languages": [
+        "French",
+        "Malagasy"
+      ],
+      "callingCodes": [
+        "+261"
+      ],
+      "currencies": [
+        "ariary"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Africa"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mx",
+      "iso2": "MX",
+      "worldAtlasId": "484",
+      "wikidataId": "Q96",
+      "name": "Mexico",
+      "capitals": [
+        "Mexico City"
+      ],
+      "languages": [
+        "Nahuatl",
+        "Spanish",
+        "Yucatec Maya"
+      ],
+      "callingCodes": [
+        "+52"
+      ],
+      "currencies": [
+        "peso"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "North America"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ma",
+      "iso2": "MA",
+      "worldAtlasId": "504",
+      "wikidataId": "Q1028",
+      "name": "Morocco",
+      "capitals": [
+        "Rabat"
+      ],
+      "languages": [
+        "Arabic",
+        "Standard Moroccan Tamazight"
+      ],
+      "callingCodes": [
+        "+212"
+      ],
+      "currencies": [
+        "Moroccan dirham"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Africa"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nz",
+      "iso2": "NZ",
+      "worldAtlasId": "554",
+      "wikidataId": "Q664",
+      "name": "New Zealand",
+      "capitals": [
+        "Wellington"
+      ],
+      "languages": [
+        "English",
+        "Māori",
+        "New Zealand Sign Language"
+      ],
+      "callingCodes": [
+        "+64"
+      ],
+      "currencies": [
+        "New Zealand dollar"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Oceania"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "no",
+      "iso2": "NO",
+      "worldAtlasId": "578",
+      "wikidataId": "Q20",
+      "name": "Norway",
+      "capitals": [
+        "Oslo"
+      ],
+      "languages": [
+        "Bokmål",
+        "Norwegian",
+        "Nynorsk",
+        "Sámi"
+      ],
+      "callingCodes": [
+        "+47"
+      ],
+      "currencies": [
+        "Norwegian krone"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ph",
+      "iso2": "PH",
+      "worldAtlasId": "608",
+      "wikidataId": "Q928",
+      "name": "Philippines",
+      "capitals": [
+        "Manila"
+      ],
+      "languages": [
+        "English",
+        "Filipino",
+        "Taglish"
+      ],
+      "callingCodes": [
+        "+63"
+      ],
+      "currencies": [
+        "Philippine peso"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Asia"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "za",
+      "iso2": "ZA",
+      "worldAtlasId": "710",
+      "wikidataId": "Q258",
+      "name": "South Africa",
+      "capitals": [
+        "Bloemfontein",
+        "Cape Town",
+        "Pretoria"
+      ],
+      "languages": [
+        "Afrikaans",
+        "English",
+        "Northern Sotho",
+        "Sesotho",
+        "South African Sign Language",
+        "Southern Ndebele",
+        "Swazi",
+        "Tsonga",
+        "Tswana",
+        "Venda",
+        "Xhosa",
+        "Zulu"
+      ],
+      "callingCodes": [
+        "+27"
+      ],
+      "currencies": [
+        "rand"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Africa"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "es",
+      "iso2": "ES",
+      "worldAtlasId": "724",
+      "wikidataId": "Q29",
+      "name": "Spain",
+      "capitals": [
+        "Madrid"
+      ],
+      "languages": [
+        "Spanish"
+      ],
+      "callingCodes": [
+        "+34"
+      ],
+      "currencies": [
+        "Q4916"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "se",
+      "iso2": "SE",
+      "worldAtlasId": "752",
+      "wikidataId": "Q34",
+      "name": "Sweden",
+      "capitals": [
+        "Stockholm"
+      ],
+      "languages": [
+        "Swedish"
+      ],
+      "callingCodes": [
+        "+46"
+      ],
+      "currencies": [
+        "Swedish krona"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "th",
+      "iso2": "TH",
+      "worldAtlasId": "764",
+      "wikidataId": "Q869",
+      "name": "Thailand",
+      "capitals": [
+        "Bangkok"
+      ],
+      "languages": [
+        "Thai"
+      ],
+      "callingCodes": [
+        "+66"
+      ],
+      "currencies": [
+        "baht"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Asia"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tr",
+      "iso2": "TR",
+      "worldAtlasId": "792",
+      "wikidataId": "Q43",
+      "name": "Turkey",
+      "capitals": [
+        "Ankara"
+      ],
+      "languages": [
+        "Turkish"
+      ],
+      "callingCodes": [
+        "+36",
+        "+90"
+      ],
+      "currencies": [
+        "Turkish lira"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "Asia",
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gb",
+      "iso2": "GB",
+      "worldAtlasId": "826",
+      "wikidataId": "Q145",
+      "name": "United Kingdom",
+      "capitals": [
+        "London"
+      ],
+      "languages": [
+        "English"
+      ],
+      "callingCodes": [
+        "+44"
+      ],
+      "currencies": [
+        "pound sterling"
+      ],
+      "drivingSides": [
+        "left"
+      ],
+      "continents": [
+        "Europe"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "us",
+      "iso2": "US",
+      "worldAtlasId": "840",
+      "wikidataId": "Q30",
+      "name": "United States",
+      "capitals": [
+        "Washington, D.C."
+      ],
+      "languages": [
+        "Carolinian",
+        "Chamorro",
+        "Hawaiian",
+        "Samoan",
+        "Spanish"
+      ],
+      "callingCodes": [
+        "+1"
+      ],
+      "currencies": [
+        "United States dollar"
+      ],
+      "drivingSides": [
+        "right"
+      ],
+      "continents": [
+        "North America"
+      ],
+      "status": "source-verified",
+      "provenance": [
+        {
+          "sourceId": "wikidata",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "name",
+            "capitals",
+            "languages",
+            "callingCodes",
+            "currencies",
+            "drivingSides",
+            "continents"
+          ]
+        },
+        {
+          "sourceId": "natural-earth",
+          "retrievedAt": "2026-09-12T04:33:42.199Z",
+          "fields": [
+            "geometry"
+          ]
+        }
+      ]
+    }
+  ]
+}

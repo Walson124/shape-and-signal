@@ -1,0 +1,20 @@
+{
+  "wikidata": {
+    "name": "Wikidata",
+    "url": "https://www.wikidata.org/",
+    "license": "CC0 1.0",
+    "licenseUrl": "https://www.wikidata.org/wiki/Wikidata:Licensing"
+  },
+  "natural-earth": {
+    "name": "Natural Earth via world-atlas",
+    "url": "https://www.naturalearthdata.com/",
+    "license": "Public domain",
+    "licenseUrl": "https://www.naturalearthdata.com/about/terms-of-use/"
+  },
+  "openstreetmap": {
+    "name": "OpenStreetMap contributors",
+    "url": "https://www.openstreetmap.org/",
+    "license": "ODbL 1.0",
+    "licenseUrl": "https://www.openstreetmap.org/copyright"
+  }
+}
