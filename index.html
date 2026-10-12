@@ -3,110 +3,194 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#05060d" />
-    <meta name="description" content="Starsea Ascension: a 3D cultivation game in the browser. Absorb cosmic energy, break through realms, hunt cosmic beasts and fly between galaxies." />
+    <meta name="theme-color" content="#05060c" />
+    <title>Starsea Ascension</title>
+    <meta name="description" content="A first-person 3D cultivation game in your browser. Steer flying swords with your mind, break through ten realms and cross the galaxies." />
+    <meta property="og:title" content="Starsea Ascension · 星海飞升" />
+    <meta property="og:description" content="Steer flying swords with your mind, survive the Heavenly Tribulation and cross the galaxies. Free in your browser." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
-    <title>Starsea Ascension</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Noto+Serif+SC:wght@600;900&display=swap" rel="stylesheet" />
   </head>
   <body>
     <canvas id="scene"></canvas>
 
+    <!-- ============================================================ HUD -->
     <div id="hud" class="hidden">
-      <div id="vignette"></div>
-      <div id="hud-tl" class="glass">
-        <div class="realm-line"><span id="realm-name">Warrior</span><span id="realm-cn" class="cn">战士</span></div>
-        <div id="stage-name" class="stage-line">Early</div>
-        <div class="bar xp"><div class="fill" id="xp-fill"></div><span id="xp-text"></span></div>
-        <div class="bar hp"><div class="fill" id="hp-fill"></div><span id="hp-text"></span></div>
-        <div class="bar en"><div class="fill" id="en-fill"></div><span id="en-text"></span></div>
-        <div id="bt-ready" class="hidden">Breakthrough ready: press <kbd>B</kbd></div>
-      </div>
-      <div id="hud-tr" class="glass">
-        <div id="loc-galaxy"></div>
-        <div id="loc-system"></div>
-        <div id="loc-danger"></div>
-        <div id="density"></div>
-        <div id="coins"></div>
+      <div id="compass-wrap"><canvas id="compass" width="560" height="44"></canvas></div>
+      <div id="target" class="cy hidden">
+        <div class="t-name"><span id="t-name"></span><span id="t-cn" class="cn"></span></div>
+        <div class="t-meta"><span id="t-realm"></span><span id="t-dist" class="mono"></span></div>
+        <div class="seg-bar red"><i id="t-hp"></i></div>
       </div>
       <div id="boss-bar" class="hidden">
-        <div id="boss-name"></div>
-        <div class="bar boss"><div class="fill" id="boss-fill"></div></div>
+        <div class="boss-title"><span class="boss-tag">OVERLORD</span><span id="boss-name"></span><span id="boss-cn" class="cn"></span></div>
+        <div class="boss-track"><i id="boss-fill"></i><i id="boss-ghost"></i></div>
       </div>
       <div id="trib-bar" class="hidden">
-        <div>Heavenly Tribulation <span class="cn">天劫</span></div>
-        <div class="bar trib"><div class="fill" id="trib-fill"></div></div>
-        <div class="trib-hint">Dodge the red markers. Survive to break through.</div>
+        <div class="boss-title"><span class="boss-tag violet">TRIBULATION</span><span>Heavenly Tribulation</span><span class="cn">天劫</span></div>
+        <div class="boss-track violet"><i id="trib-fill"></i></div>
       </div>
-      <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+
+      <div id="hud-tl" class="cy">
+        <div class="realm"><span id="realm-name">Warrior</span><span id="realm-cn" class="cn">战士</span></div>
+        <div class="stage mono" id="stage-name">EARLY STAGE</div>
+        <div class="xp-track"><i id="xp-fill"></i></div>
+        <div class="xp-row mono"><span>EXP</span><span id="xp-text"></span></div>
+        <div id="bt-ready" class="hidden"></div>
+      </div>
+
+      <div id="hud-tr">
+        <div class="loc cy">
+          <div class="mono dim" id="loc-galaxy"></div>
+          <div class="loc-sys" id="loc-system"></div>
+          <div class="loc-row mono"><span>THREAT</span><span id="loc-danger"></span></div>
+          <div class="loc-row mono"><span>QI DENSITY</span><span id="density"></span></div>
+          <div class="loc-row mono"><span>COINS</span><span id="coins" class="gold"></span></div>
+          <div class="loc-row mono"><span>ESSENCE</span><span id="essence" class="mg"></span></div>
+        </div>
+        <div id="bounty-list"></div>
+      </div>
+
+      <div id="hud-bl" class="cy">
+        <div class="vital"><span class="v-label mono">HP</span><div class="seg-bar red"><i id="hp-fill"></i></div><span class="v-val mono" id="hp-text"></span></div>
+        <div class="vital"><span class="v-label mono">EN</span><div class="seg-bar cyan"><i id="en-fill"></i></div><span class="v-val mono" id="en-text"></span></div>
+        <div class="vital"><span class="v-label mono">SP</span><div class="seg-bar mg"><i id="sp-fill"></i></div><span class="v-val mono" id="sp-text"></span></div>
+        <div id="status-row"></div>
+      </div>
+
+      <div id="hud-bc">
+        <canvas id="radar" width="260" height="150"></canvas>
+        <div id="sword-pips"></div>
+        <div id="skills"></div>
+      </div>
+
+      <div id="hud-br" class="cy">
+        <div class="speed"><span id="speed" class="mono">0</span><span class="mono dim">U/S</span></div>
+        <div class="loc-row mono"><span>FORMATION</span><span id="formation" class="cyan"></span></div>
+        <div class="loc-row mono"><span>SWORD RANGE</span><span id="sword-range"></span></div>
+        <div class="loc-row mono"><span>VIEW</span><span id="view-mode"></span></div>
+      </div>
+
+      <div id="reticle">
+        <svg viewBox="-30 -30 60 60" width="60" height="60">
+          <circle r="1.6" fill="currentColor" />
+          <g class="ret-arms">
+            <path d="M -13 0 L -7 0" /><path d="M 13 0 L 7 0" /><path d="M 0 -13 L 0 -7" /><path d="M 0 13 L 0 7" />
+          </g>
+          <circle class="ret-ring" r="17" fill="none" stroke-dasharray="6 5" />
+        </svg>
+        <div id="hitmark"><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div id="lock" class="hidden"><i></i><i></i><i></i><i></i></div>
+      <div id="ctrl-mark" class="hidden"></div>
       <div id="markers"></div>
       <div id="dmg-layer"></div>
       <div id="feed"></div>
-      <div id="prompt" class="hidden"></div>
-      <div id="nav-info" class="hidden"></div>
-      <div id="meditate" class="hidden"><span class="cn">修炼</span> Cultivating <b id="med-rate"></b></div>
-      <div id="skills"></div>
-      <div id="hints">
-        <span><kbd>M</kbd> Star map</span><span><kbd>K</kbd> Cultivation</span><span><kbd>H</kbd> Help</span>
-      </div>
+      <div id="alert" class="hidden"></div>
+      <div id="prompt" class="hidden"><svg class="prompt-ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" /><circle id="prompt-prog" cx="18" cy="18" r="15" /></svg><span id="prompt-text"></span></div>
+      <div id="nav-info" class="hidden mono"></div>
+      <div id="meditate" class="hidden"><span class="cn">修炼</span><span>CULTIVATING</span><b id="med-rate" class="mono"></b></div>
+      <div id="fps" class="mono hidden"></div>
     </div>
 
-    <div id="banner" class="hidden"><div class="b-title"></div><div class="b-sub"></div></div>
-    <div id="fade"></div>
+    <div id="banner" class="hidden"><div class="b-kicker mono"></div><div class="b-title"></div><div class="b-sub"></div></div>
 
-    <div id="title-screen" class="screen">
-      <div class="title-inner">
+    <!-- ======================================================== LOADING -->
+    <div id="loading" class="screen">
+      <div class="load-inner">
         <div class="logo-cn">星海飞升</div>
-        <h1 class="logo">Starsea Ascension</h1>
-        <p class="tagline">Devour the energy of the cosmos. Break through the realms. Cross the galaxies.</p>
-        <div class="title-buttons">
-          <button id="btn-continue" class="btn primary hidden">Continue</button>
-          <button id="btn-new" class="btn">Begin Cultivation</button>
-        </div>
-        <div class="title-realms" id="title-realms"></div>
-        <div class="controls-grid">
-          <div><kbd>Mouse</kbd> Steer</div>
-          <div><kbd>W A S D</kbd> Fly</div>
-          <div><kbd>Space</kbd>/<kbd>X</kbd> Rise / sink</div>
-          <div><kbd>Shift</kbd> Boost</div>
-          <div><kbd>Click</kbd> Star Bolt</div>
-          <div><kbd>C</kbd> Hold to cultivate</div>
-          <div><kbd>E</kbd> Explore / dock</div>
-          <div><kbd>M</kbd> Star map</div>
-        </div>
-        <p class="fine">Best with a keyboard and mouse. Progress saves in this browser.</p>
+        <div class="logo glitch" data-text="STARSEA ASCENSION">STARSEA ASCENSION</div>
+        <div class="load-bar"><i id="load-fill"></i></div>
+        <div class="load-row mono"><span id="load-status">INITIALIZING</span><span id="load-pct">0%</span></div>
+        <p class="load-tip" id="load-tip"></p>
       </div>
     </div>
 
-    <div id="pause-screen" class="screen hidden">
-      <div class="pause-inner glass">
+    <!-- ========================================================== TITLE -->
+    <div id="title" class="screen hidden">
+      <div class="title-left">
+        <div class="logo-cn">星海飞升</div>
+        <h1 class="logo glitch" data-text="STARSEA ASCENSION">STARSEA ASCENSION</h1>
+        <p class="tagline">Steer flying swords with your mind. Devour the energy of the cosmos. Break through ten realms and cross the galaxies.</p>
+        <nav class="menu" id="title-menu">
+          <button class="menu-item hidden" data-act="continue"><span class="mi-idx mono">01</span><span class="mi-label">Continue</span><span class="mi-sub mono" id="continue-sub"></span></button>
+          <button class="menu-item" data-act="new"><span class="mi-idx mono">02</span><span class="mi-label">New Game</span></button>
+          <button class="menu-item" data-act="settings"><span class="mi-idx mono">03</span><span class="mi-label">Settings</span></button>
+          <button class="menu-item" data-act="controls"><span class="mi-idx mono">04</span><span class="mi-label">Controls</span></button>
+          <button class="menu-item" data-act="credits"><span class="mi-idx mono">05</span><span class="mi-label">Credits</span></button>
+        </nav>
+      </div>
+      <div class="title-foot mono"><span>V0.2 · BUILD 2026.10</span><span>KEYBOARD &amp; MOUSE · PROGRESS SAVES LOCALLY</span></div>
+    </div>
+
+    <!-- ========================================================== PAUSE -->
+    <div id="pause" class="screen hidden">
+      <div class="pause-inner cy">
+        <div class="mono dim">SYSTEM PAUSED</div>
         <h2>Paused</h2>
-        <p>Click resume to recapture the mouse.</p>
-        <div class="title-buttons col">
-          <button id="btn-resume" class="btn primary">Resume</button>
-          <button id="btn-help" class="btn">Controls &amp; guide</button>
-          <button id="btn-mute" class="btn">Sound: on</button>
-          <button id="btn-reset" class="btn danger">Reset all progress</button>
-        </div>
+        <nav class="menu compact">
+          <button class="menu-item" data-act="resume"><span class="mi-label">Resume</span></button>
+          <button class="menu-item" data-act="settings"><span class="mi-label">Settings</span></button>
+          <button class="menu-item" data-act="controls"><span class="mi-label">Controls</span></button>
+          <button class="menu-item" data-act="quit"><span class="mi-label">Save &amp; Quit to Title</span></button>
+        </nav>
       </div>
     </div>
 
-    <div id="death-screen" class="screen hidden">
+    <!-- ========================================================== DEATH -->
+    <div id="death" class="screen hidden">
       <div class="death-inner">
-        <h2>You have fallen</h2>
+        <div class="mono mg">VITAL SIGNS LOST</div>
+        <h2 class="glitch" data-text="YOU HAVE FALLEN">YOU HAVE FALLEN</h2>
         <p id="death-text"></p>
-        <p class="fine" id="death-count"></p>
+        <p class="mono dim" id="death-count"></p>
       </div>
     </div>
 
+    <!-- ========================================================== PANEL -->
     <div id="panel" class="hidden">
-      <div class="panel-head">
-        <div id="panel-tabs"></div>
-        <button id="panel-close" class="icon-btn" aria-label="Close">✕</button>
+      <div class="panel-frame cy">
+        <div class="panel-head">
+          <div id="panel-tabs"></div>
+          <button id="panel-close" class="icon-btn" aria-label="Close">ESC ✕</button>
+        </div>
+        <div id="panel-body"></div>
       </div>
-      <div id="panel-body"></div>
+    </div>
+
+    <!-- ======================================================= SETTINGS -->
+    <div id="settings" class="screen hidden">
+      <div class="settings-frame cy">
+        <div class="panel-head">
+          <div class="tabs" id="settings-tabs"></div>
+          <button class="icon-btn" id="settings-close" aria-label="Close">ESC ✕</button>
+        </div>
+        <div id="settings-body"></div>
+        <div class="settings-foot"><button class="btn ghost" id="settings-reset">Restore defaults</button><button class="btn primary" id="settings-done">Done</button></div>
+      </div>
+    </div>
+
+    <!-- ======================================================== MODALS -->
+    <div id="modal" class="screen hidden">
+      <div class="modal-frame cy">
+        <div class="mono dim" id="modal-kicker"></div>
+        <h3 id="modal-title"></h3>
+        <div id="modal-body"></div>
+        <div class="modal-actions" id="modal-actions"></div>
+      </div>
+    </div>
+
+    <div id="fade"></div>
+    <div id="unsupported" class="screen hidden">
+      <div class="modal-frame cy">
+        <div class="mono mg">DEVICE NOT SUPPORTED</div>
+        <h3 id="unsupported-title">Keyboard and mouse required</h3>
+        <p id="unsupported-text">Starsea Ascension is a first-person game that needs a keyboard, a mouse and WebGL 2. Open it on a desktop or laptop browser.</p>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

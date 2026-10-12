@@ -1,9 +1,14 @@
-// Shared GLSL noise used by the sky, stars, gates and energy nebulae.
+// Shared GLSL noise.
 export const NOISE_GLSL = /* glsl */ `
 float hash13(vec3 p) {
   p = fract(p * 0.1031);
   p += dot(p, p.zyx + 31.32);
   return fract((p.x + p.y) * p.z);
+}
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
 }
 float vnoise(vec3 x) {
   vec3 i = floor(x);
@@ -23,5 +28,15 @@ float fbm(vec3 p) {
     a *= 0.5;
   }
   return v / 0.96875;
+}
+float fbm7(vec3 p) {
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 7; i++) {
+    v += a * vnoise(p);
+    p = p * 2.03 + vec3(3.1, 1.7, 5.3);
+    a *= 0.5;
+  }
+  return v / 0.9921875;
 }
 `;

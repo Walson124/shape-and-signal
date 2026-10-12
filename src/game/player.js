@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { glowTexture } from './textures.js';
+import { glowTexture } from '../world/textures.js';
 import { REALMS } from './data.js';
 
 const FWD = new THREE.Vector3();

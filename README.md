@@ -1,59 +1,53 @@
 # Starsea Ascension · 星海飞升
 
-A 3D cultivation game that runs in the browser. You start as a lowly Warrior in the Solace system and fly through space absorbing cosmic energy, hunting cosmic beasts, and exploring planets. You break through realm after realm until you can cross the Universe Gates to new galaxies and challenge their Overlords. Inspired by cultivation novels like 吞噬星空 (Swallowed Star).
+A first-person 3D cultivation game that runs in the browser. You start as a Warrior in the Solace system with three spirit swords. You steer them with your mind, hunt cosmic beasts, absorb the energy of stars, and break through ten realms. In time you cross Universe Gates into new galaxies and challenge their Overlords. Inspired by xianxia space epics like 吞噬星空 (Swallowed Star).
 
-Built with [Three.js](https://threejs.org/) and Vite. Every planet, star, nebula, beast and sound is generated in code, so there are no asset downloads.
+Built with [Three.js](https://threejs.org/) and Vite. Every planet, star, nebula, beast, sword, station and sound is generated in code at runtime, so there are no asset downloads.
 
 ## Run it
 
 ```bash
 npm install
 npm run dev      # local dev server
-npm run build    # static build in dist/, host it anywhere
+npm run build    # static build in dist/, works from any host or subfolder
+npm run preview  # serve the production build
 ```
 
-Open the page, click **Begin Cultivation**, and the game captures the mouse. Progress saves to the browser's local storage.
+It needs a desktop browser with WebGL 2, a keyboard and a mouse. Progress and settings save to local storage.
 
 ## Controls
 
-| Action | Key |
+| Action | Input |
 | --- | --- |
-| Steer | Mouse |
-| Fly / strafe | W A S D |
-| Rise / sink | Space / X |
-| Boost (uses energy) | Shift |
-| Star Bolt | Left click (hold) |
-| Flying Swords · Domain Burst · Golden Body | Q · R · F |
-| Cultivate | Hold C |
-| Break through at Peak | B |
-| Explore planet / dock / use gate | E |
+| Look / steer | Mouse |
+| Fly · rise / sink · boost | W A S D · Space / X · Shift |
+| Star Bolt | Left mouse (hold) |
+| Steer flying swords | Right mouse (hold), wheel sets distance |
+| Loose swords at targets · formation | Q · Z |
+| Domain Burst · Golden Body · Ten Thousand Swords | R · F · V |
+| Lock / cycle target | Tab |
+| Cultivate · breakthrough | C (hold) · B |
+| Interact · scan planet | E · hold E |
 | Pills | 1 2 3 |
-| Set course to marker near crosshair / cruise there | T / G |
-| Star map · Cultivation · Guide | M · K · H |
-| Zoom camera | Mouse wheel |
-| Mute · Pause | N · Esc |
+| Set course · cruise | T · G |
+| First / third person | P |
+| Star map · cultivation · bounties · guide | M · K · J · H |
+| Mute · pause | N · Esc |
 
-## How it plays
+## Features
 
-- **Realms.** Warrior 战士, War God 战神, Planetary 行星级, Stellar 恒星级, Cosmic 宇宙级, Domain Lord 域主, Realm Lord 界主, Immortal 不朽, Venerable 尊者, Universe Master 宇宙之主. Each realm has Early, Middle, Late and Peak stages.
-- **Cultivating.** Hold C to absorb energy. Energy is denser near stars, inside glowing nebulae, and in more dangerous systems.
-- **Tribulation.** At Peak, press B to call down the Heavenly Tribulation 天劫. Dodge the red markers until it ends to enter the next realm. If you die, the breakthrough fails and you lose some experience.
-- **Beasts.** Void Mites swarm, Star Rays shoot from range, Rockback Devourers charge, and Nebula Wraiths teleport. Beasts far below your realm give little experience.
-- **Planets.** Press E near a planet to explore it once. You may find crystals, coins, pills, manuals, or an angry nest. Ruins hold inheritances, including the Devouring Art 吞噬秘法.
-- **Travel.** The star map warps you between systems in a galaxy. Each galaxy's first system has a station for healing and shopping, plus a Universe Gate to other galaxies once your realm allows.
-- **Overlords.** Each galaxy's last system holds a boss. Slaying one grants +10% life and attack for good. The Primordial Devourer guards the final breakthrough.
+- **Flying swords.** Idle swords fly beside you and knock enemy shots out of the air. Hold right mouse and they follow your crosshair, cutting anything they pass. Swarm formation whirls them around the aim point. Lance formation lines them into a spear. A glowing spirit thread links your fingertips to the blades. You gain a sword every realm, up to twelve, and can reforge them through five grades.
+- **Ten realms.** They run from Warrior 战士 to Universe Master 宇宙之主, with four stages each. A Heavenly Tribulation 天劫 guards every breakthrough.
+- **Five galaxies.** Each is a chain of procedurally generated star systems with planets, rings, asteroid belts, energy nebulae, stations and Universe Gates. Each galaxy has its own Overlord boss.
+- **Stations.** Dock to heal, buy pills and technique manuals, take bounties, forge swords and refine beast essence into experience.
+- **Presentation.** The game has first-person cyber gauntlets and a holographic HUD with compass, radar, target lock and hit markers. Rendering includes a baked skybox with reflections, lens flares, bloom, chromatic aberration, speed blur and film grain. The music is generative and intensifies in combat.
+- **Settings.** You can choose a quality preset from Low to Ultra, set the render scale, and turn on dynamic resolution. You can also adjust FOV, sensitivity, invert-Y, volume levels and post effects.
 
 ## Code map
 
-| File | Role |
+| Folder | Contents |
 | --- | --- |
-| `src/game/game.js` | Game loop, progression, tribulation, warping, interaction |
-| `src/game/data.js` | Realms, techniques, beasts, bosses, galaxies, system generation |
-| `src/game/system.js` | Builds a star system: star shader, planets, belts, nebulae, station, gate |
-| `src/game/beasts.js` | Beast and boss models, AI, spawning |
-| `src/game/combat.js` | Projectiles, flying swords, shockwaves, lightning |
-| `src/game/player.js` | Player figure, flight physics, poses |
-| `src/game/ui.js` | HUD, markers, damage numbers, map, cultivation, shop and guide panels |
-| `src/game/textures.js` | Procedural planet, ring, glow and galaxy textures |
-| `src/game/sky.js` | Nebula skybox, starfield, distant galaxies |
-| `src/game/particles.js`, `audio.js`, `input.js`, `state.js` | Particles, synthesized sound, input, save data |
+| `src/core/` | Settings, input, audio engine, post-processing, noise helpers |
+| `src/world/` | Star systems, planet texture workers, skybox baker, station and gate models, lens flare, space dust |
+| `src/game/` | Game loop, player, flying swords, first-person arms, beasts, combat, loot, bounties, data, save state |
+| `src/ui/` | HUD, menus and in-game panels |
