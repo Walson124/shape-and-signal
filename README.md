@@ -1,50 +1,59 @@
-# Shape / Signal - Whereform
+# Starsea Ascension · 星海飞升
 
-Whereform is a geography game about recognizing real places from the shapes and signals they leave behind. Players study an unlabeled geographic form, reveal factual signals if needed, and tap the answer on a world map.
+A 3D cultivation game that runs in the browser. You start as a lowly Warrior in the Solace system and fly through space absorbing cosmic energy, hunting cosmic beasts, and exploring planets. You break through realm after realm until you can cross the Universe Gates to new galaxies and challenge their Overlords. Inspired by cultivation novels like 吞噬星空 (Swallowed Star).
 
-## Current release
+Built with [Three.js](https://threejs.org/) and Vite. Every planet, star, nebula, beast and sound is generated in code, so there are no asset downloads.
 
-- Five deterministic daily rounds, with a new set chosen from the local calendar date
-- Randomized Free Play mode
-- 30 source-backed countries
-- No country-shape clue or full-border reveal
-- Per-round clue decks drawn from position, hemisphere, atlas structure, land neighbors, area rank, traffic flow, language, currency, calling code, and capital data
-- Three balanced starting signals and five seeded deeper signals; combinations vary by place and day
-- Round value decays by 10 points per second all the way to zero, with additional hint costs
-- One movable, confirmed map guess per round
-- Distance scoring against the nearest point on the target country's land geometry, with exact-country detection
-- Zoomable, draggable world map with keyboard-accessible country targets
-- Daily personal bests and scored sharing
-- Visible in-game provenance and licensing
-- Desktop and mobile layouts
-
-The first content pack focuses on national borders. The data model is designed to add OpenStreetMap street grids and traffic infrastructure, plus individually licensed official GTFS transit feeds.
-
-## Commands
+## Run it
 
 ```bash
 npm install
-npm run data:sync
-npm run data:validate
-npm run dev
-npm run test:smoke
-npm run build
+npm run dev      # local dev server
+npm run build    # static build in dist/, host it anywhere
 ```
 
-`data:sync` refreshes structured metadata from Wikidata. `data:validate` rejects incomplete records, duplicate identifiers, and fields without provenance. The checked-in snapshot keeps daily rounds stable and allows production builds without live API dependencies.
+Open the page, click **Begin Cultivation**, and the game captures the mouse. Progress saves to the browser's local storage.
 
-`test:smoke` expects the development server on `http://127.0.0.1:5173`. It drives desktop and mobile Chrome through mixed clue generation, score decay, movable pins, guess confirmation, exact and distance-scored results, focus styling, map zoom and panning, Daily and Free Play entry, all five rounds, scored sharing, and the results screen. It also fails on browser console errors.
+## Controls
 
-## Data policy
+| Action | Key |
+| --- | --- |
+| Steer | Mouse |
+| Fly / strafe | W A S D |
+| Rise / sink | Space / X |
+| Boost (uses energy) | Shift |
+| Star Bolt | Left click (hold) |
+| Flying Swords · Domain Burst · Golden Body | Q · R · F |
+| Cultivate | Hold C |
+| Break through at Peak | B |
+| Explore planet / dock / use gate | E |
+| Pills | 1 2 3 |
+| Set course to marker near crosshair / cruise there | T / G |
+| Star map · Cultivation · Guide | M · K · H |
+| Zoom camera | Mouse wheel |
+| Mute · Pause | N · Esc |
 
-- Geographic geometry: [Natural Earth](https://www.naturalearthdata.com/), public domain, distributed through `world-atlas`.
-- Structured place metadata: [Wikidata](https://www.wikidata.org/), CC0 1.0.
-- Future street and traffic geometry: [OpenStreetMap](https://www.openstreetmap.org/copyright), ODbL 1.0 with required attribution.
-- Future transit geometry: official GTFS feeds, admitted individually only after license review.
-- Traffic laws and signal meanings: government or national transport sources with manual review.
+## How it plays
 
-Ambiguous multi-value fields are not silently resolved. The UI omits signals that cannot be presented unambiguously, and every shipped record carries source IDs and retrieval timestamps.
+- **Realms.** Warrior 战士, War God 战神, Planetary 行星级, Stellar 恒星级, Cosmic 宇宙级, Domain Lord 域主, Realm Lord 界主, Immortal 不朽, Venerable 尊者, Universe Master 宇宙之主. Each realm has Early, Middle, Late and Peak stages.
+- **Cultivating.** Hold C to absorb energy. Energy is denser near stars, inside glowing nebulae, and in more dangerous systems.
+- **Tribulation.** At Peak, press B to call down the Heavenly Tribulation 天劫. Dodge the red markers until it ends to enter the next realm. If you die, the breakthrough fails and you lose some experience.
+- **Beasts.** Void Mites swarm, Star Rays shoot from range, Rockback Devourers charge, and Nebula Wraiths teleport. Beasts far below your realm give little experience.
+- **Planets.** Press E near a planet to explore it once. You may find crystals, coins, pills, manuals, or an angry nest. Ruins hold inheritances, including the Devouring Art 吞噬秘法.
+- **Travel.** The star map warps you between systems in a galaxy. Each galaxy's first system has a station for healing and shopping, plus a Universe Gate to other galaxies once your realm allows.
+- **Overlords.** Each galaxy's last system holds a boss. Slaying one grants +10% life and attack for good. The Primordial Devourer guards the final breakthrough.
 
-## Important scope boundary
+## Code map
 
-"Source verified" means the displayed value was retrieved from the recorded open dataset and passed the repository checks. It does not mean third-party datasets are infallible. Content should remain traceable, reviewable, and correctable.
+| File | Role |
+| --- | --- |
+| `src/game/game.js` | Game loop, progression, tribulation, warping, interaction |
+| `src/game/data.js` | Realms, techniques, beasts, bosses, galaxies, system generation |
+| `src/game/system.js` | Builds a star system: star shader, planets, belts, nebulae, station, gate |
+| `src/game/beasts.js` | Beast and boss models, AI, spawning |
+| `src/game/combat.js` | Projectiles, flying swords, shockwaves, lightning |
+| `src/game/player.js` | Player figure, flight physics, poses |
+| `src/game/ui.js` | HUD, markers, damage numbers, map, cultivation, shop and guide panels |
+| `src/game/textures.js` | Procedural planet, ring, glow and galaxy textures |
+| `src/game/sky.js` | Nebula skybox, starfield, distant galaxies |
+| `src/game/particles.js`, `audio.js`, `input.js`, `state.js` | Particles, synthesized sound, input, save data |

@@ -1,5 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="10" fill="#f1eee6"/>
-  <path d="M13 39V25M23 48V16M33 55V9M43 46V18M53 38V26" stroke="#101012" stroke-width="7"/>
-  <path d="M33 55V9" stroke="#f04435" stroke-width="7"/>
+  <defs>
+    <radialGradient id="g" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff6d8"/>
+      <stop offset="0.35" stop-color="#f3cf7a"/>
+      <stop offset="1" stop-color="#f3cf7a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#070a18"/>
+  <circle cx="32" cy="32" r="22" fill="url(#g)"/>
+  <ellipse cx="32" cy="32" rx="27" ry="8" fill="none" stroke="#8fb8ff" stroke-width="2.5" transform="rotate(-24 32 32)"/>
+  <circle cx="32" cy="32" r="7" fill="#fff"/>
 </svg>
