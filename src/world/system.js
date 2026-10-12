@@ -138,10 +138,10 @@ export class StarSystem {
           vec3 p = vPos * 4.0;
           vec3 warp = vec3(fbm(p + time * 0.03), fbm(p + 7.1 - time * 0.02), fbm(p + 3.3));
           float n = fbm(p * 1.6 + warp * 2.0 + time * 0.05);
-          float cells = pow(fbm(vPos * 22.0 + warp * 3.0 - time * 0.12), 2.0);
+          float cells = pow(clamp(fbm(vPos * 22.0 + warp * 3.0 - time * 0.12), 0.0, 1.0), 2.0);
           float heat = n * 0.7 + cells * 0.6;
           vec3 col = mix(edge, core, smoothstep(0.3, 0.85, heat));
-          float mu = max(dot(normalize(vNormal), normalize(vView)), 0.0);
+          float mu = clamp(dot(normalize(vNormal), normalize(vView)), 0.0, 1.0);
           col *= 0.62 + 0.5 * pow(mu, 0.5);
           col += edge * pow(1.0 - mu, 2.5) * 1.8;
           gl_FragColor = vec4(col * 2.2, 1.0);
@@ -297,9 +297,9 @@ export class StarSystem {
         void main() {
           vec3 V = normalize(cameraPosition - vP);
           vec3 L = normalize(-vP);
-          float fres = pow(1.0 - max(dot(vN, V), 0.0), 2.4);
+          float fres = pow(clamp(1.0 - dot(normalize(vN), V), 0.0, 1.0), 2.4);
           float lit = smoothstep(-0.3, 0.55, dot(vN, L));
-          float fwd = pow(max(dot(-V, L), 0.0), 8.0);
+          float fwd = pow(clamp(dot(-V, L), 0.0, 1.0), 8.0);
           float a = fres * (lit + fwd * 2.0) * strength;
           vec3 c = mix(color, sunColor, fwd * 0.6 + 0.1);
           gl_FragColor = vec4(c * a * 1.4, a);

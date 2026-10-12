@@ -58,13 +58,13 @@ export class SkyBaker {
           float h = dot(d, bandDir);
           float band = exp(-h * h * 10.0);
           float bandWide = exp(-h * h * 2.5);
-          float coreGlow = pow(max(dot(d, coreDir), 0.0), 10.0) * band;
+          float coreGlow = pow(clamp(dot(d, coreDir), 0.0, 1.0), 10.0) * band;
           vec3 neb = mix(colA, colB, clamp(q.x * 1.8 - 0.4, 0.0, 1.0));
           neb = mix(neb, colD, clamp(q.z * 2.2 - 1.35, 0.0, 1.0) * 0.6);
           float density = smoothstep(0.38, 0.92, n) * (0.15 + 0.85 * bandWide);
           vec3 col = colC * 0.18;
           col += neb * density * 0.85;
-          float fil = pow(1.0 - abs(fbm(p * 3.6 + q * 3.0) * 2.0 - 1.0), 7.0);
+          float fil = pow(clamp(1.0 - abs(fbm(p * 3.6 + q * 3.0) * 2.0 - 1.0), 0.0, 1.0), 7.0);
           col += neb * fil * bandWide * 0.35;
           float dust = smoothstep(0.48, 0.74, fbm7(p * 2.6 + q * 2.0 + 7.0));
           col *= 1.0 - 0.8 * dust * band;

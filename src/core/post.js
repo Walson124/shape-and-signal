@@ -86,6 +86,23 @@ const FinalShader = {
     }`,
 };
 
+// Replaces NaN/Inf texels before bloom so one bad pixel can't spread into a black box.
+const SanitizeShader = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      bool bad = !(c.r == c.r) || !(c.g == c.g) || !(c.b == c.b)
+        || !(abs(c.r) < 60000.0) || !(abs(c.g) < 60000.0) || !(abs(c.b) < 60000.0);
+      gl_FragColor = vec4(bad ? vec3(0.0) : clamp(c.rgb, 0.0, 60000.0), 1.0);
+    }`,
+};
+
 export class PostFX {
   constructor(renderer, scene, camera, vmScene, vmCamera) {
     this.renderer = renderer;
@@ -120,6 +137,7 @@ export class PostFX {
     this.final = new ShaderPass(FinalShader);
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.vmPass);
+    this.composer.addPass(new ShaderPass(SanitizeShader));
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.final);

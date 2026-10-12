@@ -270,7 +270,7 @@ function buildWraith(color) {
       varying vec3 vV;
       varying float vY;
       void main() {
-        float f = pow(1.0 - abs(dot(vN, vV)), 2.0);
+        float f = pow(clamp(1.0 - abs(dot(vN, vV)), 0.0, 1.0), 2.0);
         float bands = 0.6 + 0.4 * sin(vY * 9.0);
         gl_FragColor = vec4(color * (f * 1.6 + 0.12) * bands, 1.0);
       }`,

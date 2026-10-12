@@ -6,6 +6,7 @@ import {
 import { newState, loadState, saveState, clearSave, derive } from './state.js';
 import { generateOffers, progressBounties, MAX_BOUNTIES } from './missions.js';
 import { settings } from '../core/settings.js';
+import { applyShaderFixes } from '../core/shaderfix.js';
 import { Input } from '../core/input.js';
 import { AudioEngine } from '../core/audio.js';
 import { PostFX } from '../core/post.js';
@@ -32,6 +33,7 @@ const SCAN_TIME = 1.6;
 
 export class Game {
   constructor(canvas) {
+    applyShaderFixes();
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;

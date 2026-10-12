@@ -281,9 +281,9 @@ export function buildGate(colA, colB) {
         float a = atan(p.y, p.x);
         float tw = a * 3.0 + 4.0 / (r + 0.25) - time * 1.8;
         float swirl = fbm(vec3(cos(tw) * 1.5, sin(tw) * 1.5, r * 4.0 - time * 0.6));
-        float arms = pow(0.5 + 0.5 * sin(tw * 1.0 + swirl * 4.0), 3.0);
+        float arms = pow(clamp(0.5 + 0.5 * sin(tw + swirl * 4.0), 0.0, 1.0), 3.0);
         vec3 col = mix(colA, colB, swirl) * (0.35 + arms * 1.6 + swirl);
-        col += vec3(1.0) * pow(max(0.0, 1.0 - r * 2.2), 3.0) * 3.0;
+        col += vec3(1.0) * pow(clamp(1.0 - r * 2.2, 0.0, 1.0), 3.0) * 3.0;
         float alpha = smoothstep(1.0, 0.82, r);
         gl_FragColor = vec4(col * alpha * 1.3, alpha);
       }`,
