@@ -1,23 +1,25 @@
 import { generatePlanet, generateRing } from './planetgen.js';
+import { buildChunk } from './chunkgen.js';
 
-// A small pool of texture workers. Falls back to the main thread if workers
-// can't start (very old browsers, strict CSP).
-class TexPool {
+const RUN = { ring: generateRing, chunk: buildChunk, planet: generatePlanet };
+
+// Worker pool for texture and terrain generation. Jobs may carry a priority
+// function (lower runs first) and a cancelled() check. Falls back to the main
+// thread if workers can't start.
+class WorkerPool {
   constructor() {
     this.workers = [];
     this.queue = [];
     this.pending = new Map();
     this.seq = 0;
     this.failed = false;
-    const n = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 1));
+    const n = Math.max(2, Math.min(6, (navigator.hardwareConcurrency || 4) - 1));
     try {
       for (let i = 0; i < n; i++) {
         const w = new Worker(new URL('./texgen.worker.js', import.meta.url), { type: 'module' });
         w.busy = false;
         w.onmessage = (e) => this.onDone(w, e.data);
-        w.onerror = () => {
-          this.failed = true;
-        };
+        w.onerror = () => { this.failed = true; };
         this.workers.push(w);
       }
     } catch {
@@ -25,44 +27,61 @@ class TexPool {
     }
   }
 
-  run(kind, job) {
+  get busy() {
+    return this.queue.length + this.workers.filter((w) => w.busy).length;
+  }
+
+  run(kind, job, opts = {}) {
     if (this.failed || !this.workers.length) {
-      return new Promise((resolve) => {
-        setTimeout(() => resolve(kind === 'ring' ? generateRing(job) : generatePlanet(job)), 0);
-      });
+      return new Promise((resolve) => setTimeout(() => resolve(RUN[kind](job)), 0));
     }
     return new Promise((resolve, reject) => {
       const id = ++this.seq;
-      this.pending.set(id, { resolve, reject, kind, job });
-      this.queue.push({ id, kind, job });
+      const task = { id, kind, job, priority: opts.priority || null, cancelled: opts.cancelled || null, resolve, reject };
+      this.pending.set(id, task);
+      this.queue.push(task);
       this.pump();
     });
   }
 
   pump() {
     for (const w of this.workers) {
-      if (w.busy || !this.queue.length) continue;
-      const task = this.queue.shift();
+      if (w.busy) continue;
+      // drop cancelled tasks
+      this.queue = this.queue.filter((t) => {
+        if (t.cancelled && t.cancelled()) {
+          this.pending.delete(t.id);
+          t.resolve(null);
+          return false;
+        }
+        return true;
+      });
+      if (!this.queue.length) return;
+      let bi = 0, bp = Infinity;
+      for (let i = 0; i < this.queue.length; i++) {
+        const p = this.queue[i].priority ? this.queue[i].priority() : -1;
+        if (p < bp) { bp = p; bi = i; }
+      }
+      const task = this.queue.splice(bi, 1)[0];
       w.busy = true;
-      w.task = task.id;
-      w.postMessage(task);
+      w.postMessage({ id: task.id, kind: task.kind, job: task.job });
     }
   }
 
   onDone(w, { id, out, error }) {
     w.busy = false;
-    const p = this.pending.get(id);
+    const t = this.pending.get(id);
     this.pending.delete(id);
-    if (p) {
+    if (t) {
       if (error) {
-        // retry on the main thread
-        setTimeout(() => p.resolve(p.kind === 'ring' ? generateRing(p.job) : generatePlanet(p.job)), 0);
+        console.warn('worker job failed, retrying on main thread', error);
+        try { t.resolve(RUN[t.kind](t.job)); } catch (e) { t.reject(e); }
       } else {
-        p.resolve(out);
+        t.resolve(out);
       }
     }
     this.pump();
   }
 }
 
-export const texPool = new TexPool();
+export const texPool = new WorkerPool();

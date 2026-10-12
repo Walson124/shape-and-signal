@@ -1,17 +1,17 @@
 import {
-  REALMS, STAGES, TECHNIQUES, ACTIVE_TECHNIQUES, PILLS, GALAXIES, BOSSES, STAR_TYPES, SWORD_GRADES, TIPS,
-  getGalaxySystems, priceFor, MANUAL_PRICE, realmOf, masteryMult, swordCount,
+  REALMS, STAGES, TECHNIQUES, ACTIVE_TECHNIQUES, PILLS, REGIONS, BOSSES, SWORD_GRADES, SHIPS, TIPS,
+  priceFor, MANUAL_PRICE, masteryMult, swordCount,
 } from '../game/data.js';
 import { MAX_BOUNTIES } from '../game/missions.js';
 import { settings, PRESETS } from '../core/settings.js';
 import { fmt, esc, hex, dangerClass } from './hud.js';
 
 const CONTROLS = [
-  ['Look / steer', 'Mouse'], ['Fly', 'W A S D'], ['Rise / sink', 'Space / X'], ['Boost', 'Shift'],
+  ['Look / steer', 'Mouse'], ['Move', 'W A S D'], ['Jump · double-tap to fly', 'Space'], ['Rise / sink while flying', 'Space / X'], ['Sprint / boost', 'Shift'],
   ['Star Bolt', 'Left mouse (hold)'], ['Steer flying swords', 'Right mouse (hold)'], ['Sword control distance', 'Mouse wheel while steering'],
   ['Loose swords at targets', 'Q'], ['Sword formation', 'Z'], ['Domain Burst', 'R'], ['Golden Body', 'F'], ['Ten Thousand Swords', 'V'],
   ['Lock / cycle target', 'Tab'], ['Cultivate', 'C (hold)'], ['Breakthrough', 'B'], ['Interact / scan planet', 'E (hold to scan)'],
-  ['Pills', '1 2 3'], ['Set course / cruise', 'T / G'], ['Toggle first / third person', 'P'], ['Star map', 'M'],
+  ['Pills', '1 2 3'], ['Target a marker or a star', 'T'], ['Cruise to target · warp to target star', 'G'], ['Board / leave ship', 'E'], ['Toggle first / third person', 'P'],
   ['Cultivation', 'K'], ['Bounties', 'J'], ['Guide', 'H'], ['Mute', 'N'], ['Pause', 'Esc'],
 ];
 
@@ -77,12 +77,9 @@ export class Menus {
       const a = e.target.closest('[data-action]');
       if (!a || a.disabled) return;
       const { action } = a.dataset;
-      if (action === 'select-system') {
-        this.selectedSystem = Number(a.dataset.index);
-        snd().ui();
+      if (action === 'build-ship') {
+        g.buildShip(Number(a.dataset.tier));
         this.render();
-      } else if (action === 'warp') {
-        g.requestWarp(Number(a.dataset.galaxy), Number(a.dataset.index));
       } else if (action === 'buy') {
         g.buy(a.dataset.item, a.dataset.tech);
         this.render();
@@ -170,7 +167,7 @@ export class Menus {
     cont.classList.toggle('hidden', !save);
     if (save) {
       const r = REALMS[save.realm];
-      this.$('continue-sub').textContent = `${r.name.toUpperCase()} · ${STAGES[save.stage].name.toUpperCase()} · ${GALAXIES[save.galaxy].name.toUpperCase()}`;
+      this.$('continue-sub').textContent = `${r.name.toUpperCase()} · ${STAGES[save.stage].name.toUpperCase()}${save.loc && save.loc.label ? ` · ${save.loc.label.toUpperCase()}` : ''}`;
     }
   }
 
@@ -278,8 +275,6 @@ export class Menus {
   openPanel(kind, tab) {
     this.panelKind = kind;
     this.panelTab = tab || null;
-    if (kind === 'map' && !this.panelTab) this.panelTab = 'galaxy';
-    if (kind === 'map' && this.selectedSystem === null) this.selectedSystem = this.game.state.system;
     this.$('panel').classList.remove('hidden');
     this.render();
   }
@@ -294,11 +289,9 @@ export class Menus {
     if (!k) return;
     const docked = this.game.atStation;
     const tabs = [
-      ['map', 'galaxy', 'Star map'],
-      ['map', 'universe', 'Universe'],
       ['cultivation', '', 'Cultivation'],
       ['bounties', '', 'Bounties'],
-      ...(docked ? [['shop', '', 'Exchange'], ['forge', '', 'Sword forge']] : []),
+      ...(docked ? [['shop', '', 'Exchange'], ['forge', '', 'Sword forge'], ['shipyard', '', 'Shipyard']] : []),
       ['guide', '', 'Guide'],
     ];
     this.$('panel-tabs').innerHTML = tabs.map(([kind, tab, label]) => {
@@ -306,7 +299,7 @@ export class Menus {
       return `<button class="tab ${on ? 'on' : ''}" data-kind="${kind}" data-tab="${tab}">${label}</button>`;
     }).join('');
     let html = '';
-    if (k === 'map') html = this.panelTab === 'universe' ? this.renderUniverse() : this.renderGalaxy();
+    if (k === 'shipyard') html = this.renderShipyard();
     else if (k === 'cultivation') html = this.renderCultivation();
     else if (k === 'bounties') html = this.renderBounties();
     else if (k === 'shop') html = this.renderShop();
@@ -315,68 +308,25 @@ export class Menus {
     this.$('panel-body').innerHTML = html;
   }
 
-  renderGalaxy() {
+  renderShipyard() {
     const { state } = this.game;
-    const systems = getGalaxySystems(state.galaxy);
-    const g = GALAXIES[state.galaxy];
-    const sel = systems[this.selectedSystem] || systems[state.system];
-    let lines = '';
-    for (let i = 1; i < systems.length; i++) {
-      const a = systems[i - 1], b = systems[i];
-      lines += `<line x1="${a.mapX}" y1="${a.mapY * 0.7}" x2="${b.mapX}" y2="${b.mapY * 0.7}" stroke="rgba(62,242,255,0.35)" stroke-width="0.3" stroke-dasharray="1.2 0.8"/>`;
-    }
-    const nodes = systems.map((s) => {
-      const star = STAR_TYPES[s.starType];
-      const cls = dangerClass(s.tier, state.realm);
-      const color = cls === 'danger-ok' ? '#5dffa8' : cls === 'danger-warn' ? '#ffe44d' : '#ff4466';
-      const here = s.index === state.system;
-      const y = s.mapY * 0.7;
-      const icons = [s.boss !== null ? (state.bosses.includes(s.boss) ? '✓' : '☠') : '', s.station ? '⌂' : '', s.gate ? '◎' : ''].filter(Boolean).join(' ');
-      return `<g class="node" data-action="select-system" data-index="${s.index}">
-        <circle cx="${s.mapX}" cy="${y}" r="5.5" fill="${hex(star.glow)}" opacity="0.2"/>
-        ${here ? `<circle class="here" cx="${s.mapX}" cy="${y}" r="4" fill="none" stroke="#3ef2ff" stroke-width="0.5"/>` : ''}
-        <circle cx="${s.mapX}" cy="${y}" r="2.2" fill="${hex(star.core)}" stroke="${s.index === sel.index ? '#fff' : color}" stroke-width="${s.index === sel.index ? 0.7 : 0.45}"/>
-        <text x="${s.mapX}" y="${y + 6.3}" text-anchor="middle" font-size="2.5" fill="#e8f4ff">${esc(s.name)}</text>
-        <text x="${s.mapX}" y="${y + 9.2}" text-anchor="middle" font-size="1.9" fill="${color}">${esc(realmOf(s.tier).name)} ${icons}</text>
-      </g>`;
+    const cur = state.ship ? state.ship.tier : -1;
+    const locked = state.realm < 2;
+    const rows = SHIPS.map((sh, i) => {
+      const owned = i <= cur;
+      const next = i === cur + 1;
+      const can = next && !locked && state.coins >= sh.coins && state.ore >= sh.ore && state.essence >= sh.essence;
+      return `<div class="item"><div><h4>${esc(sh.name)}<span class="cn">${sh.cn}</span></h4>
+        <p>Warp range ${sh.range} light years · cruise ${(sh.cruise / 1000).toFixed(0)} km/s · hull ×${sh.hull}</p></div>
+        <div><span class="price">${fmt(sh.coins)} ◈</span> <span class="price" style="color:var(--cy)">${fmt(sh.ore)} ⬢</span> <span class="price ess">${fmt(sh.essence)} ✦</span></div>
+        ${owned ? '<span class="tag done">OWNED</span>' : `<button class="btn small ${can ? 'primary' : ''}" data-action="build-ship" data-tier="${i}" ${can ? '' : 'disabled'}>${cur < 0 ? 'Build' : 'Upgrade'}</button>`}</div>`;
     }).join('');
-    const check = this.game.canWarpTo(state.galaxy, sel.index);
-    const bossDone = sel.boss !== null && state.bosses.includes(sel.boss);
-    const rel = Math.pow(3, sel.tier - state.realm);
-    const card = `<div class="card">
-      <h3>${esc(sel.name)}</h3>
-      <div class="misc-line">${STAR_TYPES[sel.starType].label}</div>
-      <div class="tags">
-        ${sel.station ? '<span class="tag station">STATION</span>' : ''}
-        ${sel.gate ? '<span class="tag gate">UNIVERSE GATE</span>' : ''}
-        ${sel.boss !== null ? `<span class="tag ${bossDone ? 'done' : 'boss'}">${bossDone ? 'SLAIN: ' : 'OVERLORD: '}${esc(BOSSES[sel.boss].name.toUpperCase())}</span>` : ''}
-      </div>
-      <div class="row"><span>Threat</span><span class="${dangerClass(sel.tier, state.realm)}">${esc(realmOf(sel.tier).name)} ${REALMS[Math.floor(sel.tier)].cn}</span></div>
-      <div class="row"><span>Cultivation speed</span><span>×${rel >= 10 ? Math.round(rel) : rel.toFixed(rel < 1 ? 2 : 1)} vs. your realm</span></div>
-      <div class="row"><span>Beasts</span><span>${sel.tier >= 2 ? 'Mites, Rays, Rockbacks, Wraiths' : sel.tier >= 1 ? 'Mites, Rays, Rockbacks' : 'Mites, Rays'}</span></div>
-      ${sel.index === state.system ? '<div class="misc-line" style="margin-top:10px">You are here.</div>' : `<button class="btn primary" data-action="warp" data-galaxy="${state.galaxy}" data-index="${sel.index}" ${check.ok ? '' : 'disabled'}>Warp to ${esc(sel.name)}</button>`}
-      ${!check.ok && sel.index !== state.system ? `<div class="why">${esc(check.reason)}</div>` : ''}
-    </div>`;
-    return `<p class="panel-note"><b>${esc(g.name)}</b> <span class="cn">${g.cn}</span>. ${esc(g.desc)} Green systems match your realm. Yellow ones are a step above. Red ones are out of reach.</p>
-      <div class="map-wrap"><svg class="map-svg" viewBox="0 0 100 70">${lines}${nodes}</svg>${card}</div>`;
-  }
-
-  renderUniverse() {
-    const { state } = this.game;
-    const cards = GALAXIES.map((g, i) => {
-      const check = this.game.canTravelGalaxy(i);
-      const boss = BOSSES[g.boss];
-      const slain = state.bosses.includes(g.boss);
-      return `<div class="card galaxy-card ${i === state.galaxy ? 'current' : ''}" style="--gc:${g.sky[0]}">
-        <h3>${esc(g.name)}<span class="cn">${g.cn}</span></h3>
-        <p>${esc(g.desc)}</p>
-        <div class="meta">Requires <span class="${state.realm >= g.reqRealm ? 'danger-ok' : 'danger-bad'}">${esc(REALMS[g.reqRealm].name)}</span></div>
-        <div class="meta">Threat ${esc(realmOf(g.tiers[0]).name)} to ${esc(realmOf(g.tiers[g.tiers.length - 1]).name)}</div>
-        <div class="meta">Overlord <span class="${slain ? 'danger-ok' : 'danger-bad'}">${esc(boss.name)} ${boss.cn}${slain ? ' · slain' : ''}</span></div>
-        ${i === state.galaxy ? '<div class="misc-line" style="margin-top:10px">You are in this galaxy.</div>' : `<button class="btn ${check.ok ? 'primary' : ''}" data-action="warp" data-galaxy="${i}" data-index="0" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Jump through the gate' : esc(check.reason)}</button>`}
-      </div>`;
-    }).join('');
-    return `<p class="panel-note">${this.game.atGate ? 'The Universe Gate hums before you. Choose a destination.' : 'Crossing galaxies requires a Universe Gate. Every galaxy keeps one in its first system, near the station.'}</p><div class="galaxy-grid">${cards}</div>`;
+    const note = locked
+      ? 'Galactic law forbids starships to anyone below the <b>Planetary</b> realm: a weaker body cannot survive the void even inside a hull. Keep cultivating.'
+      : state.ship
+        ? `Your <b>${esc(SHIPS[state.ship.tier].name)}</b> is registered here. Upgrades are fitted on the spot.`
+        : 'Build a starship to cross the void between stars. Aim at any star in the sky with <kbd>T</kbd> and warp with <kbd>G</kbd>.';
+    return `<p class="panel-note">${note} You hold <b class="gold">${fmt(state.coins)} ◈</b>, <b class="cyan">${fmt(state.ore)} ⬢</b> star metal and <b class="mg">${fmt(state.essence)} ✦</b> essence.</p><div class="list">${rows}</div>`;
   }
 
   renderCultivation() {
@@ -428,7 +378,7 @@ export class Menus {
     const active = state.bounties.length
       ? state.bounties.map((b) => {
         const prog = b.type === 'cultivate' ? `${fmt(b.progress)}/${fmt(b.need)}` : `${b.progress}/${b.need}`;
-        return `<div class="item"><div><h4>${esc(b.title)}</h4><p>${esc(b.desc)}</p><p class="mono">PROGRESS ${prog} · ${GALAXIES[b.galaxy].name.toUpperCase()}</p></div><div>${this.rewardText(b.reward)}</div><button class="btn small danger" data-action="abandon" data-id="${b.id}">Abandon</button></div>`;
+        return `<div class="item"><div><h4>${esc(b.title)}</h4><p>${esc(b.desc)}</p><p class="mono">PROGRESS ${prog} · ${(REGIONS[b.region] || REGIONS[0]).name.toUpperCase()}</p></div><div>${this.rewardText(b.reward)}</div><button class="btn small danger" data-action="abandon" data-id="${b.id}">Abandon</button></div>`;
       }).join('')
       : '<p class="panel-note">No active bounties.</p>';
     let offers = '';
@@ -494,14 +444,15 @@ export class Menus {
 
   renderGuide() {
     return `<ul class="tips">
-      <li><b>Flying swords.</b> Hold right mouse to steer them with your mind. They follow your crosshair and cut everything they pass through. Scroll to push them further or pull them closer. Z switches between Swarm, a whirling blade storm, and Lance, a piercing spear. Q looses them at targets. Idle swords guard you and swat enemy shots out of the air.</li>
-      <li><b>Cultivate</b> by holding C. Energy is richest near stars and inside glowing nebulae, and richer still in dangerous systems.</li>
-      <li><b>Hunt beasts</b> for experience, star coins and essence cores. Fly into the cores to collect them. Beasts far below your realm teach you little.</li>
-      <li><b>Explore planets</b> by holding E nearby. Planets marked with ruins hold inheritances.</li>
+      <li><b>Your homeworld.</b> You begin in Base City 07 on Terra. Beasts roam the wilderness beyond the walls, and they grow stronger the further you stray.</li>
+      <li><b>Leaving the ground.</b> Warriors can only run and jump. At the <b>War God</b> realm, double-tap Space to fly through the sky. At the <b>Planetary</b> realm your body survives the void and you can fly into space, then land on any world you like.</li>
+      <li><b>Flying swords.</b> Hold right mouse to steer them with your mind. Scroll to change their reach. Z switches between Swarm and Lance. Q looses them at targets. Idle swords guard you from projectiles.</li>
+      <li><b>Every planet is a world.</b> Look for ancient ruins (hold E to search), energy springs (cultivate inside the beam), glowing ore deposits (shatter them for star metal), beast nests and wrecks.</li>
+      <li><b>Cultivate</b> by holding C. Springs, stars and nebulae are richest, and more dangerous places hold denser energy.</li>
       <li>At <b>Peak</b> stage, press B to face the <b>Heavenly Tribulation</b>. Keep moving and stay out of the red spheres.</li>
-      <li><b>Stations</b> heal you, sell pills and manuals, post bounties, forge your swords and refine essence.</li>
-      <li>Use the <b>star map</b> (M) to warp between systems and the <b>Universe Gate</b> to cross galaxies once your realm allows.</li>
-      <li>Each galaxy has an <b>Overlord</b>. Slaying one permanently strengthens you. The last one guards the path to Universe Master.</li>
+      <li><b>Starships.</b> At the Planetary realm, build a ship at a shipyard with coins, star metal and essence. Every star you see in the sky is a real system. Aim at one with T and press G in your ship to warp there. Bigger ships reach further.</li>
+      <li><b>In space</b>, aim at a planet or station with T and press G to cruise there. Cruise speed rises the further you are from anything massive.</li>
+      <li>Each region of the galaxy has <b>Overlords</b>. Slaying one strengthens you for good. The last waits at the galaxy's heart.</li>
     </ul>
     <div class="section-title">Controls</div>
     <div class="help-grid">${CONTROLS.map(([a, b]) => `<div><span>${esc(a)}</span><span><b>${esc(b)}</b></span></div>`).join('')}</div>`;

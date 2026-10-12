@@ -206,6 +206,10 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .prompt-ring { width: 28px; height: 28px; transform: rotate(-90deg); }
 .prompt-ring circle { fill: none; stroke: rgba(62, 242, 255, 0.2); stroke-width: 3; }
 #prompt-prog { stroke: var(--cy); stroke-dasharray: 94.25; stroke-dashoffset: 94.25; }
+#star-target { position: absolute; right: 14px; bottom: 160px; width: 230px; padding: 10px 14px; --chamfer: 9px; }
+#star-target::before { background: var(--yl); box-shadow: 0 0 8px var(--yl); }
+.st-name { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; margin: 2px 0 4px; }
+.yl { color: var(--yl); }
 #nav-info { position: absolute; left: 50%; top: 116px; transform: translateX(-50%); color: var(--yl); font-size: 13px; text-shadow: 0 0 8px rgba(255, 228, 77, 0.6); }
 #meditate { position: absolute; left: 50%; top: 36%; transform: translateX(-50%); display: flex; gap: 12px; align-items: baseline; font-family: var(--display); font-weight: 700; font-size: 16px; letter-spacing: 0.25em; color: #ffe8a8; text-shadow: 0 0 14px rgba(255, 200, 90, 0.9); }
 #meditate .cn { font-size: 22px; letter-spacing: 0.1em; }

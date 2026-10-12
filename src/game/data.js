@@ -1,13 +1,13 @@
-import { mulberry32, hashString, pick, range } from '../core/rng.js';
+import { pick } from '../core/rng.js';
 
 // ---------------------------------------------------------------------------
 // Cultivation ladder: ten realms of four stages each. A lightning tribulation
 // separates one realm from the next.
 // ---------------------------------------------------------------------------
 export const REALMS = [
-  { name: 'Warrior', cn: '战士', color: 0x8fb8ff, blurb: 'A mortal body tempered by cosmic energy. Three spirit swords answer your will.' },
-  { name: 'War God', cn: '战神', color: 0x3ef2ff, blurb: 'Your strikes shatter mountains and your spirit sense sharpens.' },
-  { name: 'Planetary', cn: '行星级', color: 0x5dffa8, blurb: 'You survive the void unaided. Domain Burst awakens.' },
+  { name: 'Warrior', cn: '战士', color: 0x8fb8ff, blurb: 'A mortal body tempered by cosmic energy. You are bound to your homeworld, but three spirit swords answer your will.' },
+  { name: 'War God', cn: '战神', color: 0x3ef2ff, blurb: 'Your strikes shatter mountains. You can take to the skies of any world.' },
+  { name: 'Planetary', cn: '行星级', color: 0x5dffa8, blurb: 'Your body survives the void. The stars are open to you, and Domain Burst awakens.' },
   { name: 'Stellar', cn: '恒星级', color: 0xffe066, blurb: 'Your body burns like a star and your swords move faster than sight.' },
   { name: 'Cosmic', cn: '宇宙级', color: 0xffa040, blurb: 'Space bends around you. The Golden Body manifests.' },
   { name: 'Domain Lord', cn: '域主', color: 0xff3c7d, blurb: 'You rule a domain of your own. Lesser beasts flee your presence.' },
@@ -82,103 +82,99 @@ export const BOSSES = [
 ];
 export const FINAL_BOSS = BOSSES.length - 1;
 
+
 // ---------------------------------------------------------------------------
-// The universe: five galaxies, each a chain of star systems of rising danger.
+// The galaxy is endless. Danger rises with distance from home, and the bands
+// of danger are named regions with their own skies, stars and Overlords.
 // sky: [nebula A, nebula B, base, highlight]
 // ---------------------------------------------------------------------------
-export const GALAXIES = [
+export const REGIONS = [
   {
-    id: 'azure', name: 'Azure Spiral', cn: '青旋星系', reqRealm: 0, tiers: [0, 1, 1, 2, 2, 3], boss: 0,
+    id: 'azure', name: 'Azure Reach', cn: '青域', minTier: 0, boss: 0,
     sky: ['#2a5cff', '#8a3cff', '#060a24', '#3ef2ff'], chords: [[57, 64, 67, 71], [53, 60, 64, 69], [48, 55, 64, 67], [55, 62, 66, 69]],
-    desc: 'Your home galaxy. Young stars, gentle nebulae, and beasts a Warrior can handle.',
+    stars: ['yellow', 'yellow', 'blue', 'white', 'violet', 'red'], planets: ['terran', 'rocky', 'desert', 'ice', 'lava', 'toxic'],
+    desc: 'The quiet spiral arm around your homeworld. Young stars and beasts a fresh cultivator can handle.',
   },
   {
-    id: 'crimson', name: 'Crimson Maelstrom', cn: '赤漩星系', reqRealm: 3, tiers: [3, 3, 4, 4, 5, 5], boss: 1,
+    id: 'crimson', name: 'Crimson Expanse', cn: '赤域', minTier: 2.5, boss: 1,
     sky: ['#ff3a1a', '#ffaa2a', '#1c0404', '#ff3c7d'], chords: [[52, 59, 62, 67], [48, 55, 60, 64], [50, 57, 60, 65], [47, 54, 59, 62]],
-    desc: 'A galaxy of red giants and burning dust. Its beasts hunt Stellar cultivators for sport.',
+    stars: ['red', 'red', 'yellow', 'white'], planets: ['lava', 'desert', 'rocky', 'toxic', 'lava'],
+    desc: 'Red giants and burning dust. Its beasts hunt Stellar cultivators for sport.',
   },
   {
-    id: 'jade', name: 'Jade Abyss', cn: '翠渊星系', reqRealm: 5, tiers: [5, 5, 6, 6, 7, 7], boss: 2,
+    id: 'jade', name: 'Jade Abyss', cn: '翠渊', minTier: 4.5, boss: 2,
     sky: ['#12e6a0', '#2a7cff', '#021612', '#b8ffe0'], chords: [[50, 57, 62, 66], [55, 62, 66, 69], [52, 59, 64, 67], [47, 54, 62, 66]],
+    stars: ['green', 'blue', 'green', 'white'], planets: ['toxic', 'terran', 'crystal', 'ice'],
     desc: 'Emerald nebulae hide colossal predators and the bones of fallen lords.',
   },
   {
-    id: 'ruin', name: 'Shattered Ancients', cn: '古碎星域', reqRealm: 7, tiers: [7, 7, 7.5, 8, 8, 8], boss: 3,
+    id: 'ruin', name: 'Shattered Ancients', cn: '古碎星域', minTier: 6.5, boss: 3,
     sky: ['#a86cff', '#ffc46a', '#100620', '#ff3c7d'], chords: [[49, 56, 61, 64], [45, 52, 57, 61], [47, 54, 59, 62], [44, 51, 56, 63]],
+    stars: ['violet', 'white', 'red'], planets: ['crystal', 'rocky', 'ice', 'lava'],
     desc: 'The broken remains of an ancient civilization. Their guardians still keep watch.',
   },
   {
-    id: 'origin', name: 'Primordial Core', cn: '原初之核', reqRealm: 8, tiers: [8, 8.3, 8.6], boss: 4,
+    id: 'origin', name: 'Primordial Core', cn: '原初之核', minTier: 8.2, boss: 4,
     sky: ['#ff2a9a', '#ffd86a', '#160214', '#ffffff'], chords: [[45, 52, 55, 60], [41, 48, 53, 57], [43, 50, 55, 58], [40, 47, 52, 56]],
-    desc: 'The heart of the universe. Whatever devours stars here bars the path to Universe Master.',
+    stars: ['violet', 'white', 'red'], planets: ['crystal', 'lava', 'rocky'],
+    desc: 'The heart of the galaxy. Whatever devours stars here bars the path to Universe Master.',
   },
 ];
+export const regionForTier = (tier) => {
+  let r = 0;
+  REGIONS.forEach((g, i) => { if (tier >= g.minTier) r = i; });
+  return r;
+};
 
 export const STAR_TYPES = {
-  yellow: { label: 'Yellow star', core: 0xfff1b0, edge: 0xff9a2a, glow: 0xffb347, r: [150, 200] },
-  blue: { label: 'Blue giant', core: 0xe6f0ff, edge: 0x3a6cff, glow: 0x6a9cff, r: [190, 250] },
-  red: { label: 'Red giant', core: 0xffb48a, edge: 0xc42a10, glow: 0xff4a24, r: [240, 310] },
-  white: { label: 'White dwarf', core: 0xffffff, edge: 0x9ab8ff, glow: 0xcfe0ff, r: [90, 120] },
-  violet: { label: 'Violet star', core: 0xffd8ff, edge: 0x9a2aff, glow: 0xc060ff, r: [170, 230] },
-  green: { label: 'Jade star', core: 0xeaffef, edge: 0x10b070, glow: 0x40ffb0, r: [160, 220] },
-};
-const GALAXY_STARS = {
-  azure: ['yellow', 'blue', 'white', 'yellow', 'violet'],
-  crimson: ['red', 'red', 'yellow', 'white'],
-  jade: ['green', 'blue', 'green', 'white'],
-  ruin: ['violet', 'white', 'red', 'violet'],
-  origin: ['violet', 'white', 'red'],
-};
-export const GALAXY_PLANETS = {
-  azure: ['terran', 'rocky', 'gas', 'ice', 'lava', 'gas'],
-  crimson: ['lava', 'rocky', 'gas', 'toxic', 'lava'],
-  jade: ['toxic', 'terran', 'gas', 'crystal', 'ice'],
-  ruin: ['crystal', 'rocky', 'ice', 'gas', 'lava'],
-  origin: ['crystal', 'lava', 'gas', 'crystal'],
+  yellow: { label: 'Yellow star', core: 0xfff1b0, edge: 0xff9a2a, glow: 0xffb347, r: [42000, 60000], lum: 1 },
+  blue: { label: 'Blue giant', core: 0xe6f0ff, edge: 0x3a6cff, glow: 0x6a9cff, r: [60000, 80000], lum: 3 },
+  red: { label: 'Red giant', core: 0xffb48a, edge: 0xc42a10, glow: 0xff4a24, r: [70000, 95000], lum: 1.4 },
+  white: { label: 'White dwarf', core: 0xffffff, edge: 0x9ab8ff, glow: 0xcfe0ff, r: [22000, 30000], lum: 0.6 },
+  violet: { label: 'Violet star', core: 0xffd8ff, edge: 0x9a2aff, glow: 0xc060ff, r: [48000, 66000], lum: 1.6 },
+  green: { label: 'Jade star', core: 0xeaffef, edge: 0x10b070, glow: 0x40ffb0, r: [46000, 62000], lum: 1.3 },
 };
 
-const SYL_A = ['Ka', 'Vel', 'Or', 'Zeph', 'Tal', 'Mir', 'Sar', 'Quo', 'Ny', 'Ar', 'Lux', 'Dra', 'Ser', 'Xi', 'Hel', 'Cor', 'Ves', 'Ul', 'Rhe', 'Tau'];
-const SYL_B = ['ion', 'ara', 'eth', 'ux', 'an', 'oria', 'is', 'enth', 'os', 'yra', 'ova', 'ael', 'un', 'ix', 'ari', 'eon'];
-const SYL_C = ['', '', ' Prime', ' Minor', ' Major', ' Reach', ' Deep', ' Verge'];
-const systemName = (rand) => pick(rand, SYL_A) + pick(rand, SYL_B) + pick(rand, SYL_C);
+export const PLANET_INFO = {
+  terran: { label: 'Living world', atmo: [0.45, 0.62, 1.0], ocean: 0x0a3a6a, landable: true },
+  desert: { label: 'Desert world', atmo: [1.0, 0.72, 0.45], ocean: null, landable: true },
+  ice: { label: 'Ice world', atmo: [0.7, 0.85, 1.0], ocean: null, landable: true },
+  lava: { label: 'Volcanic world', atmo: [1.0, 0.45, 0.25], ocean: 'lava', landable: true },
+  toxic: { label: 'Toxic world', atmo: [0.75, 1.0, 0.35], ocean: 0x3a5a10, landable: true },
+  crystal: { label: 'Crystal world', atmo: [0.75, 0.55, 1.0], ocean: null, landable: true },
+  rocky: { label: 'Barren rock', atmo: null, ocean: null, landable: true },
+  gas: { label: 'Gas giant', atmo: [1.0, 0.85, 0.65], ocean: null, landable: false },
+};
 
-const cache = new Map();
-export function getGalaxySystems(gIndex) {
-  if (cache.has(gIndex)) return cache.get(gIndex);
-  const g = GALAXIES[gIndex];
-  const rand = mulberry32(hashString(`galaxy:${g.id}`));
-  const n = g.tiers.length;
-  const used = new Set();
-  const systems = g.tiers.map((tier, i) => {
-    const seed = hashString(`${g.id}:${i}`);
-    const r2 = mulberry32(seed);
-    let name = systemName(r2);
-    while (used.has(name)) name = systemName(r2);
-    if (gIndex === 0 && i === 0) name = 'Solace';
-    used.add(name);
-    const starType = gIndex === 0 && i === 0 ? 'yellow' : pick(r2, GALAXY_STARS[g.id]);
-    return {
-      index: i, galaxy: gIndex, name, tier, seed, starType,
-      station: i === 0, gate: i === 0, boss: i === n - 1 ? g.boss : null,
-      mapX: 8 + (i / Math.max(1, n - 1)) * 84,
-      mapY: 50 + Math.sin(i * 1.7 + rand() * 2) * 26 + range(rand, -6, 6),
-    };
-  });
-  cache.set(gIndex, systems);
-  return systems;
-}
+// Which realm unlocks which kind of movement.
+export const FLIGHT = {
+  canFly: (realm) => realm >= 1,
+  canSpace: (realm) => realm >= 2,
+};
 
-export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+// Starships, built at a city shipyard once you reach the Planetary realm.
+export const SHIPS = [
+  { name: 'Skiff', cn: '星舟', range: 15, cruise: 120000, speed: 900, hull: 1, coins: 2500, ore: 30, essence: 400, color: 0x3ef2ff },
+  { name: 'Corvette', cn: '护卫舰', range: 35, cruise: 300000, speed: 1400, hull: 2.6, coins: 40000, ore: 120, essence: 6000, color: 0x5dffa8 },
+  { name: 'Frigate', cn: '巡航舰', range: 80, cruise: 800000, speed: 2200, hull: 7, coins: 600000, ore: 400, essence: 90000, color: 0xffe066 },
+  { name: 'Cruiser', cn: '战列舰', range: 170, cruise: 2000000, speed: 3500, hull: 18, coins: 9000000, ore: 1200, essence: 1500000, color: 0xff3c7d },
+  { name: 'Star Ark', cn: '星槎', range: 450, cruise: 5000000, speed: 6000, hull: 50, coins: 140000000, ore: 4000, essence: 25000000, color: 0xfff0b8 },
+];
+
+const SYL_A = ['Ka', 'Vel', 'Or', 'Zeph', 'Tal', 'Mir', 'Sar', 'Quo', 'Ny', 'Ar', 'Lux', 'Dra', 'Ser', 'Xi', 'Hel', 'Cor', 'Ves', 'Ul', 'Rhe', 'Tau', 'Ae', 'Bel', 'Cyr', 'Eld', 'Fen', 'Gal', 'Ith', 'Jor'];
+const SYL_B = ['ion', 'ara', 'eth', 'ux', 'an', 'oria', 'is', 'enth', 'os', 'yra', 'ova', 'ael', 'un', 'ix', 'ari', 'eon', 'iel', 'oth', 'ade'];
+export const makeName = (rand) => pick(rand, SYL_A) + pick(rand, SYL_B);
+export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 export const TIPS = [
-  'Hold right mouse to take direct control of your flying swords. Sweep them through beasts like a blade storm.',
-  'Lance formation (Z) lines your swords into a piercing spear. Swarm formation surrounds a target.',
-  'Idle swords guard you, knocking enemy projectiles out of the sky.',
-  'Cosmic energy is densest near stars and inside glowing nebulae. Cultivate there.',
-  'Beasts far below your realm teach you little. Seek stronger prey.',
-  'Ancient ruins hide inheritances. Look for planets marked with ruins.',
-  'Dock at a station to heal, take bounties, forge your swords and refine beast essence.',
+  'Hold right mouse to steer your flying swords with your mind. Sweep them through beasts.',
+  'You are bound to your homeworld until you reach the Planetary realm. War Gods can already fly through the sky.',
+  'Double-tap Space to take flight once you reach the War God realm.',
+  'Every star in the sky is a real system. Build a starship, aim at a star with T and warp there with G.',
+  'Cosmic energy is densest near energy springs, stars and nebulae. Cultivate there with C.',
+  'Ancient ruins hide inheritances. Planets far from home hide stronger ones.',
+  'Shatter glowing ore deposits for star metal. Shipyards need it to build ships.',
   'At Peak stage, press B to face the Heavenly Tribulation. Keep moving.',
-  'Press T while looking at a marker to set a course, then G to cruise there.',
-  'Each galaxy Overlord you slay permanently strengthens your body.',
+  'The further a star lies from home, the deadlier its beasts and the richer its energy.',
+  'Each region of the galaxy is ruled by Overlords. Their lairs show on your target scanner.',
 ];

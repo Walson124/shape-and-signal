@@ -47,12 +47,12 @@ export class LensFlare {
       const edge = Math.max(Math.abs(sx), Math.abs(sy));
       target = edge < 1.25 ? 1 - Math.max(0, edge - 0.85) / 0.4 : 0;
       // occlusion by planets (and the star itself is fine)
-      const camPos = camera.position;
+      const camPos = camera.getWorldPosition(new THREE.Vector3());
       const dir = tmp2.subVectors(starPos, camPos);
       const len = dir.length();
       dir.divideScalar(len);
       for (const c of colliders) {
-        if (c.kind !== 'planet') continue;
+        if (c.kind && c.kind !== 'planet') continue;
         const oc = tmp.subVectors(camPos, c.pos);
         const b = oc.dot(dir);
         const cc = oc.lengthSq() - c.radius * c.radius;
@@ -62,7 +62,7 @@ export class LensFlare {
           if (t > 0 && t < len) { target = 0; break; }
         }
       }
-      const dist = starPos.distanceTo(camPos);
+      const dist = starPos.distanceTo(camera.getWorldPosition(new THREE.Vector3()));
       target *= Math.min(1, Math.max(0.35, (starRadius * 9) / dist));
     }
     this.vis += (target - this.vis) * (1 - Math.exp(-dt * 10));

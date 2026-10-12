@@ -73,6 +73,20 @@ export class Combat {
     this.sound.enemyShot(origin);
   }
 
+  rebase(m, q) {
+    for (const s of this.shots) {
+      s.pos.applyMatrix4(m);
+      s.vel.applyQuaternion(q);
+      s.group.position.copy(s.pos);
+      if (s.mesh) s.mesh.quaternion.premultiply(q);
+    }
+    for (const e of this.effects) e.obj.applyMatrix4(m);
+    for (const d of this.debrisList) {
+      d.mesh.position.applyMatrix4(m);
+      d.vel.applyQuaternion(q);
+    }
+  }
+
   get enemyShots() {
     return this.shots.filter((s) => s.owner === 'enemy');
   }
@@ -193,9 +207,9 @@ export class Combat {
     }
   }
 
-  lightning(target, color = 0xc8b8ff, height = 420) {
+  lightning(target, color = 0xc8b8ff, height = 420, up = new THREE.Vector3(0, 1, 0)) {
     const pts = [];
-    const top = target.clone().add(new THREE.Vector3((Math.random() - 0.5) * 60, height, (Math.random() - 0.5) * 60));
+    const top = target.clone().addScaledVector(up, height).add(new THREE.Vector3((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60));
     const n = 16;
     for (let i = 0; i <= n; i++) {
       const p = top.clone().lerp(target, i / n);
@@ -209,7 +223,7 @@ export class Combat {
       let p = pts[3 + Math.floor(Math.random() * 10)].clone();
       const fp = [p.clone()];
       for (let k = 0; k < 5; k++) {
-        p = p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 40, -20 - Math.random() * 20, (Math.random() - 0.5) * 40));
+        p = p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 40, (Math.random() - 0.5) * 40, (Math.random() - 0.5) * 40)).addScaledVector(up, -20 - Math.random() * 20);
         fp.push(p);
       }
       g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(fp), 20, 0.9, 4, false), mat));
@@ -269,14 +283,9 @@ export class Combat {
         this.particles.burst(s.pos, s.color, 14, 40, 1.2, 0.4, 3);
         dead = true;
       }
-      if (!dead && system) {
-        for (const c of system.colliders) {
-          if (s.pos.distanceToSquared(c.pos) < c.radius * c.radius) {
-            dead = true;
-            this.particles.burst(s.pos, s.color, 6, 30, 1, 0.3, 3);
-            break;
-          }
-        }
+      if (!dead && ctx.solid && ctx.solid(s.pos)) {
+        dead = true;
+        this.particles.burst(s.pos, s.color, 8, 30, 1, 0.3, 3);
       }
       if (dead) this.removeShot(i);
     }

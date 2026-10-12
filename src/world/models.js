@@ -217,124 +217,97 @@ export function buildShip(accentHex) {
   return g;
 }
 
-// ------------------------------------------------------------------ gate --
-export function buildGate(colA, colB) {
+// ------------------------------------------------------------ player ship --
+// A sleek fighter-shuttle, about 26 m long, pointing down -Z.
+export function buildPlayerShip(tier, accentHex) {
   const g = new THREE.Group();
   const { map, rough } = hullTextures();
-  const metal = new THREE.MeshStandardMaterial({ map, roughnessMap: rough, color: 0x6a6480, metalness: 0.85, roughness: 0.4 });
-  const glowA = new THREE.MeshBasicMaterial({ color: new THREE.Color(colA).multiplyScalar(2.5) });
-  const R = 120;
-  const segs = [];
-  const glows = [];
-  for (let i = 0; i < 12; i++) {
-    const arc = (Math.PI * 2) / 12 - 0.06;
-    const geo = new THREE.TorusGeometry(R, 9, 10, 16, arc);
-    geo.rotateZ((i / 12) * Math.PI * 2);
-    segs.push(geo);
-    const lg = new THREE.TorusGeometry(R - 9.5, 0.9, 6, 16, arc * 0.8);
-    lg.rotateZ((i / 12) * Math.PI * 2 + arc * 0.1);
-    glows.push(lg);
-  }
-  const inner = new THREE.Group();
-  inner.add(new THREE.Mesh(mergeGeometries(segs), metal));
-  inner.add(new THREE.Mesh(mergeGeometries(glows), glowA));
-  g.add(inner);
-  const outer = new THREE.Group();
-  const pylons = [];
-  const pylonParts = [];
-  const tipParts = [];
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const p = new THREE.BoxGeometry(12, 34, 16);
-    p.rotateZ(a - Math.PI / 2);
-    p.translate(Math.cos(a) * (R + 22), Math.sin(a) * (R + 22), 0);
-    pylonParts.push(p);
-    const tip = new THREE.OctahedronGeometry(4);
-    tip.translate(Math.cos(a) * (R + 42), Math.sin(a) * (R + 42), 0);
-    tipParts.push(tip);
-    pylons.push(new THREE.Vector3(Math.cos(a) * (R + 42), Math.sin(a) * (R + 42), 0));
-  }
-  outer.add(new THREE.Mesh(mergeGeometries(pylonParts), metal));
-  const tipMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colB).multiplyScalar(3) });
-  outer.add(new THREE.Mesh(mergeGeometries(tipParts), tipMat));
-  g.add(outer);
+  const hull = new THREE.MeshStandardMaterial({ map, roughnessMap: rough, color: 0xd8dde6, metalness: 0.45, roughness: 0.42, envMapIntensity: 1.0 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2a303c, metalness: 0.55, roughness: 0.4 });
+  const accent = new THREE.Color(accentHex);
+  const neon = new THREE.MeshBasicMaterial({ color: accent.clone().multiplyScalar(2.6) });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x0a1a2a, metalness: 1, roughness: 0.05, envMapIntensity: 2.2, emissive: accent.clone().multiplyScalar(0.15) });
+  const s = 1 + tier * 0.18;
 
-  const uniforms = { time: { value: 0 }, colA: { value: new THREE.Color(colA) }, colB: { value: new THREE.Color(colB) } };
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(R - 8, 128), new THREE.ShaderMaterial({
-    uniforms,
-    side: THREE.DoubleSide,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    vertexShader: /* glsl */ `
-      varying vec2 vUv;
-      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: /* glsl */ `
-      uniform float time;
-      uniform vec3 colA;
-      uniform vec3 colB;
-      varying vec2 vUv;
-      ${NOISE_GLSL}
-      void main() {
-        vec2 p = vUv * 2.0 - 1.0;
-        float r = length(p);
-        float a = atan(p.y, p.x);
-        float tw = a * 3.0 + 4.0 / (r + 0.25) - time * 1.8;
-        float swirl = fbm(vec3(cos(tw) * 1.5, sin(tw) * 1.5, r * 4.0 - time * 0.6));
-        float arms = pow(clamp(0.5 + 0.5 * sin(tw + swirl * 4.0), 0.0, 1.0), 3.0);
-        vec3 col = mix(colA, colB, swirl) * (0.35 + arms * 1.6 + swirl);
-        col += vec3(1.0) * pow(clamp(1.0 - r * 2.2, 0.0, 1.0), 3.0) * 3.0;
-        float alpha = smoothstep(1.0, 0.82, r);
-        gl_FragColor = vec4(col * alpha * 1.3, alpha);
-      }`,
-  }));
-  g.add(disc);
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(colB).multiplyScalar(0.7), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.55 }));
-  halo.scale.setScalar(600);
-  g.add(halo);
-
-  // electric arcs between pylon tips and the ring
-  const arcMat = new THREE.LineBasicMaterial({ color: new THREE.Color(colB).multiplyScalar(4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-  const arcGeo = new THREE.BufferGeometry();
-  const arcPos = new Float32Array(8 * 12 * 6);
-  arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPos, 3));
-  const arcs = new THREE.LineSegments(arcGeo, arcMat);
-  arcs.frustumCulled = false;
-  outer.add(arcs);
-  const light = new THREE.PointLight(new THREE.Color(colB), 2.5, 700, 1.2);
+  const profile = [];
+  for (let i = 0; i <= 16; i++) {
+    const t = i / 16;
+    const r = Math.sin(Math.pow(t, 0.7) * Math.PI) * 2.2 * (t < 0.15 ? 0.6 + t * 2.6 : 1);
+    profile.push(new THREE.Vector2(Math.max(0.05, r), (t - 0.5) * 24));
+  }
+  const fus = new THREE.Mesh(new THREE.LatheGeometry(profile, 20).rotateX(-Math.PI / 2), hull);
+  fus.scale.set(1.15, 0.75, 1);
+  g.add(fus);
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(1.4, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.7, 2.4), glass);
+  canopy.position.set(0, 1.1, -5);
+  g.add(canopy);
+  const wingShape = new THREE.Shape();
+  wingShape.moveTo(0, 4);
+  wingShape.lineTo(11, -3);
+  wingShape.lineTo(11, -5.5);
+  wingShape.lineTo(0, -7);
+  wingShape.lineTo(0, 4);
+  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.5, bevelEnabled: true, bevelSize: 0.15, bevelThickness: 0.15, bevelSegments: 1 }).rotateX(-Math.PI / 2);
+  for (const side of [-1, 1]) {
+    const w = new THREE.Mesh(wingGeo, hull);
+    w.scale.x = side;
+    w.position.set(side * 1.2, -0.4, 2);
+    g.add(w);
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 3), neon);
+    tip.position.set(side * 12.3, -0.1, 5.8);
+    g.add(tip);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(9, 0.08, 0.25), neon);
+    stripe.position.set(side * 6.5, 0.2, 2.8);
+    stripe.rotation.y = side * 0.55;
+    g.add(stripe);
+    const eng = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 6, 16).rotateX(Math.PI / 2), dark);
+    eng.position.set(side * 3.4, -0.2, 8.5);
+    g.add(eng);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.16, 8, 24), neon);
+    ring.position.set(side * 3.4, -0.2, 11.55);
+    g.add(ring);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 3.6), hull);
+    fin.position.set(side * 2.2, 2, 9);
+    fin.rotation.z = side * -0.35;
+    g.add(fin);
+  }
+  const exhaustMat = new THREE.SpriteMaterial({ map: glowTexture(), color: accent.clone().multiplyScalar(1.6), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+  const flames = [-1, 1].map((side) => {
+    const f = new THREE.Sprite(exhaustMat);
+    f.position.set(side * 3.4, -0.2, 12.4);
+    f.scale.setScalar(4);
+    g.add(f);
+    return f;
+  });
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 14), neon);
+  strip.position.set(0, 1.55, 2);
+  g.add(strip);
+  const gear = new THREE.Group();
+  for (const [x, z] of [[-2.2, -6], [2.2, -6], [-3, 6], [3, 6]]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 2.4, 6).translate(0, -1.2, 0), dark);
+    leg.position.set(x, -1.2, z);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.25, 10), dark);
+    foot.position.set(x, -3.6, z);
+    gear.add(leg, foot);
+  }
+  g.add(gear);
+  const light = new THREE.PointLight(accent, 1.5, 60, 1.6);
+  light.position.set(0, 3, 0);
   g.add(light);
-
-  let t = 0, arcT = 0;
+  g.scale.setScalar(s);
   return {
     group: g,
-    update(dt) {
-      t += dt;
-      uniforms.time.value = t;
-      inner.rotation.z += dt * 0.08;
-      outer.rotation.z -= dt * 0.03;
-      arcT -= dt;
-      if (arcT <= 0) {
-        arcT = 0.08;
-        let k = 0;
-        for (let i = 0; i < 8; i++) {
-          const from = pylons[i];
-          const to = from.clone().multiplyScalar((R - 4) / (R + 42));
-          if (Math.random() < 0.45) {
-            for (let s = 0; s < 72; s++) arcPos[k++] = 0;
-            continue;
-          }
-          let prev = from.clone();
-          for (let s = 1; s <= 12; s++) {
-            const p = from.clone().lerp(to, s / 12);
-            if (s < 12) p.add(new THREE.Vector3((Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9));
-            arcPos[k++] = prev.x; arcPos[k++] = prev.y; arcPos[k++] = prev.z;
-            arcPos[k++] = p.x; arcPos[k++] = p.y; arcPos[k++] = p.z;
-            prev = p;
-          }
-        }
-        arcGeo.attributes.position.needsUpdate = true;
-        arcMat.opacity = 0.6 + Math.random() * 0.4;
-      }
+    gear,
+    setThrust(v) {
+      for (const f of flames) f.scale.setScalar(2.5 + v * 7);
+      exhaustMat.opacity = 0.5 + v * 0.5;
+    },
+    dispose() {
+      g.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material && !o.isSprite) o.material.dispose();
+      });
+      exhaustMat.dispose();
     },
   };
 }

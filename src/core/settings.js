@@ -2,10 +2,10 @@
 const KEY = 'starsea-settings-v1';
 
 export const PRESETS = {
-  low: { label: 'Low', pixelRatio: 1, msaa: 0, bloomStrength: 0.7, texRes: 512, skyRes: 1024, particles: 5000, dust: 700, belt: 500, flare: false, planetSeg: 64 },
-  medium: { label: 'Medium', pixelRatio: 1.25, msaa: 2, bloomStrength: 0.8, texRes: 1024, skyRes: 1024, particles: 8000, dust: 1400, belt: 900, flare: true, planetSeg: 96 },
-  high: { label: 'High', pixelRatio: 1.5, msaa: 4, bloomStrength: 0.85, texRes: 1024, skyRes: 2048, particles: 12000, dust: 2200, belt: 1400, flare: true, planetSeg: 128 },
-  ultra: { label: 'Ultra', pixelRatio: 2, msaa: 4, bloomStrength: 0.9, texRes: 2048, skyRes: 2048, particles: 16000, dust: 3000, belt: 2200, flare: true, planetSeg: 160 },
+  low: { label: 'Low', pixelRatio: 1, msaa: 0, bloomStrength: 0.7, texRes: 512, skyRes: 1024, particles: 5000, dust: 700, belt: 500, flare: false, planetSeg: 64, leaf: 110, split: 1.7 },
+  medium: { label: 'Medium', pixelRatio: 1.25, msaa: 2, bloomStrength: 0.8, texRes: 1024, skyRes: 1024, particles: 8000, dust: 1400, belt: 900, flare: true, planetSeg: 96, leaf: 70, split: 2.1 },
+  high: { label: 'High', pixelRatio: 1.5, msaa: 4, bloomStrength: 0.85, texRes: 1024, skyRes: 2048, particles: 12000, dust: 2200, belt: 1400, flare: true, planetSeg: 128, leaf: 50, split: 2.5 },
+  ultra: { label: 'Ultra', pixelRatio: 2, msaa: 4, bloomStrength: 0.9, texRes: 2048, skyRes: 2048, particles: 16000, dust: 3000, belt: 2200, flare: true, planetSeg: 160, leaf: 36, split: 2.9 },
 };
 
 const DEFAULTS = {

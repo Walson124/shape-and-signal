@@ -48,9 +48,11 @@
           <div class="mono dim" id="loc-galaxy"></div>
           <div class="loc-sys" id="loc-system"></div>
           <div class="loc-row mono"><span>THREAT</span><span id="loc-danger"></span></div>
+          <div class="loc-row mono" id="alt-row"><span>ALTITUDE</span><span id="altitude"></span></div>
           <div class="loc-row mono"><span>QI DENSITY</span><span id="density"></span></div>
           <div class="loc-row mono"><span>COINS</span><span id="coins" class="gold"></span></div>
           <div class="loc-row mono"><span>ESSENCE</span><span id="essence" class="mg"></span></div>
+          <div class="loc-row mono"><span>STAR METAL</span><span id="ore" class="cyan"></span></div>
         </div>
         <div id="bounty-list"></div>
       </div>
@@ -69,10 +71,11 @@
       </div>
 
       <div id="hud-br" class="cy">
-        <div class="speed"><span id="speed" class="mono">0</span><span class="mono dim">U/S</span></div>
+        <div class="speed"><span id="speed" class="mono">0</span><span class="mono dim" id="speed-unit">M/S</span></div>
+        <div class="loc-row mono"><span>MODE</span><span id="move-mode" class="yl"></span></div>
         <div class="loc-row mono"><span>FORMATION</span><span id="formation" class="cyan"></span></div>
-        <div class="loc-row mono"><span>SWORD RANGE</span><span id="sword-range"></span></div>
         <div class="loc-row mono"><span>VIEW</span><span id="view-mode"></span></div>
+        <div class="loc-row mono" id="hull-row"><span>HULL</span><span id="hull"></span></div>
       </div>
 
       <div id="reticle">
@@ -93,6 +96,13 @@
       <div id="alert" class="hidden"></div>
       <div id="prompt" class="hidden"><svg class="prompt-ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" /><circle id="prompt-prog" cx="18" cy="18" r="15" /></svg><span id="prompt-text"></span></div>
       <div id="nav-info" class="hidden mono"></div>
+      <div id="star-target" class="cy hidden">
+        <div class="mono dim">STAR TARGET</div>
+        <div class="st-name" id="st-name"></div>
+        <div class="loc-row mono"><span>DISTANCE</span><span id="st-dist"></span></div>
+        <div class="loc-row mono"><span>THREAT</span><span id="st-threat"></span></div>
+        <div class="loc-row mono"><span>WARP</span><span id="st-range"></span></div>
+      </div>
       <div id="meditate" class="hidden"><span class="cn">修炼</span><span>CULTIVATING</span><b id="med-rate" class="mono"></b></div>
       <div id="fps" class="mono hidden"></div>
     </div>
@@ -115,7 +125,7 @@
       <div class="title-left">
         <div class="logo-cn">星海飞升</div>
         <h1 class="logo glitch" data-text="STARSEA ASCENSION">STARSEA ASCENSION</h1>
-        <p class="tagline">Steer flying swords with your mind. Devour the energy of the cosmos. Break through ten realms and cross the galaxies.</p>
+        <p class="tagline">Rise from a walled base city to the stars. Steer flying swords with your mind, break through ten realms, build a starship and warp across an endless galaxy.</p>
         <nav class="menu" id="title-menu">
           <button class="menu-item hidden" data-act="continue"><span class="mi-idx mono">01</span><span class="mi-label">Continue</span><span class="mi-sub mono" id="continue-sub"></span></button>
           <button class="menu-item" data-act="new"><span class="mi-idx mono">02</span><span class="mi-label">New Game</span></button>

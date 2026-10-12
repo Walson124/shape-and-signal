@@ -22,7 +22,7 @@ export class Loot {
     return this.mats.get(hex);
   }
 
-  spawn(pos, amount, color, count = 1) {
+  spawn(pos, amount, color, count = 1, kind = 'essence') {
     const m = this.mat(color);
     const per = amount / count;
     for (let i = 0; i < count; i++) {
@@ -35,7 +35,7 @@ export class Loot {
       g.position.copy(pos);
       this.scene.add(g);
       const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(25 + Math.random() * 35);
-      this.items.push({ g, mesh, vel: v, amount: per, life: 75, color: new THREE.Color(color).multiplyScalar(1.6), t: Math.random() * 10, pulled: false });
+      this.items.push({ g, mesh, vel: v, amount: per, kind, life: 90, color: new THREE.Color(color).multiplyScalar(1.6), t: Math.random() * 10, pulled: false });
     }
   }
 
@@ -66,6 +66,13 @@ export class Loot {
         this.sound.pickup();
         this.remove(i);
       }
+    }
+  }
+
+  rebase(m, q) {
+    for (const it of this.items) {
+      it.g.position.applyMatrix4(m);
+      it.vel.applyQuaternion(q);
     }
   }
 

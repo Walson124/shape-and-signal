@@ -1,5 +1,5 @@
 import { settings } from './settings.js';
-import { GALAXIES } from '../game/data.js';
+import { REGIONS } from '../game/data.js';
 
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 const STEP = 60 / 112 / 4;
@@ -90,10 +90,13 @@ export class AudioEngine {
   setListener(camera) {
     if (!this.ctx) return;
     const l = this.ctx.listener;
+    // sounds are positioned in the camera's parent frame
     const p = camera.position;
-    const e = camera.matrixWorld.elements;
-    const f = [-e[8], -e[9], -e[10]];
-    const u = [e[4], e[5], e[6]];
+    const q = camera.quaternion;
+    const fx = -(2 * (q.x * q.z + q.w * q.y)), fy = -(2 * (q.y * q.z - q.w * q.x)), fz = -(1 - 2 * (q.x * q.x + q.y * q.y));
+    const ux = 2 * (q.x * q.y - q.w * q.z), uy = 1 - 2 * (q.x * q.x + q.z * q.z), uz = 2 * (q.y * q.z + q.w * q.x);
+    const f = [fx, fy, fz];
+    const u = [ux, uy, uz];
     if (l.positionX) {
       const t = this.ctx.currentTime;
       l.positionX.setValueAtTime(p.x, t); l.positionY.setValueAtTime(p.y, t); l.positionZ.setValueAtTime(p.z, t);
@@ -366,7 +369,7 @@ export class AudioEngine {
   }
 
   currentChord() {
-    const chords = GALAXIES[this.galaxy].chords;
+    const chords = REGIONS[this.galaxy].chords;
     return chords[this.chordIdx % chords.length];
   }
 

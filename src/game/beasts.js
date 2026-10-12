@@ -471,31 +471,62 @@ export class BeastManager {
     this.onKill = null;
   }
 
-  setSystem(system, def, bossDefeated, avoid) {
-    this.clear();
-    this.system = system;
-    this.def = def;
-    this.max = Math.min(30, 13 + Math.round(def.tier * 1.8));
-    this.spawnTimer = 3;
-    let guard = 0;
-    while (this.beasts.length < this.max * 0.75 && guard++ < 40) this.spawnRandomGroup(avoid, 900);
-    if (def.boss !== null && !bossDefeated) this.spawnBoss(def.boss, system.bossPoint, def.tier);
+  // The environment supplies spawning, terrain and collision for the current
+  // frame (a planet surface or open space). See Game.beastEnv().
+  setEnv(env) {
+    this.env = env;
+    this.spawnTimer = Math.min(this.spawnTimer ?? 2, 2);
   }
 
-  spawnRandomGroup(avoid, minDist = 800) {
-    const pts = this.system.spawnPoints.filter((p) => !avoid || p.pos.distanceTo(avoid) > minDist);
-    if (!pts.length) return;
-    const sp = pts[Math.floor(Math.random() * pts.length)];
-    const tier = this.def.tier;
+  spawnRandomGroup(playerPos) {
+    const env = this.env;
+    if (!env || !env.spawn) return;
+    const sp = env.spawn(playerPos);
+    if (!sp) return;
+    const tier = sp.tier;
     const roll = Math.random();
     let type;
     if (sp.kind === 'belt') type = roll < 0.6 ? 'rockback' : 'mite';
     else if (sp.kind === 'hotspot') type = tier >= 2 && roll < 0.45 ? 'wraith' : roll < 0.75 ? 'ray' : 'mite';
+    else if (sp.kind === 'ground') type = roll < 0.5 ? 'mite' : roll < 0.75 ? 'ray' : tier >= 1 ? 'rockback' : 'mite';
     else type = roll < 0.45 ? 'mite' : roll < 0.8 ? 'ray' : tier >= 1 ? 'rockback' : 'mite';
-    const counts = { mite: [3, 6], ray: [1, 3], rockback: [1, 2], wraith: [1, 3] }[type];
+    if (tier >= 2 && roll > 0.9) type = 'wraith';
+    const counts = { mite: [2, 5], ray: [1, 3], rockback: [1, 2], wraith: [1, 2] }[type];
     const n = counts[0] + Math.floor(Math.random() * (counts[1] - counts[0] + 1));
-    const center = sp.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 300, (Math.random() - 0.5) * 120, (Math.random() - 0.5) * 300));
-    this.spawnGroup(type, center, n, tier);
+    this.spawnGroup(type, sp.pos, n, tier);
+  }
+
+  // Inert targets such as ore deposits: they take hits and drop loot.
+  spawnStatic({ pos, radius, hp, name, cn = '', color = 0x3ef2ff, onKill, tier = 0, cores = 0 }) {
+    const holder = new THREE.Object3D();
+    holder.position.copy(pos);
+    this.scene.add(holder);
+    const b = {
+      uid: ++this.uid, type: 'static', def: { name, behavior: 'static', aggro: 0, radius, xp: 0.4, coins: 0.3, cores, color, speed: 0 },
+      model: { group: holder, flash: [], anim: () => {} }, mesh: holder, pos: holder.position, vel: new THREE.Vector3(),
+      hp, maxHp: hp, dmg: 0, tier, radius, elite: false, boss: false, static: true, name, cn,
+      home: pos.clone(), wander: new THREE.Vector3(), wanderT: 0, gid: 0, alive: true, aggro: false,
+      cd: 0, cd2: 0, cd3: 0, state: 'move', stateT: 0, flashT: 0, phase: 0, lastHit: -99, xpMult: 1, coinMult: 1, onKill,
+    };
+    this.beasts.push(b);
+    return b;
+  }
+
+  removeBeast(b) {
+    if (!b.alive) return;
+    b.alive = false;
+    this.removeModel(b);
+    this.beasts.splice(this.beasts.indexOf(b), 1);
+  }
+
+  rebase(m, q) {
+    for (const b of this.beasts) {
+      b.pos.applyMatrix4(m);
+      b.home.applyMatrix4(m);
+      b.vel.applyQuaternion(q);
+      b.mesh.quaternion.premultiply(q);
+      if (b.chargeDir) b.chargeDir.applyQuaternion(q);
+    }
   }
 
   spawnGroup(type, center, n, tier, aggro = false) {
@@ -570,6 +601,15 @@ export class BeastManager {
 
   kill(b) {
     b.alive = false;
+    if (b.static) {
+      this.particles.burst(b.pos, new THREE.Color(b.def.color).multiplyScalar(2), 60, 40, 1.4, 1.2, 1.5);
+      this.sound.explosion(b.pos, false);
+      this.removeModel(b);
+      this.beasts.splice(this.beasts.indexOf(b), 1);
+      if (b.onKill) b.onKill(b);
+      if (this.onKill) this.onKill(b);
+      return;
+    }
     const c = b.boss ? b.def.color : b.elite ? 0xffd040 : b.def.color;
     this.combat.explosion(b.pos, c, b.boss ? 6 : Math.max(1, b.radius / 4));
     this.combat.debris(b.pos, c, b.boss ? 40 : Math.round(6 + b.radius), b.radius * 0.25);
@@ -603,9 +643,9 @@ export class BeastManager {
     return tmpA.copy(player.pos).addScaledVector(player.vel, d / speed).sub(b.pos).normalize().clone();
   }
 
-  face(b, dir, dt, rate = 6) {
+  face(b, dir, dt, rate = 6, up = UP) {
     if (dir.lengthSq() < 0.0001) return;
-    tmpM.lookAt(tmpB.copy(b.pos).add(dir), b.pos, UP);
+    tmpM.lookAt(tmpB.copy(b.pos).add(dir), b.pos, up);
     tmpQ.setFromRotationMatrix(tmpM);
     b.mesh.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * rate));
   }
@@ -619,14 +659,29 @@ export class BeastManager {
 
   update(dt, ctx) {
     const { player, playerAlive, time } = ctx;
+    const env = this.env;
     this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0) {
-      this.spawnTimer = 7;
-      const normal = this.beasts.filter((b) => !b.boss).length;
-      if (normal < this.max) this.spawnRandomGroup(player.pos, 900);
+    if (this.spawnTimer <= 0 && env) {
+      this.spawnTimer = env.interval ?? 6;
+      const normal = this.beasts.filter((b) => !b.boss && !b.static).length;
+      if (normal < (env.max ?? 0) && playerAlive) this.spawnRandomGroup(player.pos);
+    }
+    // despawn stragglers far behind
+    if (env) {
+      for (let i = this.beasts.length - 1; i >= 0; i--) {
+        const b = this.beasts[i];
+        if (b.boss || b.static || b.aggro) continue;
+        if (b.pos.distanceTo(player.pos) > (env.despawn ?? 3000)) this.removeBeast(b);
+      }
     }
 
     for (const b of this.beasts) {
+      if (b.static) {
+        if (b.flashT > 0) b.flashT -= dt;
+        continue;
+      }
+      const ground = env && env.ground ? env.ground(b.pos) : null;
+      const bUp = ground ? ground.up : UP;
       const toP = tmpA.subVectors(player.pos, b.pos);
       const d = toP.length();
       const dirP = toP.clone().divideScalar(Math.max(d, 0.001));
@@ -716,10 +771,28 @@ export class BeastManager {
       }
 
       const accel = b.state === 'charge' ? 6 : 2.2;
+      if (ground) {
+        // keep movement along the surface for walkers
+        const walker = b.type === 'mite' || b.type === 'rockback';
+        if (walker) desired.addScaledVector(ground.up, -desired.dot(ground.up));
+      }
       b.vel.lerp(desired, 1 - Math.exp(-dt * accel));
       b.pos.addScaledVector(b.vel, dt);
-      if (this.system) this.system.resolveCollision(b.pos, b.radius);
-      this.face(b, faceDir || (b.vel.lengthSq() > 4 ? b.vel.clone().normalize() : dirP), dt, b.boss ? 2.5 : 6);
+      if (env && env.resolve) env.resolve(b.pos, b.radius);
+      if (ground) {
+        const D = b.pos.length();
+        const walker = b.type === 'mite' || b.type === 'rockback';
+        const g2 = env.ground(b.pos);
+        const floor = g2.floorR + b.radius * (walker ? 0.75 : 1);
+        if (walker) b.pos.multiplyScalar(floor / D);
+        else {
+          const hover = floor + (b.boss ? 60 : 18 + (b.phase % 1) * 20);
+          if (D < hover) b.pos.multiplyScalar((D + (hover - D) * Math.min(1, dt * 3)) / D);
+        }
+      }
+      let fd = faceDir || (b.vel.lengthSq() > 4 ? b.vel.clone().normalize() : dirP);
+      if (ground && (b.type === 'mite' || b.type === 'rockback')) fd = fd.clone().addScaledVector(bUp, -fd.dot(bUp)).normalize();
+      this.face(b, fd, dt, b.boss ? 2.5 : 6, bUp);
 
       if (playerAlive && b.aggro && d < b.radius + player.radius + 1.5) {
         b.cd3 -= dt;

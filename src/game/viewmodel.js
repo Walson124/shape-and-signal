@@ -313,12 +313,13 @@ export class ViewModel {
     }
     this.thread.visible = true;
     const ndc = this.leftTipNDC(new THREE.Vector3());
-    const dir = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(camera).sub(camera.position).normalize();
-    const a = camera.position.clone().addScaledVector(dir, 1.2);
+    const camPos = camera.getWorldPosition(new THREE.Vector3());
+    const dir = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(camera).sub(camPos).normalize();
+    const a = camPos.clone().addScaledVector(dir, 1.2);
     const b = target;
     const ab = b.clone().sub(a);
     const len = ab.length();
-    const toCam = camera.position.clone().sub(a).normalize();
+    const toCam = camPos.clone().sub(a).normalize();
     const side = new THREE.Vector3().crossVectors(ab, toCam).normalize();
     const up = new THREE.Vector3().crossVectors(side, ab).normalize();
     const p = this.threadPos;

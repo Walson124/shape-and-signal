@@ -9,6 +9,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 const TRAIL_N = 20;
 const tA = new THREE.Vector3();
 const tB = new THREE.Vector3();
+const tC = new THREE.Vector3();
 const tQ = new THREE.Quaternion();
 const tM = new THREE.Matrix4();
 
@@ -122,13 +123,18 @@ export class SwordArray {
     const spread = perSide > 1 ? k / (perSide - 1) : 0.5;
     const ang = THREE.MathUtils.degToRad(52 + spread * 58);
     const R = 4.4 + spread * 1.0;
-    const fwd = tA.set(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-    const right = tB.set(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    // slots hang around the player in the plane of their local up
+    const up = player.mode === 'space' ? player.localUp(tC) : tC.copy(player.up);
+    const f = player.forward(tA);
+    f.addScaledVector(up, -f.dot(up));
+    if (f.lengthSq() < 1e-6) player.localUp(f).negate();
+    f.normalize();
+    const right = tB.crossVectors(f, up).normalize();
     const bob = Math.sin(this.time * 1.6 + s.i * 1.3) * 0.18;
     out.copy(player.pos)
-      .addScaledVector(fwd, Math.cos(ang) * R)
-      .addScaledVector(right, Math.sin(ang) * R * side);
-    out.y += -0.9 + spread * 1.3 + bob;
+      .addScaledVector(f, Math.cos(ang) * R)
+      .addScaledVector(right, Math.sin(ang) * R * side)
+      .addScaledVector(up, -0.9 + spread * 1.3 + bob);
     return out;
   }
 
@@ -331,7 +337,7 @@ export class SwordArray {
       speedSum += sp - player.vel.length() * (s.state === 'seek' ? 0 : 1);
       let dir = faceDir;
       if (!dir || sp > 140) dir = sp > 5 ? tB.copy(s.vel).normalize() : aimDir;
-      tM.lookAt(tA.copy(s.pos).add(dir), s.pos, UP);
+      tM.lookAt(tA.copy(s.pos).add(dir), s.pos, ctx.up || UP);
       tQ.setFromRotationMatrix(tM);
       if (s.spawned) {
         s.group.quaternion.copy(tQ);
@@ -390,6 +396,21 @@ export class SwordArray {
         ph.mesh.position.addScaledVector(dir, step);
       }
     }
+  }
+
+  rebase(m, q) {
+    for (const s of this.swords) {
+      s.pos.applyMatrix4(m);
+      s.vel.applyQuaternion(q);
+      s.group.position.copy(s.pos);
+      s.group.quaternion.premultiply(q);
+      s.trail.filled = false;
+    }
+    for (const ph of this.phantoms) {
+      ph.mesh.position.applyMatrix4(m);
+      ph.aim.applyMatrix4(m);
+    }
+    this.controlPoint.applyMatrix4(m);
   }
 
   clearPhantoms() {

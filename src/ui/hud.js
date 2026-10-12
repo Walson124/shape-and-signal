@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { REALMS, STAGES, MAX_REALM, TECHNIQUES, ACTIVE_TECHNIQUES, PILLS, GALAXIES, realmOf } from '../game/data.js';
+import { REALMS, STAGES, MAX_REALM, TECHNIQUES, ACTIVE_TECHNIQUES, PILLS, realmOf } from '../game/data.js';
 import { settings } from '../core/settings.js';
 
 export function fmt(n) {
@@ -31,6 +31,7 @@ export class HUD {
     for (const id of ['hud', 'target', 't-name', 't-cn', 't-realm', 't-dist', 't-hp', 'boss-bar', 'boss-name', 'boss-cn', 'boss-fill', 'boss-ghost', 'trib-bar', 'trib-fill',
       'realm-name', 'realm-cn', 'stage-name', 'xp-fill', 'xp-text', 'bt-ready', 'loc-galaxy', 'loc-system', 'loc-danger', 'density', 'coins', 'essence', 'bounty-list',
       'hp-fill', 'hp-text', 'en-fill', 'en-text', 'sp-fill', 'sp-text', 'status-row', 'sword-pips', 'skills', 'speed', 'formation', 'sword-range', 'view-mode',
+      'altitude', 'alt-row', 'ore', 'speed-unit', 'move-mode', 'hull', 'hull-row', 'star-target', 'st-name', 'st-dist', 'st-threat', 'st-range',
       'reticle', 'hitmark', 'lock', 'ctrl-mark', 'markers', 'dmg-layer', 'feed', 'alert', 'prompt', 'prompt-text', 'prompt-prog', 'nav-info', 'meditate', 'med-rate',
       'fps', 'banner', 'compass', 'radar']) this.el[id] = $(id);
     this.compassCtx = this.el.compass.getContext('2d');
@@ -185,18 +186,40 @@ export class HUD {
     } else {
       bt.classList.add('hidden');
     }
-    const g = GALAXIES[state.galaxy];
-    const sys = info.systemDef;
-    e['loc-galaxy'].textContent = `${g.name.toUpperCase()} · ${g.cn}`;
-    e['loc-system'].textContent = `${sys.name}`;
-    e['loc-danger'].innerHTML = `<span class="${dangerClass(sys.tier, state.realm)}">${realmOf(sys.tier).name.toUpperCase()}</span>`;
+    const loc = info.loc;
+    e['loc-galaxy'].textContent = `${loc.region.toUpperCase()} · ${loc.system.toUpperCase()}`;
+    e['loc-system'].textContent = loc.body;
+    e['loc-danger'].innerHTML = `<span class="${dangerClass(loc.tier, state.realm)}">${realmOf(loc.tier).name.toUpperCase()}</span>`;
+    if (loc.alt !== null) {
+      e['alt-row'].classList.remove('hidden');
+      e.altitude.textContent = loc.alt >= 1000 ? `${(loc.alt / 1000).toFixed(2)} KM` : `${Math.round(loc.alt)} M`;
+    } else {
+      e['alt-row'].classList.add('hidden');
+    }
+    e.ore.textContent = fmt(state.ore);
+    e['move-mode'].textContent = loc.mode;
+    if (info.hull !== null) {
+      e['hull-row'].classList.remove('hidden');
+      e.hull.textContent = `${Math.round(info.hull * 100)}%`;
+    } else {
+      e['hull-row'].classList.add('hidden');
+    }
+    const stt = info.starTarget;
+    if (stt) {
+      e['star-target'].classList.remove('hidden');
+      e['st-name'].textContent = `${stt.name}${stt.boss ? ' ☠' : ''}${stt.visited ? ' ✓' : ''}`;
+      e['st-dist'].textContent = `${stt.dist.toFixed(1)} LY`;
+      e['st-threat'].innerHTML = `<span class="${dangerClass(stt.tier, state.realm)}">${realmOf(stt.tier).name.toUpperCase()}</span>`;
+      e['st-range'].innerHTML = stt.inRange === null ? '<span class="dim">NO SHIP</span>' : stt.inRange ? '<span class="danger-ok">IN RANGE · [G]</span>' : `<span class="danger-bad">RANGE ${stt.range} LY</span>`;
+    } else {
+      e['star-target'].classList.add('hidden');
+    }
     e.density.textContent = `×${info.density.toFixed(1)}`;
     e.coins.textContent = fmt(state.coins);
     e.essence.textContent = fmt(state.essence);
     e['med-rate'].textContent = `+${fmt(info.medRate)}/S`;
-    e.speed.textContent = Math.round(info.speed);
+    if (info.speed >= 10000) { e.speed.textContent = (info.speed / 1000).toFixed(1); e['speed-unit'].textContent = 'KM/S'; } else { e.speed.textContent = Math.round(info.speed); e['speed-unit'].textContent = 'M/S'; }
     e.formation.textContent = info.formation.toUpperCase();
-    e['sword-range'].textContent = fmtDist(info.controlRange);
     e['view-mode'].textContent = info.camMode === 'first' ? 'FIRST PERSON' : 'THIRD PERSON';
     if (info.nav) {
       e['nav-info'].classList.remove('hidden');
@@ -232,12 +255,13 @@ export class HUD {
   }
 
   // ----------------------------------------------------------- compass --
-  drawCompass(yaw, items) {
+  // heading: radians, 0 = north, clockwise positive. items: [{bearing, color}] same convention.
+  drawCompass(headingRad, items) {
     const ctx = this.compassCtx;
     const w = 560, h = 44, cx = w / 2;
     const span = THREE.MathUtils.degToRad(75);
     ctx.clearRect(0, 0, w, h);
-    const heading = ((-THREE.MathUtils.radToDeg(yaw) % 360) + 360) % 360;
+    const heading = ((THREE.MathUtils.radToDeg(headingRad) % 360) + 360) % 360;
     ctx.font = '12px "Share Tech Mono", monospace';
     ctx.textAlign = 'center';
     for (let d = Math.floor(heading - 80); d <= heading + 80; d++) {
@@ -264,8 +288,8 @@ export class HUD {
     ctx.lineTo(cx, 10);
     ctx.fill();
     for (const it of items) {
-      const rel = wrap(it.bearing - yaw);
-      const x = cx - (rel / span) * (w / 2);
+      const rel = wrap(it.bearing - headingRad);
+      const x = cx + (rel / span) * (w / 2);
       const clamped = Math.max(10, Math.min(w - 10, x));
       ctx.fillStyle = it.color;
       ctx.beginPath();
@@ -277,7 +301,7 @@ export class HUD {
   }
 
   // ------------------------------------------------------------- radar --
-  drawRadar(dt, player, blips, range) {
+  drawRadar(dt, blips, range) {
     const ctx = this.radarCtx;
     const w = 260, h = 150, cx = w / 2, cy = h / 2 + 6, rx = 118, ry = 56;
     ctx.clearRect(0, 0, w, h);
@@ -319,13 +343,11 @@ export class HUD {
     ctx.lineTo(cx + Math.cos(sa) * rx, cy + Math.sin(sa) * ry);
     ctx.stroke();
 
-    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
-    const rxv = Math.cos(player.yaw), rzv = -Math.sin(player.yaw);
-    const sorted = blips.slice().sort((a, b) => b.pos.z - a.pos.z);
+    const sorted = blips.slice().sort((a, b) => b.f - a.f);
     for (const b of sorted) {
-      const dx = b.pos.x - player.pos.x, dy = b.pos.y - player.pos.y, dz = b.pos.z - player.pos.z;
-      let fwd = dx * fx + dz * fz;
-      let right = dx * rxv + dz * rzv;
+      let fwd = b.f;
+      let right = b.r;
+      const dy = b.u;
       const dist = Math.hypot(fwd, right);
       let edge = false;
       if (dist > range) {

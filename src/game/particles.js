@@ -127,6 +127,25 @@ export class Particles {
     this.aAlpha.needsUpdate = true;
   }
 
+  rebase(m, q) {
+    const p = this.pos, vel = this.vel;
+    const e = m.elements;
+    const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+    for (let i = 0; i < this.cap; i++) {
+      if (this.life[i] <= 0) continue;
+      const i3 = i * 3;
+      const x = p[i3], y = p[i3 + 1], z = p[i3 + 2];
+      p[i3] = e[0] * x + e[4] * y + e[8] * z + e[12];
+      p[i3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+      p[i3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+      const vx = vel[i3], vy = vel[i3 + 1], vz = vel[i3 + 2];
+      const ix = qw * vx + qy * vz - qz * vy, iy = qw * vy + qz * vx - qx * vz, iz = qw * vz + qx * vy - qy * vx, iw = -qx * vx - qy * vy - qz * vz;
+      vel[i3] = ix * qw + iw * -qx + iy * -qz - iz * -qy;
+      vel[i3 + 1] = iy * qw + iw * -qy + iz * -qx - ix * -qz;
+      vel[i3 + 2] = iz * qw + iw * -qz + ix * -qy - iy * -qx;
+    }
+  }
+
   clear() {
     this.life.fill(0);
     this.alpha.fill(0);

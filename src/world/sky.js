@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { NOISE_GLSL } from '../core/glsl.js';
 import { mulberry32, hashString } from '../core/rng.js';
 import { galaxyTexture, spikeTexture } from './textures.js';
-import { GALAXIES } from '../game/data.js';
+import { REGIONS, STAR_TYPES } from '../game/data.js';
+import { starsNear, coreDirection } from './galaxy.js';
 
 // Bakes the galaxy's sky (domain-warped nebulae, three star layers, distant
 // galaxies) into a cubemap once, then derives a PMREM environment from it so
@@ -14,16 +15,17 @@ export class SkyBaker {
     this.current = null;
   }
 
-  bake(gIndex, size) {
-    const g = GALAXIES[gIndex];
-    const r = mulberry32(hashString(`sky:${g.id}`));
+  // Bake the sky as seen from `galPos` (light years): region nebulae, the
+  // galactic band, the core glow and every real star within 160 ly.
+  bake(regionIndex, galPos, size) {
+    const g = REGIONS[regionIndex];
+    const r = mulberry32(hashString(`sky:${g.id}:${Math.round(galPos.x)},${Math.round(galPos.y)},${Math.round(galPos.z)}`));
     const scene = new THREE.Scene();
     const disposables = [];
     const track = (o) => { disposables.push(o); return o; };
 
-    const band = new THREE.Vector3(r() - 0.5, 1, r() - 0.5).normalize();
-    const tangent = new THREE.Vector3(1, 0, 0).cross(band).normalize();
-    const core = tangent.clone().applyAxisAngle(band, r() * Math.PI * 2);
+    const band = new THREE.Vector3(0, 1, 0);
+    const core = coreDirection(galPos);
     const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
     const skyMat = track(new THREE.ShaderMaterial({
       side: THREE.BackSide,
@@ -121,24 +123,29 @@ export class SkyBaker {
       }));
       scene.add(new THREE.Points(geo, mat));
     };
-    starLayer(16000, 1.2, 2.2, 0.55, 0.6);
-    starLayer(2500, 2.2, 3.6, 1.0, 0.4);
-    starLayer(300, 3.5, 5.5, 1.8, 0.2);
+    starLayer(18000, 1.0, 2.0, 0.45, 0.7);
+    starLayer(2500, 1.8, 3.0, 0.8, 0.5);
 
     // bright stars with diffraction spikes
     const spike = spikeTexture();
-    for (let i = 0; i < 26; i++) {
-      const u = r() * 2 - 1, th = r() * Math.PI * 2, s = Math.sqrt(1 - u * u);
-      const c = new THREE.Color().setHSL(r() < 0.6 ? 0.58 : 0.1, 0.4, 0.8).multiplyScalar(1.6);
-      const m = track(new THREE.SpriteMaterial({ map: spike, color: c, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    const near = starsNear(galPos, 160);
+    const starMats = new Map();
+    for (const { star, dist } of near) {
+      const st = STAR_TYPES[star.cls];
+      const bright = Math.min(3, (st.lum * 260) / (dist * dist + 30));
+      let m = starMats.get(star.cls);
+      if (!m) {
+        m = track(new THREE.SpriteMaterial({ map: spike, color: new THREE.Color(st.glow).lerp(new THREE.Color(0xffffff), 0.45).multiplyScalar(1.5), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+        starMats.set(star.cls, m);
+      }
       const sp = new THREE.Sprite(m);
-      sp.position.set(s * Math.cos(th), u, s * Math.sin(th)).multiplyScalar(85);
-      sp.scale.setScalar(2.2 + r() * 2.5);
+      sp.position.copy(star.pos).sub(galPos).normalize().multiplyScalar(85);
+      sp.scale.setScalar(0.6 + Math.sqrt(bright) * 2.4);
       scene.add(sp);
     }
 
-    GALAXIES.forEach((other, i) => {
-      if (i === gIndex) return;
+    REGIONS.forEach((other, i) => {
+      if (i === regionIndex) return;
       const tex = track(galaxyTexture(other.sky[0], hashString(other.id)));
       const m = track(new THREE.SpriteMaterial({ map: tex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85 }));
       const sp = new THREE.Sprite(m);
