@@ -5,6 +5,7 @@ import { chunkIndex } from './chunkgen.js';
 import { terrainMaterial, propMaterial, propGeometries } from './props.js';
 import { makeAtmosphere, makeOcean, makeClouds, makeRings } from './planetfx.js';
 import { buildSettlement } from './city.js';
+import { buildRuinField } from './ruins.js';
 import { buildPoi } from './pois.js';
 import { PLANET_INFO } from '../game/data.js';
 import { settings } from '../core/settings.js';
@@ -47,7 +48,7 @@ export class Planet {
     this.tilt.add(this.spin);
     this.params = {
       key: this.key, type: body.type, seed: body.seed, radius: this.R, amp: body.amp, sea: body.sea,
-      city: body.sites.city, outposts: [...body.sites.outposts, ...(body.sites.towns || [])],
+      city: body.sites.city, outposts: [...body.sites.outposts, ...(body.sites.towns || [])], ruins: body.sites.ruins || [],
     };
     this.atmoR = body.atmo ? this.R * (1 + body.atmo.height) : this.R + body.amp * 1.5 + 200;
     this.soi = Math.max(this.atmoR * 2.4, this.R * 3.5);
@@ -226,7 +227,7 @@ export class Planet {
     }
     if (node.mesh) {
       this.terrainGroup.remove(node.mesh);
-      for (const c of node.mesh.children) c.dispose();
+      for (const c of node.mesh.children) if (c.isInstancedMesh) c.dispose();
       node.mesh.geometry.dispose();
       node.mesh = null;
       this.chunkCount--;
@@ -321,6 +322,22 @@ export class Planet {
         }
         const r2 = s.collideBoxes(local, radius, eye);
         if (r2 !== null) roof = Math.max(roof ?? 0, r2);
+      }
+      for (const e of this.details.ruins) {
+        const s = e.obj;
+        if (!s || local.distanceTo(s.group.position) > s.radius * 1.4 + 100) continue;
+        for (const c of s.colliders) {
+          tA.subVectors(local, c.pos);
+          const along = tA.dot(c.up);
+          const feet = along - eye;
+          if (along < -2 || feet > c.height + 0.5) continue;
+          tB.copy(tA).addScaledVector(c.up, -along);
+          const hd = tB.length();
+          if (hd < c.radius + radius) {
+            if (feet > c.height - 0.8) roof = Math.max(roof ?? 0, c.pos.length() + c.height);
+            else if (hd > 0.001) local.addScaledVector(tB.divideScalar(hd), c.radius + radius - hd);
+          }
+        }
       }
     }
     // props near the point
@@ -449,12 +466,14 @@ export class Planet {
     const d = this.details;
     d.settlements = d.sites.filter((e) => e.obj).map((e) => e.obj);
     d.services = [...(d.campServices || [])];
+    for (const e of d.ruins || []) if (e.obj) d.services.push(...e.obj.services);
     for (const s of d.settlements) d.services.push(...s.services);
   }
 
   buildDetails() {
     if (this.details || !this.body.landable) return;
-    const d = { sites: [], settlements: [], pois: [], services: [] };
+    const d = { sites: [], settlements: [], pois: [], services: [], ruins: [] };
+    for (const site of this.body.sites.ruins || []) d.ruins.push({ site, dir: new THREE.Vector3(site.x, site.y, site.z).normalize(), obj: null });
     for (const site of this.allSites()) {
       const dir = new THREE.Vector3(site.x, site.y, site.z).normalize();
       // a light pillar marks every settlement from afar
@@ -503,6 +522,11 @@ export class Planet {
       this.spin.remove(e.beacon);
       e.beacon.material.dispose();
     }
+    for (const e of this.details.ruins || []) {
+      if (!e.obj) continue;
+      this.spin.remove(e.obj.group);
+      e.obj.dispose();
+    }
     for (const p of this.details.pois) {
       this.spin.remove(p.obj.group);
       p.obj.group.traverse((o) => {
@@ -548,6 +572,20 @@ export class Planet {
         }
         e.beacon.visible = d > 2500;
         e.beacon.material.opacity = Math.min(1, (d - 2500) / 4000);
+      }
+      for (const e of this.details.ruins) {
+        const d = tB.copy(e.dir).multiplyScalar(this.R).distanceTo(this.camLocal);
+        if (!e.obj && d < 3200) {
+          e.obj = buildRuinField(e.site, this);
+          this.spin.add(e.obj.group);
+          changed = true;
+        } else if (e.obj && d > 4800) {
+          this.spin.remove(e.obj.group);
+          e.obj.dispose();
+          e.obj = null;
+          changed = true;
+        }
+        if (e.obj) e.obj.update(dt);
       }
       if (changed) this.refreshSettlements();
       for (const s of this.details.settlements) s.update(dt, this.camLocal);

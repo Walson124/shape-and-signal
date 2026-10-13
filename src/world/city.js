@@ -113,6 +113,7 @@ export function buildSettlement(site, R, opts = {}) {
   const addBox = (x0, x1, y0, y1, z0, z1, extra = {}) => boxes.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), y0, y1, z0: Math.min(z0, z1), z1: Math.max(z0, z1), ...extra });
 
   const radius = site.radius;
+  const guardSpots = [];
   const plaza = outpost ? 26 : capital ? 80 : 56;
   const padX = outpost ? radius * 0.55 : capital ? radius - 150 : radius - 110;
   const arena = capital ? { x: -radius * 0.45, z: radius * 0.42, r: 46 } : null;
@@ -237,6 +238,16 @@ export function buildSettlement(site, R, opts = {}) {
       const [sx, sz] = toWorldXZ(lay.service.x, lay.service.z);
       services.push({ kind, name: v.name, pos: toLocal(sx, 1.6, sz), range: 4.5, venue, city: site.name });
     }
+    if (kind === 'lobby') {
+      // an elevator to the roof, and a hatch on the roof to come back down
+      const [ex, ez] = toWorldXZ(bw / 2 - 1.5, bd / 2 - 3);
+      const [ix, iz] = toWorldXZ(0, 0);
+      const rx = sh.x - sh.w * 0.32, rz = sh.z - sh.d * 0.32;
+      services.push({ kind: 'elevator', name: 'Elevator to the roof', pos: toLocal(ex, 1.6, ez), range: 3.5, to: toLocal(rx + 2.5, sh.h + 0.05, rz), city: site.name });
+      services.push({ kind: 'elevator', name: 'Elevator down', pos: toLocal(rx, sh.h + 1.6, rz), range: 3.5, to: toLocal(ix, 0.05, iz), city: site.name });
+      place(darkParts, new THREE.BoxGeometry(3, 3, 3), rx, sh.h + 1.5, rz);
+      neon('cy', new THREE.BoxGeometry(2.2, 0.15, 0.15), rx, sh.h + 2.6, rz + 1.55);
+    }
     venues.push(venue);
   });
 
@@ -246,7 +257,14 @@ export function buildSettlement(site, R, opts = {}) {
     const gateEvery = capital ? 18 : 12;
     for (let i = 0; i < segs; i++) {
       const a = (i / segs) * Math.PI * 2;
-      if (i % gateEvery === 0) continue; // gates
+      if (i % gateEvery === 0) {
+        // two guards stand at every gate
+        for (const s of [-1, 1]) {
+          const ga = a + s * 0.012;
+          guardSpots.push([Math.cos(ga) * (radius - 14), Math.sin(ga) * (radius - 14), -a + Math.PI / 2]);
+        }
+        continue;
+      }
       const wr = radius - 6;
       const x = Math.cos(a) * wr, z = Math.sin(a) * wr;
       const len = (2 * Math.PI * wr) / segs + 1;
@@ -408,6 +426,46 @@ export function buildSettlement(site, R, opts = {}) {
     lampXZ.push({ x, z, broken: 0 });
   }
   group.add(lamps, poles);
+
+  // ---- a market street south of the plaza
+  if (!outpost) {
+    const awning = { cy: [], mg: [], yl: [] };
+    const keys = ['cy', 'mg', 'yl'];
+    const vendors = [];
+    const marketLen = capital ? 140 : 90;
+    let n = 0;
+    for (let zz = -plaza - 14; zz > -plaza - marketLen; zz -= 14) {
+      for (const sx of [-1, 1]) {
+        const x = sx * 13, z = zz;
+        place(darkParts, new THREE.BoxGeometry(5, 1.1, 2), x, 0.55, z, 0);
+        for (const px of [-2.3, 2.3]) place(darkParts, new THREE.CylinderGeometry(0.08, 0.08, 3.2, 4), x + px, 1.6, z + sx * 1.6, 0);
+        const k = keys[(n + (sx > 0 ? 1 : 0)) % 3];
+        place(awning[k], new THREE.BoxGeometry(5.6, 0.12, 3.6), x, 3.2, z + sx * 0.6, 0);
+        neon(k, new THREE.SphereGeometry(0.22, 6, 4), x, 2.7, z + sx * 2.1);
+        addBox(x - 2.5, x + 2.5, 0, 1.1, z - 1, z + 1);
+        vendors.push([x, z + sx * 1.6, sx > 0 ? -Math.PI / 2 : Math.PI / 2]);
+        n++;
+      }
+    }
+    const awnMat = { cy: 0x1f6f7a, mg: 0x7a1f4a, yl: 0x7a6a1f };
+    for (const [k, list] of Object.entries(awning)) if (list.length) group.add(new THREE.Mesh(mergeGeometries(list), new THREE.MeshStandardMaterial({ color: awnMat[k], roughness: 0.8, emissive: awnMat[k], emissiveIntensity: 0.25 })));
+    const vend = new THREE.InstancedMesh(npcGeometry(), new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.7 }), vendors.length);
+    vendors.forEach(([x, z, ry], i) => {
+      vend.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(x, drop(x, z), z), new THREE.Quaternion().setFromAxisAngle(Y_AXIS, ry), new THREE.Vector3(1, 1, 1)));
+    });
+    group.add(vend);
+    // two of the stalls do business with you
+    const z1 = -plaza - 14, z2 = -plaza - 42;
+    services.push({ kind: 'food', name: 'Street Food Stall', pos: toLocal(-13, 1.6, z1 + 2.4), range: 3.5, city: site.name });
+    services.push({ kind: 'pills', name: 'Herb Stall', pos: toLocal(13, 1.6, z2 - 2.4), range: 3.5, city: site.name });
+  }
+  if (guardSpots.length) {
+    const gm = new THREE.InstancedMesh(npcGeometry(), new THREE.MeshStandardMaterial({ color: 0x1c2a3a, roughness: 0.4, metalness: 0.6, emissive: 0x0a3a4a, emissiveIntensity: 0.6 }), guardSpots.length);
+    guardSpots.forEach(([x, z, ry], i) => {
+      gm.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(x, drop(x, z), z), new THREE.Quaternion().setFromAxisAngle(Y_AXIS, ry), new THREE.Vector3(1.15, 1.15, 1.15)));
+    });
+    group.add(gm);
+  }
 
   // ---- pedestrians walking the avenues
   const walkers = [];

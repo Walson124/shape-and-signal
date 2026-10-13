@@ -420,6 +420,11 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 #ping-ring.go { animation: pingOut 1.1s ease-out; }
 @keyframes pingOut { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(40); opacity: 0; } }
 
+.item.lore { grid-template-columns: 1fr; }
+.item.lore.locked { opacity: 0.45; }
+.item.lore.focus { border-color: var(--gd); box-shadow: inset 0 0 18px rgba(255, 200, 87, 0.18); }
+.item.lore p { font-size: 14px; line-height: 1.5; color: #cfd8e6; }
+
 /* ---- HUD scale */
 #hud-tl, #hud-tr, #hud-bl, #hud-bc, #hud-br, #feed, #star-target { zoom: var(--hud-scale, 1); }
 

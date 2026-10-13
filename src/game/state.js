@@ -27,6 +27,7 @@ export function newState() {
     chamberUntil: 0,
     meal: null,
     radar: 0,
+    lore: [],
     insight: 0,
     nixSeen: {},
     devour: false,

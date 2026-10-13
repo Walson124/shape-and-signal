@@ -123,6 +123,7 @@ export function makeTerrain(params) {
   const sea = params.sea;
   const city = params.city || null;
   const outpost = params.outposts || [];
+  const ruins = params.ruins || [];
   const craterFreq = 3 + r() * 3;
 
   function raw(x, y, z) {
@@ -133,7 +134,25 @@ export function makeTerrain(params) {
       const mask = smooth(0.0, 0.35, fbm(x * 1.7 + o[2][0], y * 1.7 + o[2][1], z * 1.7 + o[2][2], 3) + 0.15);
       const hills = fbm(x * 9 + o[3][0], y * 9 + o[3][1], z * 9 + o[3][2], 4);
       const det = fbm(x * 48 + o[4][0], y * 48 + o[4][1], z * 48 + o[4][2], 3);
-      return c * 0.22 * A + land * (mtn * mtn * mask * A * 0.9 + hills * A * 0.07) + det * A * 0.012;
+      let h = c * 0.22 * A + land * (mtn * mtn * mask * A * 0.9 + hills * A * 0.07) + det * A * 0.012;
+      // terraced cliffs in some regions
+      const tm = smooth(0.18, 0.32, fbm(x * 1.3 + o[5][0], y * 1.3 + o[5][1], z * 1.3 + o[5][2], 3));
+      if (tm > 0 && h > 0) {
+        const st = A * 0.055;
+        const k = h / st;
+        const f = k - Math.floor(k);
+        h = mix(h, (Math.floor(k) + smooth(0.7, 0.95, f)) * st, tm);
+      }
+      // rivers: winding channels cut below sea level so water fills them
+      if (sea !== null && h > sea - A * 0.01) {
+        const rv = Math.abs(fbm(x * 4.2 + o[7][0], y * 4.2 + o[7][1], z * 4.2 + o[7][2], 3) + fbm(x * 19 + o[6][0], y * 19 + o[6][1], z * 19 + o[6][2], 2) * 0.08);
+        const bank = 1 - smooth(0.012, 0.05, rv);
+        if (bank > 0) {
+          const bed = sea - A * 0.025;
+          h = mix(h, Math.min(h, bed), smooth(0, 1, bank));
+        }
+      }
+      return h;
     }
     if (type === 'desert') {
       const base = fbm(x * 1.6 + o[0][0], y * 1.6 + o[0][1], z * 1.6 + o[0][2], 4);
@@ -198,6 +217,16 @@ export function makeTerrain(params) {
       if (d < s.radius * pad) return true;
     }
     return false;
+  }
+
+  // 0..1: how strongly a point lies inside a lost-civilisation ruin field.
+  function inRuin(x, y, z) {
+    let best = 0;
+    for (const s of ruins) {
+      const d = Math.acos(Math.max(-1, Math.min(1, x * s.x + y * s.y + z * s.z))) * R;
+      if (d < s.radius * 1.3) best = Math.max(best, 1 - smooth(s.radius * 0.6, s.radius * 1.3, d));
+    }
+    return best;
   }
 
   // Surface radius including liquid (what you stand on).
@@ -269,6 +298,16 @@ export function makeTerrain(params) {
     if (inSite(x, y, z, 1.05) && h >= (sea ?? -1e9)) {
       // paved city ground
       out[0] = 0.05; out[1] = 0.055; out[2] = 0.065;
+    } else if (ruins.length && h >= (sea ?? -1e9)) {
+      // cracked old concrete where the lost cities stood
+      const ru = inRuin(x, y, z);
+      if (ru > 0) {
+        const cr = Math.abs(fbm(x * 260 + o[3][0], y * 260 + o[3][1], z * 260 + o[3][2], 2));
+        const c = cr < 0.012 ? 0.07 : 0.13 + n * 0.04;
+        // grass breaks through the old concrete in patches
+        const k = ru * 0.8 * smooth(-0.05, 0.25, fbm(x * 90 + o[2][0], y * 90 + o[2][1], z * 90 + o[2][2], 3) + 0.15);
+        out[0] = mix(out[0], c, k); out[1] = mix(out[1], c * 1.02, k); out[2] = mix(out[2], c * 1.05, k);
+      }
     }
   }
 
@@ -276,6 +315,7 @@ export function makeTerrain(params) {
   function prop(x, y, z, h, slope, rnd) {
     if ((sea !== null && h < sea + A * 0.012) || slope > 0.45) return -1;
     if (inSite(x, y, z, 1.25)) return -1;
+    if (ruins.length && inRuin(x, y, z) > 0.6 && rnd < 0.7) return rnd < 0.08 ? PROP.ROCK : -1;
     const n = fbm(x * 6 + o[6][0], y * 6 + o[6][1], z * 6 + o[6][2], 3);
     if (type === 'terran') {
       const hs = h / A;
@@ -294,7 +334,7 @@ export function makeTerrain(params) {
     return rnd < 0.05 ? PROP.ROCK : -1;
   }
 
-  return { height, floorHeight, color, prop, sea, amp: A, radius: R, type, inSite };
+  return { height, floorHeight, color, prop, sea, amp: A, radius: R, type, inSite, inRuin };
 }
 
 // Map cube-face coordinates (s, t in [-1, 1]) to a unit sphere direction.

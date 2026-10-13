@@ -6,6 +6,7 @@ import {
 import { PATHS, TECHS, REALM_PERKS, canLearn, nodeById } from './paths.js';
 import { Arts } from './arts.js';
 import { Companion } from './companion.js';
+import { LORE, RUIN_NAMES } from './lore.js';
 import { speciesForBody } from './bestiary.js';
 import { codeLabel } from '../core/bindings.js';
 import { newState, loadState, saveState, clearSave, derive } from './state.js';
@@ -1756,6 +1757,7 @@ export class Game {
     if (!it) return null;
     if (it.kind === 'leave') return this.canExitShip() ? '<kbd>E</kbd> LEAVE SHIP' : null;
     if (it.kind === 'ship') return '<kbd>E</kbd> BOARD YOUR SHIP';
+    if (it.kind === 'service' && it.service.kind === 'lore') return `<kbd>E</kbd> ACCESS THE OLD TERMINAL${this.state.lore.includes(it.service.lore) ? ' · READ' : ''}`;
     if (it.kind === 'service') return `<kbd>E</kbd> ${esc(it.name.toUpperCase())}`;
     if (it.kind === 'dock') return `<kbd>E</kbd> LAND ON ${esc(it.name.toUpperCase())}`;
     if (it.kind === 'poi') {
@@ -1784,6 +1786,10 @@ export class Game {
       this.boardShip();
     } else if (it.kind === 'dock') {
       this.dockShip(it.station);
+    } else if (it.kind === 'service' && it.service.kind === 'elevator') {
+      this.rideElevator(it.service);
+    } else if (it.kind === 'service' && it.service.kind === 'lore') {
+      this.readLore(it.service.lore);
     } else if (it.kind === 'service' || it.kind === 'station') {
       const vk = it.kind === 'station' ? 'station' : it.service.kind;
       this.rt.hp = this.stats.maxHp;
@@ -1801,7 +1807,7 @@ export class Game {
       if (vk === 'hall' && needs && ![...s.offers, ...s.bounties].some((b) => b.type === 'insight')) s.offers.unshift(insightTrial(s));
       const panel = {
         station: 'shop', hall: 'bounties', shipyard: 'shipyard', exchange: 'shop', pills: 'shop', forge: 'forge',
-        clinic: 'clinic', chamber: 'chamber', bar: 'bar', food: 'food', home: 'home', arena: 'arena', camp: 'shop',
+        clinic: 'clinic', chamber: 'chamber', bar: 'bar', food: 'food', home: 'home', arena: 'arena', camp: 'shop', lore: 'archive',
       }[vk] || 'shop';
       this.menus.openPanel(panel);
       this.input.unlock();
@@ -1950,6 +1956,66 @@ export class Game {
 
   geneCap() {
     return 3 + this.state.realm * 2;
+  }
+
+  rideElevator(sv) {
+    const p = this.player;
+    const up = sv.to.clone().normalize();
+    const fade = document.getElementById('fade');
+    fade.style.transition = 'opacity 0.25s';
+    fade.style.background = '#000';
+    fade.style.opacity = 1;
+    this.sound.confirm();
+    setTimeout(() => {
+      const fwd = p.forward().projectOnPlane(up).normalize();
+      const at = sv.to.clone().addScaledVector(up, EYE + 0.05);
+      p.placeAt(at, at.clone().add(fwd), up);
+      p.vel.set(0, 0, 0);
+      p.mode = 'ground';
+      this.camQuat.copy(p.quat);
+      fade.style.opacity = 0;
+      setTimeout(() => { fade.style.background = ''; fade.style.transition = ''; }, 300);
+    }, 280);
+  }
+
+  // ------------------------------------------------------------ lore --
+  readLore(i) {
+    const s = this.state;
+    const log = LORE[i];
+    if (!log) return;
+    const fresh = !s.lore.includes(i);
+    if (fresh) {
+      s.lore.push(i);
+      this.addXp(this.stats.xpNeed * 0.12);
+      s.coins += Math.round(40 * Math.pow(2.2, s.realm));
+      this.hud.notify(`Recovered an archive log: <b>${esc(log.title)}</b>. (${s.lore.length}/${LORE.length})`, 'yl');
+      this.sound.reward();
+      this.save();
+    }
+    this.menus.loreFocus = i;
+    this.menus.openPanel('archive');
+    this.input.unlock();
+    if (fresh && log.nix) setTimeout(() => this.nix.say(log.nix, 1), 600);
+  }
+
+  // Ruin fields: discovery and markers.
+  updateRuinFields(list, origin, fmtKm) {
+    const f = this.frame, s = this.state;
+    if (!f || !f.details || !f.details.ruins) return;
+    for (const e of f.details.ruins) {
+      const center = e.dir.clone().multiplyScalar(f.R + 30);
+      const d = center.distanceTo(origin);
+      const id = `ruinfield:${e.site.index}`;
+      const known = s.discovered.includes(id);
+      if (d < e.site.radius && !known) {
+        s.discovered.push(id);
+        this.hud.notify(`Discovered the ruins of <b>${esc(RUIN_NAMES[e.site.index] || 'a lost city')}</b>.`, 'yl');
+        this.applyBounties(progressBounties(s, { kind: 'discover' }));
+        this.nix.once('ruinfield', 'discover.ruin', {}, 0);
+      }
+      if (d < e.site.radius * 0.7 || d > (known ? 12000 : 5000)) continue;
+      list.push({ key: id, kind: 'hotspot', label: `<span style="color:#c8b89a">${esc((RUIN_NAMES[e.site.index] || 'Ruins').toUpperCase())}${known ? '' : ' ?'}</span>`, sub: fmtKm(d), pos: this.toWorld(center), dist: d, edge: false, compass: d < 3000 ? '#c8b89a' : null });
+    }
   }
 
   // --------------------------------------------------- destruction --
@@ -2992,6 +3058,7 @@ export class Game {
           list.push({ key: `svc:${sv.name}`, kind: 'station', label: esc(sv.name), sub: fmtKm(d), pos: this.toWorld(sv.pos.clone().addScaledVector(sv.pos.clone().normalize(), 8)), dist: d, edge: false, compass: d < 1500 ? '#3ef2ff' : null });
         }
       }
+      this.updateRuinFields(list, origin, fmtKm);
       for (const e of f.details.sites) {
         const center = e.dir.clone().multiplyScalar(f.R + e.site.height + 40);
         const d = center.distanceTo(origin);

@@ -4,6 +4,7 @@ import {
 } from '../game/data.js';
 import { PATHS, PATH_IDS, TECHS, REALM_PERKS, TREES, treeFor, canLearn, pointsFree, pointsEarned } from '../game/paths.js';
 import { MAX_BOUNTIES } from '../game/missions.js';
+import { LORE } from '../game/lore.js';
 import { settings, PRESETS } from '../core/settings.js';
 import { ACTIONS, codeLabel } from '../core/bindings.js';
 import { fmt, esc, hex } from './hud.js';
@@ -370,13 +371,14 @@ export class Menus {
     const k = this.panelKind;
     if (!k) return;
     const venue = this.venueTabs();
-    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['guide', 'Guide']];
+    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['archive', 'Archive'], ['guide', 'Guide']];
     const tabs = [...venue, ...base.filter(([kk]) => !venue.some(([vk]) => vk === kk))];
     this.$('panel-tabs').innerHTML = tabs.map(([kind, label]) => `<button class="tab ${kind === k ? 'on' : ''}" data-kind="${kind}">${label}</button>`).join('');
     const r = {
       shipyard: () => this.renderShipyard(), cultivation: () => this.renderCultivation(), skills: () => this.renderSkills(), bounties: () => this.renderBounties(),
       shop: () => this.renderShop(), forge: () => this.renderForge(), trainer: () => this.renderTrainer(), clinic: () => this.renderClinic(),
       chamber: () => this.renderChamber(), bar: () => this.renderBar(), food: () => this.renderFood(), home: () => this.renderHome(), arena: () => this.renderArena(),
+      archive: () => this.renderArchive(),
     }[k];
     this.$('panel-body').innerHTML = r ? r() : this.renderGuide();
   }
@@ -640,6 +642,18 @@ export class Menus {
     const wave = (s.arena || 0) + 1;
     return `<p class="panel-note">Step into the ring and face waves of this world's beasts while the crowd watches. Each wave is harder and pays more. Leave the ring and you forfeit. Best so far: <b>wave ${s.arena || 0}</b>.</p>
       <div class="list"><div class="item"><div><h4>Wave ${wave}<span class="cn">竞技场</span></h4><p>${Math.min(10, 2 + Math.floor(wave / 2))} beasts. Fight inside the sand circle.</p></div><button class="btn small primary" data-action="arena" ${g.arena ? 'disabled' : ''}>Enter the ring</button></div></div>`;
+  }
+
+  renderArchive() {
+    const { state } = this.game;
+    const found = (state.lore || []).slice().sort((a, b) => a - b);
+    const focus = this.loreFocus ?? found[found.length - 1];
+    this.loreFocus = null;
+    const list = LORE.map((l, i) => {
+      const has = found.includes(i);
+      return `<div class="item lore ${has ? '' : 'locked'} ${i === focus ? 'focus' : ''}"><div><h4>${has ? esc(l.title) : '— Missing log —'}</h4><p>${has ? esc(l.text) : 'Somewhere in the ruins of Terra, an old Concord terminal still holds this record.'}</p></div></div>`;
+    }).join('');
+    return `<p class="panel-note">Records of the Aurean Concord, the civilisation that ruled Terra before the Night of Teeth. Bunker terminals in the ruin fields still hold them. <b>${found.length}/${LORE.length}</b> recovered.</p><div class="list">${list}</div>`;
   }
 
   renderGuide() {

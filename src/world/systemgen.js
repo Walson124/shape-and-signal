@@ -46,6 +46,41 @@ function findSite(body, siteR, prefLat, fine, avoid = [], prefLon = null) {
   return { x: best.d[0], y: best.d[1], z: best.d[2], height: best.h };
 }
 
+// Fields of the lost civilisation scattered across a world. The nearest to the
+// capital come first, so lore logs are found roughly in story order.
+function placeRuins(body, avoid, r) {
+  const T = makeTerrain({ key: 'probe', type: body.type, seed: body.seed, radius: body.radius, amp: body.amp, sea: body.sea });
+  const sea = body.sea ?? -Infinity;
+  const R = body.radius;
+  const capital = avoid[0];
+  const out = [];
+  const tryAt = (d, radius) => {
+    const h = T.height(d[0], d[1], d[2]);
+    if (h < sea + body.amp * 0.03) return false;
+    for (const s of [...avoid, ...out]) {
+      const ang = Math.acos(Math.max(-1, Math.min(1, d[0] * s.x + d[1] * s.y + d[2] * s.z))) * R;
+      if (ang < (s.radius + radius) * 1.6) return false;
+    }
+    out.push({ x: d[0], y: d[1], z: d[2], radius, seed: Math.floor(r() * 1e9) });
+    return true;
+  };
+  // two close to the capital, so the first lore is a short walk away
+  const [cl, co] = latLonOf(capital);
+  for (const [a, b] of [[9, 6], [-6, -11], [12, -9], [-11, 8]]) {
+    if (out.length >= 2) break;
+    tryAt(dirFromLatLon(cl + a / WORLD_SCALE, co + b / WORLD_SCALE), 300);
+  }
+  let guard = 0;
+  while (out.length < 26 && guard++ < 600) {
+    const u = r() * 2 - 1, th = r() * Math.PI * 2, s = Math.sqrt(1 - u * u);
+    tryAt([s * Math.cos(th), u * 0.9, s * Math.sin(th)].map((v, i, a) => v / Math.hypot(...a)), 220 + r() * 260);
+  }
+  const dist = (s) => Math.acos(Math.max(-1, Math.min(1, s.x * capital.x + s.y * capital.y + s.z * capital.z)));
+  out.sort((a, b) => dist(a) - dist(b));
+  out.forEach((s, i) => { s.index = i; s.bunker = i < 14; });
+  return out;
+}
+
 const TERRA_TOWNS = [
   { name: 'Jiangnan Base City', cn: '江南基地市', lat: 25, lon: 120 },
   { name: 'Yangzhou Base City', cn: '扬州基地市', lat: 32, lon: 200 },
@@ -179,6 +214,7 @@ export function generateSystem(star) {
       terra.sites.outposts.push(site);
       placed.push(site);
     }
+    terra.sites.ruins = placeRuins(terra, placed, r);
     const [cLat, cLon] = latLonOf(terra.sites.city);
     addPois(r, terra, { ruin: 3, spring: 6, ore: 12, nest: 8, wreck: 4, obelisk: 3, camp: 5 });
     // guarantee a spring and an ore field near the city
