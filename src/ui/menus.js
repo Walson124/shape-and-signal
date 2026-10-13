@@ -92,6 +92,8 @@ export class Menus {
         sleep: () => { g.sleep(); g.closePanel(); },
         arena: () => g.startArena(),
         radar: () => g.buyRadar(),
+        order: () => g.orderDelivery(a.dataset.item),
+        sim: () => g.startSim(),
       };
       if (handlers[action]) {
         handlers[action]();
@@ -363,6 +365,7 @@ export class Menus {
       hall: [['bounties', 'Bounties'], ['trainer', 'Path trainer']], clinic: [['clinic', 'Gene clinic']], chamber: [['chamber', 'Chamber']],
       bar: [['bar', 'Teahouse']], food: [['food', 'Noodle bar']], home: [['home', 'Apartment']], arena: [['arena', 'Arena']],
       camp: [['shop', 'Trader'], ['bar', 'Campfire']],
+      virtual: [['vshop', 'Star Mall'], ['bounties', 'Bounty board'], ['vsim', 'Simulator'], ['fame', 'Hall of Fame']],
     };
     return map[vk] || [];
   }
@@ -379,6 +382,7 @@ export class Menus {
       shop: () => this.renderShop(), forge: () => this.renderForge(), trainer: () => this.renderTrainer(), clinic: () => this.renderClinic(),
       chamber: () => this.renderChamber(), bar: () => this.renderBar(), food: () => this.renderFood(), home: () => this.renderHome(), arena: () => this.renderArena(),
       archive: () => this.renderArchive(),
+      vshop: () => this.renderMall(), vsim: () => this.renderSim(), fame: () => this.renderFame(),
     }[k];
     this.$('panel-body').innerHTML = r ? r() : this.renderGuide();
   }
@@ -510,7 +514,7 @@ export class Menus {
 
   renderBounties() {
     const { state } = this.game;
-    const docked = this.game.atStation && ['hall', 'station', 'bar'].includes(this.game.venueKind);
+    const docked = this.game.atStation && ['hall', 'station', 'bar', 'virtual'].includes(this.game.venueKind);
     const active = state.bounties.length
       ? state.bounties.map((b) => {
         const prog = b.type === 'cultivate' ? `${fmt(b.progress)}/${fmt(b.need)}` : `${b.progress}/${b.need}`;
@@ -642,6 +646,35 @@ export class Menus {
     const wave = (s.arena || 0) + 1;
     return `<p class="panel-note">Step into the ring and face waves of this world's beasts while the crowd watches. Each wave is harder and pays more. Leave the ring and you forfeit. Best so far: <b>wave ${s.arena || 0}</b>.</p>
       <div class="list"><div class="item"><div><h4>Wave ${wave}<span class="cn">竞技场</span></h4><p>${Math.min(10, 2 + Math.floor(wave / 2))} beasts. Fight inside the sand circle.</p></div><button class="btn small primary" data-action="arena" ${g.arena ? 'disabled' : ''}>Enter the ring</button></div></div>`;
+  }
+
+  renderMall() {
+    const g = this.game, s = g.state;
+    const eta = g.deliveryEta();
+    const pending = (s.deliveries || []).map((d) => `<li>${esc(d.label)} · ${Math.max(0, Math.ceil(d.due - s.playtime))} s</li>`).join('');
+    const rows = g.mallCatalog().map((c) => `<div class="item"><div><h4>${esc(c.name)}</h4><p>${esc(c.desc)}</p></div><span class="price">${fmt(c.price)} ◈</span><button class="btn small" data-action="order" data-item="${c.id}" ${s.coins >= c.price ? '' : 'disabled'}>Order</button></div>`).join('');
+    return `<p class="panel-note">Buy anything here and a drop pod delivers it to wherever your body is: city, wilds or deep space. Delivery to your current location takes about <b>${eta} s</b>. Prices include a 15% shipping fee. You hold ${this.wallet()}.</p>
+      ${pending ? `<div class="section-title">On the way</div><ul class="tips">${pending}</ul>` : ''}
+      <div class="list">${rows}</div>`;
+  }
+
+  renderSim() {
+    const s = this.game.state;
+    const best = s.simBest[`r${s.realm}`];
+    return `<p class="panel-note">Holographic targets appear around the simulator. Hit all twelve with your primary attack as fast as you can. The first clear at each realm pays out; after that it's for the leaderboard.</p>
+      <div class="list"><div class="item"><div><h4>Target practice<span class="cn">靶场</span></h4><p>${best !== undefined ? `Your best at this realm: <b>${best.toFixed(2)} s</b>` : 'Not yet cleared at this realm.'}</p></div><button class="btn small primary" data-action="sim">Start</button></div></div>`;
+  }
+
+  renderFame() {
+    const s = this.game.state;
+    const st = this.game.stats;
+    const mins = Math.floor(s.playtime / 60);
+    const rows = [
+      ['Realm', `${REALMS[s.realm].name} · ${STAGES[s.stage].name}`], ['Path', (PATHS[s.path] || PATHS.mind).name], ['Life · attack', `${fmt(st.maxHp)} · ${fmt(st.atk)}`],
+      ['Beasts slain', fmt(s.kills)], ['Overlords slain', s.bosses.length], ['Bounties completed', s.completedBounties], ['Arena best', `wave ${s.arena || 0}`],
+      ['Archive logs', `${(s.lore || []).length}/${LORE.length}`], ['Systems visited', s.visited.length], ['Places discovered', s.discovered.length], ['Time played', `${Math.floor(mins / 60)}h ${mins % 60}m`],
+    ];
+    return `<p class="panel-note">Your record in the Virtual Universe. One day, other cultivators will be listed here beside you.</p><div class="help-grid">${rows.map(([k, v]) => `<div><span>${esc(k)}</span><span><b>${esc(String(v))}</b></span></div>`).join('')}</div>`;
   }
 
   renderArchive() {

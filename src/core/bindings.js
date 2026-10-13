@@ -25,6 +25,7 @@ export const ACTIONS = [
   { id: 'interact', label: 'Interact · board ship · hold to search', group: 'World', def: 'KeyE' },
   { id: 'target', label: 'Target a marker or star', group: 'World', def: 'KeyT' },
   { id: 'ping', label: 'Radar pulse', group: 'World', def: 'KeyI' },
+  { id: 'virtual', label: 'Enter / leave the Virtual Universe', group: 'World', def: 'KeyO' },
   { id: 'engage', label: 'Cruise · warp', group: 'World', def: 'KeyG' },
   { id: 'camera', label: 'First / third person', group: 'Interface', def: 'KeyP' },
   { id: 'panelCult', label: 'Cultivation panel', group: 'Interface', def: 'KeyK' },

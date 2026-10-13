@@ -28,6 +28,8 @@ export function newState() {
     meal: null,
     radar: 0,
     lore: [],
+    deliveries: [],
+    simBest: {},
     insight: 0,
     nixSeen: {},
     devour: false,

@@ -7,6 +7,7 @@ import { PATHS, TECHS, REALM_PERKS, canLearn, nodeById } from './paths.js';
 import { Arts } from './arts.js';
 import { Companion } from './companion.js';
 import { LORE, RUIN_NAMES } from './lore.js';
+import { VirtualWorld } from './virtual.js';
 import { speciesForBody } from './bestiary.js';
 import { codeLabel } from '../core/bindings.js';
 import { newState, loadState, saveState, clearSave, derive } from './state.js';
@@ -85,6 +86,8 @@ export class Game {
     this.swords = new SwordArray(this.localRoot, this.particles, this.combat, this.sound);
     this.arts = new Arts(this);
     this.nix = new Companion(this);
+    this.vu = new VirtualWorld();
+    this.pods = [];
     this.player = new Player(this.localRoot, this.particles);
     this.shipObj = null;
     this.input = new Input(canvas);
@@ -139,7 +142,7 @@ export class Game {
   }
 
   get inGame() {
-    return this.mode === 'playing' || this.mode === 'dead' || this.mode === 'warping';
+    return this.mode === 'playing' || this.mode === 'dead' || this.mode === 'warping' || this.mode === 'virtual';
   }
 
   freshRuntime() {
@@ -169,6 +172,7 @@ export class Game {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.viewmodel.setAspect(w / h);
+    if (this.vu) this.vu.setAspect(w / h);
     this.particles.setScale(h * pr, this.camera.fov);
   }
 
@@ -262,6 +266,7 @@ export class Game {
     this.arena = null;
     this.trial = null;
     this.deck = null;
+    this.clearPods();
     this.combat.clear();
     this.particles.clear();
     this.loot.clear();
@@ -331,6 +336,7 @@ export class Game {
     this.localRoot.updateWorldMatrix(true, false);
     this.frame = planet;
     for (const st of this.system.stations) st.prevM = null;
+    this.clearPods();
     this.statics.forEach((b) => this.beasts.removeBeast(b));
     this.statics.clear();
     this.nestTriggered.clear();
@@ -428,6 +434,9 @@ export class Game {
   // ------------------------------------------------------- lifecycle --
   enterTitle() {
     this.mode = 'title';
+    this.nix.queue = [];
+    this.nix.current = null;
+    document.getElementById('nix').classList.add('hidden');
     this.hud.show(false);
     this.player.setVisible(false);
     this.viewmodel.setVisible(false);
@@ -545,6 +554,7 @@ export class Game {
   }
 
   async quitToTitle() {
+    this.exitVirtual();
     this.save();
     this.loaded = this.state;
     this.hasSave = true;
@@ -620,7 +630,13 @@ export class Game {
     if (!this.system) return;
     if (this.mode === 'title' || this.mode === 'loading') this.updateTitle(dt);
     else if (this.mode === 'warping') this.updateWarp(dt);
-    else {
+    else if (this.mode === 'virtual') {
+      const paused = this.menus.overlayOpen || !this.input.locked;
+      if (!paused) {
+        this.updateVirtual(dt);
+        this.state.playtime += dt;
+      } else this.input.consumeMouse();
+    } else {
       const paused = this.menus.overlayOpen || (!this.input.locked && this.mode === 'playing');
       if (!paused) {
         this.update(dt);
@@ -629,7 +645,7 @@ export class Game {
         this.input.consumeMouse();
       }
     }
-    this.sound.setListener(this.camera);
+    this.sound.setListener(this.mode === 'virtual' ? this.vu.camera : this.camera);
     this.post.render(this.time);
     this.input.endFrame();
   }
@@ -765,6 +781,7 @@ export class Game {
       if (inp.hit('breakthrough')) this.tryBreakthrough();
       if (inp.hit('target')) this.setTarget();
       if (inp.hit('ping')) this.radarPing();
+      if (inp.hit('virtual')) this.enterVirtual();
       if (inp.hit('engage')) this.engage();
     }
 
@@ -832,6 +849,7 @@ export class Game {
     this.updateInteraction(dt, alive);
     this.updatePresentation(dt, camFwd, density, medRate);
     rt.pingCd = Math.max(0, (rt.pingCd || 0) - dt);
+    this.updateDeliveries(dt);
     this.updateScorch(dt);
     this.nix.update(dt, { manual });
     this.nixWatch();
@@ -1700,6 +1718,7 @@ export class Game {
   // ------------------------------------------------------ interaction --
   gatherInteractables() {
     const list = [];
+    for (const pod of this.pods) if (pod.landed) list.push({ kind: 'pod', pod, name: 'Delivery pod', pos: pod.pos, range: 5 });
     if (this.shipObj && !this.rt.inShip) list.push({ kind: 'ship', name: 'your ship', pos: this.shipObj.pos, range: 18 * this.shipObj.scale });
     const f = this.frame;
     if (f && f.details) {
@@ -1757,6 +1776,7 @@ export class Game {
     if (!it) return null;
     if (it.kind === 'leave') return this.canExitShip() ? '<kbd>E</kbd> LEAVE SHIP' : null;
     if (it.kind === 'ship') return '<kbd>E</kbd> BOARD YOUR SHIP';
+    if (it.kind === 'pod') return '<kbd>E</kbd> OPEN THE DELIVERY POD';
     if (it.kind === 'service' && it.service.kind === 'lore') return `<kbd>E</kbd> ACCESS THE OLD TERMINAL${this.state.lore.includes(it.service.lore) ? ' · READ' : ''}`;
     if (it.kind === 'service') return `<kbd>E</kbd> ${esc(it.name.toUpperCase())}`;
     if (it.kind === 'dock') return `<kbd>E</kbd> LAND ON ${esc(it.name.toUpperCase())}`;
@@ -1784,6 +1804,8 @@ export class Game {
       else this.denied('You cannot leave the ship here. Land first.');
     } else if (it.kind === 'ship') {
       this.boardShip();
+    } else if (it.kind === 'pod') {
+      this.openPod(it.pod);
     } else if (it.kind === 'dock') {
       this.dockShip(it.station);
     } else if (it.kind === 'service' && it.service.kind === 'elevator') {
@@ -1976,6 +1998,230 @@ export class Game {
       fade.style.opacity = 0;
       setTimeout(() => { fade.style.background = ''; fade.style.transition = ''; }, 300);
     }, 280);
+  }
+
+  // ------------------------------------------------ virtual universe --
+  enterVirtual() {
+    const rt = this.rt;
+    if (this.mode !== 'playing') return;
+    if (rt.trib) return this.denied('The heavens will not wait while you browse.');
+    const near = this.beasts.beasts.some((b) => b.aggro && !b.static && b.pos.distanceTo(this.player.pos) < 250);
+    if (near) return this.denied('Too dangerous to log out of your body with beasts hunting you.');
+    if (this.shipObj && rt.inShip) this.shipObj.vel.set(0, 0, 0);
+    this.player.vel.set(0, 0, 0);
+    rt.meditating = false;
+    rt.cruise = false;
+    this.mode = 'virtual';
+    this.vu.enter(this.width / this.height);
+    this.post.renderPass.scene = this.vu.scene;
+    this.post.renderPass.camera = this.vu.camera;
+    this.post.vmEnabled = false;
+    this.flare.visible = false;
+    this.hud.show(false);
+    this.hud.setPrompt(null);
+    document.getElementById('vu-hud').classList.remove('hidden');
+    document.getElementById('vu-sub').textContent = `BODY SAFE AT ${this.locationLabel().toUpperCase()}`;
+    this.sound.warp();
+    const fade = document.getElementById('fade');
+    fade.style.opacity = 0.8;
+    setTimeout(() => { fade.style.opacity = 0; }, 250);
+    this.nix.once('vu', 'vuIntro', {}, 1);
+    this.save();
+  }
+
+  exitVirtual() {
+    if (this.mode !== 'virtual') return;
+    this.mode = 'playing';
+    this.vu.clearTargets();
+    this.post.renderPass.scene = this.scene;
+    this.post.renderPass.camera = this.camera;
+    this.flare.visible = true;
+    document.getElementById('vu-hud').classList.add('hidden');
+    this.hud.show(true);
+    this.applyCamMode();
+    this.sound.warp();
+    this.clock.getDelta();
+  }
+
+  updateVirtual(dt) {
+    const inp = this.input;
+    const mouse = inp.consumeMouse();
+    const sens = 0.0021 * settings.get('sensitivity');
+    const res = this.vu.update(dt, inp, { x: mouse.x, y: mouse.y * (settings.get('invertY') ? -1 : 1) }, sens);
+    const prompt = document.getElementById('vu-prompt');
+    const k = res.interact;
+    if (k) {
+      prompt.classList.remove('hidden');
+      prompt.innerHTML = `<kbd>${codeLabel(settings.key('interact'))}</kbd> ${k.id === 'exit' ? 'LOG OUT' : k.name.toUpperCase()}`;
+    } else prompt.classList.add('hidden');
+    const simEl = document.getElementById('vu-sim');
+    simEl.classList.toggle('hidden', !this.vu.sim);
+    if (this.vu.sim) simEl.textContent = `TARGETS ${this.vu.sim.left} · ${this.vu.sim.t.toFixed(1)} s`;
+    if (res.simDone !== null) this.finishSim(res.simDone);
+    if (inp.hit('virtual')) return this.exitVirtual();
+    if (k && inp.hit('interact')) {
+      if (k.id === 'exit') return this.exitVirtual();
+      this.venueKind = 'virtual';
+      this.lastService = { kind: 'service', service: { kind: 'virtual' } };
+      if (k.id === 'bounties' && this.state.offers.length < 3) this.state.offers.push(...generateOffers(this.state, this.offerContext(), 3 - this.state.offers.length));
+      this.interact = { kind: 'service', service: { kind: 'virtual' } };
+      this.menus.openPanel({ shop: 'vshop', bounties: 'bounties', sim: 'vsim', fame: 'fame' }[k.id]);
+      this.input.unlock();
+      this.sound.confirm();
+    }
+    this.updateDeliveries(dt);
+    this.nix.update(dt, null);
+  }
+
+  startSim() {
+    this.menus.closePanel();
+    this.input.lock();
+    this.vu.startSim();
+    this.hud.notify('Simulation running. Hit every target as fast as you can.', 'violet');
+  }
+
+  finishSim(t) {
+    const s = this.state;
+    const key = `r${s.realm}`;
+    const best = s.simBest[key];
+    const first = best === undefined;
+    if (first || t < best) s.simBest[key] = t;
+    let reward = '';
+    if (first) {
+      const xp = this.stats.xpNeed * 0.08;
+      const coins = Math.round(30 * Math.pow(2.2, s.realm));
+      this.addXp(xp);
+      s.coins += coins;
+      reward = ` First clear at this realm: +${fmt(xp)} experience, +${fmt(coins)} ◈.`;
+    }
+    this.sound.reward();
+    document.getElementById('vu-sim').classList.add('hidden');
+    this.hud.notify(`Simulation complete in <b>${t.toFixed(2)} s</b>${!first && t < best ? ' · new record!' : ''}.${reward}`, 'gold');
+    this.save();
+  }
+
+  // ---- deliveries from the Star Mall
+  deliveryEta() {
+    const f = this.frame;
+    if (f && f.body.landable) {
+      let best = Infinity;
+      const up = this.player.pos.clone().normalize();
+      for (const st of f.allSites()) best = Math.min(best, Math.acos(clamp(up.dot(new THREE.Vector3(st.x, st.y, st.z).normalize()), -1, 1)) * f.R);
+      return Math.round(Math.min(150, 8 + best / 350));
+    }
+    return this.system.stations.length ? 45 : 90;
+  }
+
+  orderDelivery(item) {
+    const s = this.state;
+    const cat = this.mallCatalog().find((c) => c.id === item);
+    if (!cat || s.coins < cat.price) return this.sound.deny();
+    s.coins -= cat.price;
+    const eta = this.deliveryEta();
+    s.deliveries.push({ id: `d${Date.now()}`, item, label: cat.name, due: s.playtime + eta });
+    this.hud.notify(`Ordered <b>${esc(cat.name)}</b>. A drop pod will reach you in about ${eta} s.`, 'yl');
+    this.nix.event('delivery', {}, 0);
+    this.sound.confirm();
+    this.save();
+  }
+
+  mallCatalog() {
+    const s = this.state, r = s.realm;
+    const fee = 1.15;
+    const pill = (k, n) => Math.round(priceFor(PILLS[k].price, r) * n * fee);
+    const items = [
+      { id: 'heal3', name: '3 × Rejuvenation Pill', desc: 'Restore 60% of your life each.', price: pill('heal', 3) },
+      { id: 'energy3', name: '3 × Primal Elixir', desc: 'Restore all energy and spirit.', price: pill('energy', 3) },
+      { id: 'cult1', name: 'Cultivation Pill', desc: 'A third of a stage of experience.', price: pill('cult', 1) },
+      { id: 'ore10', name: 'Crate of star metal (10)', desc: 'Pricier than mining, but no smashing required.', price: Math.round(SELL.ore(Math.max(r, 1)) * 10 * 2.6) },
+    ];
+    const rn = RADARS[(s.radar || 0) + 1];
+    if (rn) items.push({ id: 'radar', name: rn.name, desc: rn.desc, price: Math.round(rn.price * fee) });
+    return items;
+  }
+
+  updateDeliveries() {
+    const s = this.state;
+    if (this.mode !== 'playing' || !s.deliveries || !s.deliveries.length) {
+      for (const pod of this.pods) this.animatePod(pod, 0.016);
+      return;
+    }
+    for (const d of s.deliveries) {
+      if (d.due > s.playtime || this.pods.some((p) => p.delivery === d)) continue;
+      this.spawnPod(d);
+      this.nix.event('podIncoming', {}, 0);
+    }
+    for (const pod of this.pods) this.animatePod(pod, 0.016);
+  }
+
+  spawnPod(d) {
+    const p = this.player, f = this.frame;
+    const up = this.env.up ? this.env.up.clone() : p.localUp();
+    const side = new THREE.Vector3(1, 0, 0).projectOnPlane(up).normalize().applyAxisAngle(up, Math.random() * 6.28);
+    let land = p.pos.clone().addScaledVector(side, 12);
+    if (f && f.terrain) {
+      const dd = land.clone().normalize();
+      land = dd.multiplyScalar(f.floorRadius(dd.x, dd.y, dd.z) + 1.4);
+    }
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 2.6, 10), new THREE.MeshStandardMaterial({ color: 0xc8ccd6, metalness: 0.7, roughness: 0.35 }));
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 10), body.material);
+    cap.position.y = 1.8;
+    const band = new THREE.Mesh(new THREE.TorusGeometry(1.08, 0.08, 6, 20).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.0, 0.4) }));
+    const light = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(2.4, 2.0, 0.4), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    light.position.y = 2.6;
+    light.scale.setScalar(4);
+    g.add(body, cap, band, light);
+    g.quaternion.setFromUnitVectors(Y, up);
+    const start = land.clone().addScaledVector(up, 420);
+    g.position.copy(start);
+    this.localRoot.add(g);
+    this.pods.push({ delivery: d, group: g, light, pos: land.clone(), start, up, t: 0, landed: false });
+  }
+
+  animatePod(pod, dt) {
+    pod.light.material.opacity = 0.6 + 0.4 * Math.sin(this.time * 5);
+    if (pod.landed) return;
+    pod.t += dt;
+    const k = Math.min(1, pod.t / 2.2);
+    pod.group.position.lerpVectors(pod.start, pod.pos, k * k);
+    this.particles.emit(pod.group.position.x, pod.group.position.y, pod.group.position.z, 0, 0, 0, new THREE.Color(2.4, 1.4, 0.4), 1.6, 0.6, 0, 0.6);
+    if (k >= 1) {
+      pod.landed = true;
+      this.particles.burst(pod.pos, new THREE.Color(0.7, 0.6, 0.5), 50, 20, 1.2, 1);
+      this.combat.shockwave(pod.pos, 10, 0xffe44d, 0.5);
+      this.sound.explosion(pod.pos, false);
+      this.hud.notify(`Your delivery has landed: <b>${esc(pod.delivery.label)}</b>.`, 'yl');
+    }
+  }
+
+  openPod(pod) {
+    const s = this.state;
+    const d = pod.delivery;
+    if (d.item === 'heal3') s.pills.heal += 3;
+    else if (d.item === 'energy3') s.pills.energy += 3;
+    else if (d.item === 'cult1') s.pills.cult += 1;
+    else if (d.item === 'ore10') s.ore += 10;
+    else if (d.item === 'radar' && RADARS[(s.radar || 0) + 1]) {
+      s.radar = (s.radar || 0) + 1;
+      this.hud.notify(`Installed the <b>${RADARS[s.radar].name}</b>.`, 'violet');
+    }
+    s.deliveries = s.deliveries.filter((x) => x !== d);
+    this.removePod(pod);
+    this.sound.pickup();
+    this.hud.notify(`Unpacked <b>${esc(d.label)}</b>.`, 'green');
+    this.save();
+  }
+
+  removePod(pod) {
+    this.localRoot.remove(pod.group);
+    pod.group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    this.pods = this.pods.filter((p) => p !== pod);
+  }
+
+  // Frames changed: drop pods; undelivered orders respawn near you later.
+  clearPods() {
+    for (const pod of [...(this.pods || [])]) this.removePod(pod);
   }
 
   // ------------------------------------------------------------ lore --
