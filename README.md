@@ -34,6 +34,7 @@ Every key can be changed in Settings › Controls. The defaults are:
 | Interact · search · board or leave ship | E (hold to search) |
 | Pills | 1 2 3 |
 | Target a marker or star · cruise or warp | T · G |
+| Radar pulse | I |
 | First / third person | P |
 | Cultivation · skill tree · bounties · guide | K · U · J · H |
 | Mute · pause | N · Esc |
@@ -42,7 +43,7 @@ Every key can be changed in Settings › Controls. The defaults are:
 
 You pick a path when you start and can retrain at any Martial Hall.
 
-- **Mind Control 精神掌控.** Fire Star Bolts and steer a large host of flying swords with right mouse. Techniques: Sword Volley, Thought Prison (seizes and crushes a pack), Mind Barrier, Ten Thousand Swords.
+- **Mind Control 精神掌控.** The only path with flying swords. Fire Star Bolts and steer a large host of swords with right mouse. Techniques: Sword Volley, Thought Prison (seizes and crushes a pack), Mind Barrier, Ten Thousand Swords.
 - **Blade 刀者.** Swing a saber up close; every third cut throws a wave of blade light. Right mouse guards, and a well-timed guard parries and staggers. Techniques: Flash Cut, Crescent Wave, Battle Will, Heaven-Splitting Blade.
 - **Mental Attack 精神攻击.** Mind Spikes land instantly on whatever you aim at. Right mouse lifts and crushes a beast, and releasing hurls it. Techniques: Soul Lance, Psychic Shockwave, Terror, Soul Annihilation.
 
@@ -60,11 +61,19 @@ The ten realms run from Warrior 战士 to Universe Master 宇宙之主. Each one
 
 Running speed, jump height, flight speed and the size of your attacks and aura all grow with each realm. Beasts of higher grades are visibly larger.
 
+Experience only takes you to the Peak of a realm. To break through you also need a **Realm Insight**, earned by winning an obelisk trial, slaying an Overlord, clearing every fifth arena wave, or completing a Martial Hall breakthrough trial. Missions and fights are worth far more experience than sitting still.
+
+## Nix
+
+Your ring holds **Nix 尼克斯**, an ancient and very sarcastic intelligence. Nix comments on what you do, warns you about beasts above your grade, explains new places and systems the first time you meet them, and fills the quiet with opinions. Its chattiness can be turned down or off in Settings.
+
 ## The world
 
 - **Every planet is a whole world.** Rocky planets and moons are full-size spheres with streamed terrain, forests, rocks, oceans, clouds, and day and night. You collide with trees, rocks and buildings.
 - **Cities you can walk into.** Terra has a capital, five more base cities and three outposts; other civilised worlds have their own towns. Glowing doors lead into exchanges, sword forges, pill pavilions, gene clinics, cultivation chambers, teahouses, noodle bars, apartments and the Martial Hall. The capital has an arena. Interiors are built only when you are close, so they cost nothing elsewhere.
 - **Native beasts.** Terra has its own 怪兽: Ironhide Wolves, Bladewing Hawks, Thunder Lizards, Shadow Mantises, Golden-horn Rhinos, Frostclaw Bears, Earth Wyrms and Mountain Golems. Every other world generates its own species from its climate. Space has its own void beasts.
+- **Radar.** Pulse the radar to mark undiscovered sites on your compass. Better scanners from the Exchange find more kinds of site, further away: ore first, then wrecks and camps, ruins and springs, obelisks and nests, and finally Overlord lairs.
+- **Things break.** Attacks fell trees, shatter rocks, knock down street lamps and scorch the ground, and pedestrians run from a fight. The world repairs itself after a few minutes.
 - **Things to do.** Bounties and courier jobs between cities, arena waves, ancient ruins, energy springs, ore deposits, beast nests, wrecks, obelisk trials, hunters' camps with traders, rumours bought at teahouses, rented homes you can sleep in, meals that buff you, and permanent gene enhancement.
 - **Real star systems.** Planets follow inclined elliptical orbits. Systems have moons, asteroid belts, comets, nebulae and orbital stations you can land on.
 - **An endless galaxy.** Stars are generated from their position in space, so the galaxy never runs out. Every star in the sky is a real system you can warp to. Danger rises with distance from home, across five regions with their own Overlords.

@@ -395,6 +395,7 @@ export function buildSettlement(site, R, opts = {}) {
   const poleGeo = new THREE.CylinderGeometry(0.12, 0.18, 7, 5).translate(0, 3.5, 0);
   const poles = new THREE.InstancedMesh(poleGeo, darkMat, lamps.count);
   const m4 = new THREE.Matrix4();
+  const lampXZ = [];
   for (let i = 0; i < lamps.count; i++) {
     const axis = i % 2;
     const t = (r() * 2 - 1) * (radius - 30);
@@ -404,6 +405,7 @@ export function buildSettlement(site, R, opts = {}) {
     lamps.setMatrixAt(i, m4);
     m4.makeTranslation(x, drop(x, z), z);
     poles.setMatrixAt(i, m4);
+    lampXZ.push({ x, z, broken: 0 });
   }
   group.add(lamps, poles);
 
@@ -521,6 +523,34 @@ export function buildSettlement(site, R, opts = {}) {
       if (moved) local.copy(group.position).addScaledVector(east, pc.x).addScaledVector(up, pc.y).addScaledVector(north, pc.z);
       return roof;
     },
+    // Knock over street lamps near a point; they're repaired after a while.
+    breakAt(local, rad) {
+      toCity(local, pc);
+      const hits = [];
+      lampXZ.forEach((l, i) => {
+        if (l.broken > 0 || Math.hypot(pc.x - l.x, pc.z - l.z) > rad + 1) return;
+        l.broken = 120;
+        lamps.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+        poles.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+        hits.push(toLocal(l.x, 4, l.z));
+      });
+      if (hits.length) {
+        lamps.instanceMatrix.needsUpdate = true;
+        poles.instanceMatrix.needsUpdate = true;
+      }
+      return hits;
+    },
+    // Pedestrians near a disturbance run away.
+    panic(local) {
+      toCity(local, pc);
+      for (const wk of walkers) {
+        const x = wk.axis ? wk.t : wk.lane, z = wk.axis ? wk.lane : wk.t;
+        if (Math.hypot(pc.x - x, pc.z - z) > 70) continue;
+        wk.panic = 6;
+        const toward = wk.axis ? Math.sign(pc.x - x) : Math.sign(pc.z - z);
+        if (Math.sign(wk.v) === toward) wk.v = -wk.v;
+      }
+    },
     // Which venue (if any) contains a planet-local point.
     venueAt(local) {
       toCity(local, pc);
@@ -535,6 +565,18 @@ export function buildSettlement(site, R, opts = {}) {
     },
     update(dt, playerLocal) {
       t += dt;
+      lampXZ.forEach((l, i) => {
+        if (l.broken <= 0) return;
+        l.broken -= dt;
+        if (l.broken <= 0) {
+          m4.makeTranslation(l.x, 7.2 + drop(l.x, l.z), l.z);
+          lamps.setMatrixAt(i, m4);
+          m4.makeTranslation(l.x, drop(l.x, l.z), l.z);
+          poles.setMatrixAt(i, m4);
+          lamps.instanceMatrix.needsUpdate = true;
+          poles.instanceMatrix.needsUpdate = true;
+        }
+      });
       for (const s of signs) s.mat.opacity = s.flicker ? (Math.sin(t * 13 + s.phase) > -0.85 ? 1 : 0.2) : 0.85 + 0.15 * Math.sin(t * 2 + s.phase);
       for (const c of craft) {
         const u = c.userData;
@@ -547,7 +589,8 @@ export function buildSettlement(site, R, opts = {}) {
         const q = new THREE.Quaternion();
         const sc = new THREE.Vector3();
         walkers.forEach((wk, i) => {
-          wk.t += wk.v * dt;
+          wk.panic = Math.max(0, (wk.panic || 0) - dt);
+          wk.t += wk.v * dt * (wk.panic > 0 ? 4.5 : 1);
           if (wk.t > wk.span) wk.t = -wk.span;
           if (wk.t < -wk.span) wk.t = wk.span;
           const x = wk.axis ? wk.t : wk.lane, z = wk.axis ? wk.lane : wk.t;

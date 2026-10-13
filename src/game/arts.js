@@ -222,6 +222,7 @@ export class Arts {
     const dmg = st.atk * 2.3 * this.mult('saber');
     const hits = this.inCone(reach, 0.25, from, fwd);
     for (const b of hits) g.hitBeast(b, dmg, b.pos.clone().addScaledVector(fwd, -b.radius * 0.5), 'saber', fwd.clone().multiplyScalar(40));
+    g.breakAt(from.clone().addScaledVector(fwd, reach * 0.6), reach * 0.55, fwd);
     const up = this.up();
     g.combat.slash(from.clone().addScaledVector(fwd, 1.5).addScaledVector(up, -0.3), fwd, up, reach, this.color(), this.combo % 2 === 0);
     g.viewmodel.swing(this.combo % 2 === 0);
@@ -459,6 +460,7 @@ export class Arts {
     p.pos.lerpVectors(d.from, d.to, k);
     p.vel.copy(d.dir).multiplyScalar(30);
     g.particles.emit(p.pos.x, p.pos.y, p.pos.z, 0, 0, 0, new THREE.Color(this.color()).multiplyScalar(1.6), 1.2, 0.4, 0, 0.5);
+    g.breakAt(p.pos, 3, d.dir);
     let killed = false;
     for (const b of [...g.beasts.beasts]) {
       if (d.hit.has(b)) continue;
@@ -540,6 +542,8 @@ export class Arts {
       if (b.alive) b.stunT = (b.boss ? 0.8 : 2.5) * k;
     }
     g.combat.shockwave(p.pos, radius, this.color(), 0.6);
+    g.breakAt(p.pos, radius * 0.45, null);
+    g.scorch(p.pos, radius * 0.25);
     g.rt.shake = 0.7;
     g.post.fx.flash = 0.2;
     g.sound.burst();

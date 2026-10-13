@@ -77,6 +77,18 @@ export function generateOffers(state, ctx, count = 3) {
   return offers;
 }
 
+// The Martial Hall's breakthrough trial: hunt beasts at or above your grade.
+export function insightTrial(state) {
+  const id = ++state.bountySeq;
+  const stageXp = stageXpNeed(state.realm, state.stage);
+  return {
+    id, type: 'insight', need: 6, progress: 0, region: 0,
+    title: 'Breakthrough Trial',
+    desc: 'The masters will grant a Realm Insight to a cultivator who proves themselves. Slay 6 beasts of your own grade or higher, anywhere.',
+    reward: { coins: Math.round(60 * Math.pow(2.2, state.realm)), xp: Math.round(stageXp * 0.1), essence: essenceFor(state.realm) * 4, insight: 1 },
+  };
+}
+
 export function progressBounties(state, event) {
   const done = [];
   for (const b of state.bounties) {
@@ -85,6 +97,7 @@ export function progressBounties(state, event) {
     if (event.kind === 'kill') {
       if (b.type === 'hunt' && event.type === b.target) inc = 1;
       else if (b.type === 'elite' && event.elite) inc = 1;
+      else if (b.type === 'insight' && event.tier !== undefined && event.tier >= event.realm - 0.25) inc = 1;
       else if (b.type === 'overlord' && event.bossStar && event.bossStar === b.target) inc = 1;
     } else if (event.kind === 'discover' && b.type === 'explore') inc = 1;
     else if (event.kind === 'mine' && b.type === 'mine') inc = 1;

@@ -2,7 +2,7 @@ import { power, stageXpNeed, swordCount } from './data.js';
 import { PATHS, TECHS, skillMods } from './paths.js';
 
 const SAVE_KEY = 'starsea-ascension-save-v1';
-const VERSION = 4;
+const VERSION = 5;
 const baseMastery = () => Object.fromEntries(Object.keys(TECHS).map((k) => [k, 1]));
 
 export function newState() {
@@ -26,6 +26,9 @@ export function newState() {
     rumors: [],
     chamberUntil: 0,
     meal: null,
+    radar: 0,
+    insight: 0,
+    nixSeen: {},
     devour: false,
     pills: { heal: 2, energy: 1, cult: 0 },
     explored: [],
@@ -51,6 +54,10 @@ export function newState() {
 function migrate(data) {
   const base = newState();
   const out = { ...base, ...data, mastery: { ...base.mastery, ...data.mastery }, pills: { ...base.pills, ...data.pills }, skills: { ...(data.skills || {}) } };
+  if (data.v < 5) {
+    // breakthroughs now need a Realm Insight; returning players get one free
+    out.insight = 1;
+  }
   if (data.v < 4) {
     // paths arrived: old mastery maps onto the Mind Control path
     const m = data.mastery || {};
@@ -127,7 +134,8 @@ export function derive(s) {
     spaceSpeed: 150 * (1 + 0.6 * s.realm) * speed,
     cruiseCap: 20000 * Math.pow(2.2, Math.max(0, s.realm - 2)) * (s.realm >= 8 ? 10 : 1),
     xpNeed: stageXpNeed(s.realm, s.stage),
-    swords: Math.max(1, Math.round(swordCount(s.realm) * path.swordMult) + (mods.swords || 0)),
+    // flying swords belong to the Mind Control path alone
+    swords: s.path && s.path !== 'mind' ? 0 : Math.max(1, Math.round(swordCount(s.realm) * path.swordMult) + (mods.swords || 0)),
     crit: 0.08 + (mods.crit || 0),
     armor: Math.min(0.6, mods.armor || 0),
     lifesteal: mods.lifesteal || 0,

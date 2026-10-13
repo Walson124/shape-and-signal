@@ -406,6 +406,20 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
   .glitch::before, .glitch::after, #reticle .ret-ring { animation: none; }
 }
 
+/* ---- Nix, the ring companion */
+#nix { position: absolute; left: 14px; bottom: 150px; width: 330px; display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; background: linear-gradient(135deg, rgba(20, 8, 36, 0.86), rgba(8, 6, 18, 0.78)); border: 1px solid rgba(185, 140, 255, 0.45); clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); transition: opacity 0.4s; zoom: var(--hud-scale, 1); }
+#nix.fade { opacity: 0; }
+.nix-ring { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid #b98cff; box-shadow: 0 0 10px #b98cff, inset 0 0 8px #b98cff; display: grid; place-items: center; animation: nixSpin 6s linear infinite; }
+.nix-ring i { width: 10px; height: 10px; border-radius: 50%; background: #e8d8ff; box-shadow: 0 0 10px #d0b0ff; animation: nixBlink 3.2s steps(1) infinite; }
+@keyframes nixSpin { to { transform: rotate(360deg); } }
+@keyframes nixBlink { 0%, 92% { transform: scaleY(1); } 94% { transform: scaleY(0.1); } }
+.nix-body { display: flex; flex-direction: column; gap: 2px; font-size: 14px; line-height: 1.35; color: #ecdfff; }
+.nix-name { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; color: #b98cff; }
+.nix-name .cn { color: var(--gd); }
+#ping-ring { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border: 2px solid var(--cy); border-radius: 50%; opacity: 0; pointer-events: none; }
+#ping-ring.go { animation: pingOut 1.1s ease-out; }
+@keyframes pingOut { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(40); opacity: 0; } }
+
 /* ---- HUD scale */
 #hud-tl, #hud-tr, #hud-bl, #hud-bc, #hud-br, #feed, #star-target { zoom: var(--hud-scale, 1); }
 

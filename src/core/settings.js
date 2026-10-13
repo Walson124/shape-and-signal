@@ -32,6 +32,7 @@ const DEFAULTS = {
   showFps: false,
   // gameplay
   cultivateMode: 'toggle',
+  nixChatter: 'normal',
   headBob: true,
   autoSprint: false,
   hudScale: 1,

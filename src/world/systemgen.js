@@ -188,6 +188,7 @@ export function generateSystem(star) {
     terra.pois.find((p) => p.kind === 'nest').dir = near(-9, -10);
     terra.pois.find((p) => p.kind === 'ruin').dir = near(15, 14);
     terra.pois.find((p) => p.kind === 'wreck').dir = near(-16, 13);
+    terra.pois.find((p) => p.kind === 'obelisk').dir = near(-13, -19);
     const moons = [
       { id: 'p2m0', parent: 'p2', name: 'Luna', type: 'rocky', radius: 1500, a: 30e3, rate: 0.0028, tier: 0.4, spin: 3600 },
       { id: 'p4m0', parent: 'p4', name: 'Rime', type: 'ice', radius: 1900, a: 100e3, rate: 0.0016, tier: 1.3 },

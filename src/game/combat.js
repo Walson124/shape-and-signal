@@ -327,6 +327,7 @@ export class Combat {
       if (Math.random() < 0.6) this.particles.emit(s.pos.x, s.pos.y, s.pos.z, 0, 0, 0, s.color, s.owner === 'player' ? 0.6 : 1.2, 0.25, 0, 0.5);
 
       let dead = false;
+      if (s.owner === 'player' && (s.kind === 'wave' || s.kind === 'heaven') && ctx.breakAt) ctx.breakAt(s.pos, s.radius * 0.7, s.vel.clone().normalize());
       if (s.fade && s.ownMat) {
         s.ownMat.opacity = Math.min(0.9, s.life * 3);
         s.mesh.scale.setScalar(1 + (1 - s.life) * 0.3);
@@ -360,6 +361,10 @@ export class Combat {
       }
       if (!dead && s.kind !== 'wave' && s.kind !== 'heaven' && ctx.solid && ctx.solid(s.pos)) {
         dead = true;
+        if (s.owner === 'player' && ctx.breakAt) {
+          ctx.breakAt(s.pos, 2.5 * (s.radius || 1), s.vel.clone().normalize());
+          if (ctx.scorch) ctx.scorch(s.pos, 1.6 + s.radius);
+        }
         this.particles.burst(s.pos, s.color, 8, 30, 1, 0.3, 3);
       }
       if (dead) this.removeShot(i);

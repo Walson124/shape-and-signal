@@ -1,5 +1,5 @@
 import {
-  REALMS, STAGES, PILLS, REGIONS, BOSSES, SWORD_GRADES, SHIPS, TIPS, DEVOUR, SELL,
+  REALMS, STAGES, PILLS, REGIONS, BOSSES, SWORD_GRADES, SHIPS, TIPS, DEVOUR, SELL, RADARS,
   priceFor, MANUAL_PRICE, masteryMult,
 } from '../game/data.js';
 import { PATHS, PATH_IDS, TECHS, REALM_PERKS, TREES, treeFor, canLearn, pointsFree, pointsEarned } from '../game/paths.js';
@@ -90,6 +90,7 @@ export class Menus {
         home: () => g.rentHome(),
         sleep: () => { g.sleep(); g.closePanel(); },
         arena: () => g.startArena(),
+        radar: () => g.buyRadar(),
       };
       if (handlers[action]) {
         handlers[action]();
@@ -330,7 +331,8 @@ export class Menus {
     } else if (t === 'gameplay') {
       html = row('View', 'First or third person. The camera key switches during play.', seg('camera', [['first', 'FIRST PERSON'], ['third', 'THIRD PERSON']]))
         + row('Cultivate input', 'Tap toggles cultivation on and off (holding still works). Hold means only while held.', seg('cultivateMode', [['toggle', 'TAP TO TOGGLE'], ['hold', 'HOLD']]))
-        + row('Always sprint', 'Run by default; the sprint key walks.', tog('autoSprint'));
+        + row('Always sprint', 'Run by default; the sprint key walks.', tog('autoSprint'))
+        + row('Nix chatter', 'How much your ring companion talks. Quiet keeps only warnings and story.', seg('nixChatter', [['normal', 'NORMAL'], ['quiet', 'QUIET'], ['off', 'OFF']]));
     } else {
       html = row('Master volume', '', range('master', 0, 100, 1, 100, 'pct'))
         + row('Music', 'Generative score that intensifies in combat.', range('music', 0, 100, 1, 100, 'pct'))
@@ -443,7 +445,8 @@ export class Menus {
           <div class="stat"><div class="k">CRIT</div><div class="v">${Math.round(st.crit * 100)}%</div></div>
           <div class="stat"><div class="k">DEFENCE</div><div class="v">${Math.round(st.armor * 100)}%</div></div>
         </div>
-        <div class="misc-line">Flying swords: <b>${grade.name} ${grade.cn}</b>, ×${grade.mult} damage · Gene enhancement level <b>${state.gene || 0}</b></div>
+        <div class="misc-line">${state.path === 'mind' || !state.path ? `Flying swords: <b>${grade.name} ${grade.cn}</b>, ×${grade.mult} damage · ` : ''}Gene enhancement level <b>${state.gene || 0}</b> · Realm Insight <b style="color:#c08cff">${state.insight || 0}</b> · Radar <b>${RADARS[state.radar || 0].name}</b></div>
+        <p class="panel-note">Each breakthrough needs a <b>Realm Insight</b>. Earn one by winning an obelisk trial, slaying an Overlord, clearing every fifth arena wave, or completing a Martial Hall breakthrough trial.</p>
         <div class="section-title">Techniques</div>
         <div class="tech-list">${techs}</div>
         <div class="section-title">Realm powers</div>
@@ -499,6 +502,7 @@ export class Menus {
     if (r.coins) parts.push(`<span class="price">${fmt(r.coins)} ◈</span>`);
     if (r.essence) parts.push(`<span class="price ess">${fmt(r.essence)} ✦</span>`);
     if (r.xp) parts.push(`<span class="price" style="color:var(--gd)">${fmt(r.xp)} EXP</span>`);
+    if (r.insight) parts.push('<span class="price" style="color:#c08cff">REALM INSIGHT</span>');
     return parts.join(' ');
   }
 
@@ -544,7 +548,11 @@ export class Menus {
       <div class="item"><div><h4>Star metal<span class="cn">星金</span></h4><p>${fmt(orePrice)} ◈ each. You hold ${fmt(state.ore)}. Keep some for starships.</p></div><button class="btn small" data-action="sell" data-what="ore" data-frac="0.5" ${state.ore > 1 ? '' : 'disabled'}>Sell half</button><button class="btn small" data-action="sell" data-what="ore" data-frac="1" ${state.ore > 0 ? '' : 'disabled'}>Sell all</button></div>
       <div class="item"><div><h4>Beast essence<span class="cn">精华</span></h4><p>${SELL.essence} ◈ each. Refining it into experience at a forge is usually better.</p></div><button class="btn small" data-action="sell" data-what="essence" data-frac="0.5" ${state.essence > 1 ? '' : 'disabled'}>Sell half</button><button class="btn small" data-action="sell" data-what="essence" data-frac="1" ${state.essence > 0 ? '' : 'disabled'}>Sell all</button></div>
     </div>`;
-    return `<p class="panel-note">Life, energy and spirit restored. You hold ${this.wallet()}.</p>
+    const rn = RADARS[(state.radar || 0) + 1];
+    const radar = vk === 'pills' ? '' : `<div class="section-title">Scanners</div><div class="list">${rn
+      ? `<div class="item"><div><h4>${esc(rn.name)}<span class="cn">${rn.cn}</span></h4><p>${esc(rn.desc)} Radar ${rn.range} m · pulse ${rn.ping >= 1000 ? `${rn.ping / 1000} km` : `${rn.ping} m`}.</p></div><span class="price">${fmt(rn.price)} ◈</span><button class="btn small" data-action="radar" ${state.coins >= rn.price ? '' : 'disabled'}>Install</button></div>`
+      : '<p class="panel-note">You already carry the finest scanner in the galaxy.</p>'}</div>`;
+    return `<p class="panel-note">Life, energy and spirit restored. You hold ${this.wallet()}.</p>${radar}
       <div class="section-title" style="margin-top:0">Pills and elixirs</div><div class="list">${pills}</div>
       ${vk === 'pills' ? '' : `<div class="section-title">Technique manuals</div><div class="list">${manuals}</div>`}${sell}`;
   }

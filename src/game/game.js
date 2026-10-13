@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import {
-  REALMS, STAGES, MAX_REALM, PILLS, REGIONS, BOSSES, FINAL_BOSS, SWORD_GRADES, SHIPS, FLIGHT, SELL,
+  REALMS, STAGES, MAX_REALM, PILLS, REGIONS, BOSSES, FINAL_BOSS, SWORD_GRADES, SHIPS, FLIGHT, SELL, RADARS,
   xpScale, masteryMult, priceFor, MANUAL_PRICE, realmOf, essenceFor,
 } from './data.js';
 import { PATHS, TECHS, REALM_PERKS, canLearn, nodeById } from './paths.js';
 import { Arts } from './arts.js';
+import { Companion } from './companion.js';
 import { speciesForBody } from './bestiary.js';
 import { codeLabel } from '../core/bindings.js';
 import { newState, loadState, saveState, clearSave, derive } from './state.js';
-import { generateOffers, progressBounties, MAX_BOUNTIES } from './missions.js';
+import { generateOffers, progressBounties, insightTrial, MAX_BOUNTIES } from './missions.js';
 import { settings } from '../core/settings.js';
 import { applyShaderFixes } from '../core/shaderfix.js';
 import { Input } from '../core/input.js';
@@ -82,6 +83,7 @@ export class Game {
     this.loot = new Loot(this.localRoot, this.particles, this.sound);
     this.swords = new SwordArray(this.localRoot, this.particles, this.combat, this.sound);
     this.arts = new Arts(this);
+    this.nix = new Companion(this);
     this.player = new Player(this.localRoot, this.particles);
     this.shipObj = null;
     this.input = new Input(canvas);
@@ -505,6 +507,11 @@ export class Game {
     this.camera.updateProjectionMatrix();
     this.camQuat.copy(this.rt.inShip && this.shipObj ? this.shipObj.quat : this.player.quat);
     if (!this.state.intro) {
+      setTimeout(() => this.inGame && this.nix.event('intro', {}, 2), 1500);
+    } else {
+      setTimeout(() => this.inGame && this.nix.event('resume', {}, 1), 1200);
+    }
+    if (!this.state.intro) {
       this.state.intro = true;
       const tips = [
         ['Welcome to <b>Base City 07</b>, Warrior. Beasts roam the wilds beyond the walls.', 'gold'],
@@ -756,13 +763,14 @@ export class Game {
     if (alive) {
       if (inp.hit('breakthrough')) this.tryBreakthrough();
       if (inp.hit('target')) this.setTarget();
+      if (inp.hit('ping')) this.radarPing();
       if (inp.hit('engage')) this.engage();
     }
 
     // ---- regeneration & cultivation
     const density = this.densityHere();
     const tier = this.locTier();
-    const medRate = 1.0 * xpScale(tier) * density * (s.devour ? 1.5 : 1) * st.cultivate * (rt.chamber ? 2.5 : 1);
+    const medRate = 0.5 * xpScale(tier) * density * (s.devour ? 1.5 : 1) * st.cultivate * (rt.chamber ? 2.5 : 1);
     if (alive) {
       const brew = this.mealActive('broth') ? 1.5 : 1;
       if (!p.boosting) rt.energy = Math.min(st.maxEnergy, rt.energy + st.regen * dt * (rt.meditating ? 2.2 : 1) * brew);
@@ -796,6 +804,8 @@ export class Game {
     this.combat.update(dt, {
       beasts: this.beasts.beasts, player: p, playerAlive: alive && rt.invuln <= 0,
       solid: (pos) => this.isSolid(pos),
+      breakAt: (pos, r, dir) => this.breakAt(pos, r, dir),
+      scorch: (pos, size) => this.scorch(pos, size),
       hitBeast: (b, dmg, pos, kind, knock) => this.hitBeast(b, dmg, pos, kind, knock),
       hurtPlayer: (d, pos, shot) => this.hurtPlayer(d, pos, null, false, shot),
     });
@@ -820,6 +830,10 @@ export class Game {
     this.updateWarpCharge(dt);
     this.updateInteraction(dt, alive);
     this.updatePresentation(dt, camFwd, density, medRate);
+    rt.pingCd = Math.max(0, (rt.pingCd || 0) - dt);
+    this.updateScorch(dt);
+    this.nix.update(dt, { manual });
+    this.nixWatch();
     this.saveTimer += dt;
     if (this.saveTimer > 10) {
       this.saveTimer = 0;
@@ -1034,6 +1048,8 @@ export class Game {
       if (p.grounded && !this.wasGrounded && vDown > 22 && s.realm >= 1) {
         const radius = 6 + s.realm * 2.5;
         this.combat.shockwave(p.pos.clone().addScaledVector(env.up, -EYE + 0.3), radius, REALMS[s.realm].color, 0.5);
+        this.breakAt(p.pos, radius * 0.6, null);
+        this.scorch(p.pos, radius * 0.35);
         for (const b of [...this.beasts.beasts]) if (!b.static && b.pos.distanceTo(p.pos) < radius + b.radius) this.hitBeast(b, st.atk * (1 + vDown / 30), b.pos.clone(), 'burst', b.pos.clone().sub(p.pos).normalize().multiplyScalar(60));
         rt.shake = Math.max(rt.shake, Math.min(1, vDown / 60));
         this.sound.burst();
@@ -1346,6 +1362,7 @@ export class Game {
     this.viewmodel.setVisible(false);
     this.swords.setVisible(false);
     this.sound.death();
+    this.nix.event('death', {}, 2);
     let text;
     if (rt.trib) {
       this.endTribulation();
@@ -1383,6 +1400,7 @@ export class Game {
     this.menus.showDeath(false);
     this.particles.converge(this.player.pos, this.player.auraColor.clone().multiplyScalar(2), 120, 12, 14, 0.6);
     this.hud.notify(`Your body reforms at <b>${esc(this.locationLabel())}</b>.`, 'gold');
+    this.nix.event('respawn');
   }
 
   onBeastKilled(b) {
@@ -1418,7 +1436,9 @@ export class Game {
       this.post.fx.flash = 0.5;
       if (b.bossIndex === FINAL_BOSS) setTimeout(() => this.hud.notify('The Primordial Devourer is gone. Nothing bars your path to <b>Universe Master</b>.', 'gold'), 2500);
     }
-    this.applyBounties(progressBounties(s, { kind: 'kill', type: b.type, elite: b.elite, region: this.star.region, bossStar: b.boss ? this.star.key : null }));
+    this.applyBounties(progressBounties(s, { kind: 'kill', type: b.type, elite: b.elite, region: this.star.region, bossStar: b.boss ? this.star.key : null, tier: b.tier, realm: s.realm }));
+    this.nix.onKill(b);
+    if (b.boss) this.gainInsight('the fallen Overlord');
     this.addXp(xp);
     if (b.boss) this.save();
   }
@@ -1438,14 +1458,20 @@ export class Game {
         this.hud.notify(`Advanced to <b>${REALMS[s.realm].name} · ${STAGES[s.stage].name}</b> <span class="cn">${REALMS[s.realm].cn}${STAGES[s.stage].cn}</span>`, 'gold');
         this.particles.burst(this.player.pos, this.player.auraColor.clone().multiplyScalar(2), 60, 16, 0.6, 1);
         this.sound.stageUp();
+        this.nix.event('stageUp');
         this.save();
       } else {
         s.xp = this.stats.xpNeed;
         if (!this.peakNotified) {
           this.peakNotified = true;
           const bt = this.breakthroughStatus();
-          if (bt.ready) this.hud.notify('Your cultivation has reached its <b>Peak</b>. Press <kbd>B</kbd> to face the Heavenly Tribulation.', 'gold');
-          else if (bt.blocked) this.hud.notify(bt.blocked, 'violet');
+          if (bt.ready) {
+            this.hud.notify(`Your cultivation has reached its <b>Peak</b>. Press <kbd>${codeLabel(settings.key('breakthrough'))}</kbd> to face the Heavenly Tribulation.`, 'gold');
+            this.nix.event('btReady', {}, 1);
+          } else if (bt.bottleneck) {
+            this.hud.notify('You have hit a <b>bottleneck</b>. Experience alone will not carry you further: you need a <b>Realm Insight</b>.', 'violet');
+            this.nix.event('bottleneck', {}, 2);
+          } else if (bt.blocked) this.hud.notify(bt.blocked, 'violet');
         }
         break;
       }
@@ -1458,6 +1484,7 @@ export class Game {
       s.coins += b.reward.coins || 0;
       s.essence += b.reward.essence || 0;
       if (b.reward.xp) this.addXp(b.reward.xp);
+      if (b.reward.insight) this.gainInsight('the Martial Hall trial');
       s.completedBounties++;
       this.hud.notify(`Bounty complete: <b>${esc(b.title)}</b>. +${fmt(b.reward.coins)} ◈ · +${fmt(b.reward.essence)} ✦${b.reward.xp ? ` · +${fmt(b.reward.xp)} exp` : ''}`, 'yl');
       this.sound.reward();
@@ -1470,6 +1497,7 @@ export class Game {
     const full = s.stage === 3 && s.xp >= this.stats.xpNeed;
     if (!full || s.realm >= MAX_REALM || this.rt.trib) return { ready: false, blocked: null };
     if (s.realm === MAX_REALM - 1 && !s.bosses.includes(CORE_KEY)) return { ready: false, blocked: 'PEAK · SLAY THE PRIMORDIAL DEVOURER TO ASCEND' };
+    if ((s.insight || 0) < 1) return { ready: false, blocked: 'BOTTLENECK · SEEK A REALM INSIGHT', bottleneck: true };
     return { ready: true, blocked: null };
   }
 
@@ -1490,6 +1518,8 @@ export class Game {
 
   startTribulation() {
     const s = this.state, rt = this.rt;
+    s.insight = Math.max(0, (s.insight || 0) - 1);
+    this.nix.event('trib', {}, 2);
     const clouds = new THREE.Group();
     const puff = puffTexture();
     for (let i = 0; i < 22; i++) {
@@ -1592,6 +1622,8 @@ export class Game {
     this.sound.breakthrough();
     rt.shake = 1.2;
     this.post.fx.flash = 0.7;
+    this.nix.event('breakthrough', {}, 2);
+    if (s.realm === 1) this.nix.once('fly', 'firstFly', {}, 1);
     this.hud.banner('BREAKTHROUGH', realm.name, `<span class="cn">${realm.cn}</span>${esc(realm.blurb)}`, hex(realm.color), 5);
     if (this.stats.swords > derive({ ...s, realm: s.realm - 1 }).swords) setTimeout(() => this.hud.notify(`A new flying sword answers your call. You now command <b>${this.stats.swords}</b>.`, 'violet'), 2000);
     const P = PATHS[s.path] || PATHS.mind;
@@ -1602,7 +1634,7 @@ export class Game {
     const perk = REALM_PERKS.find((pk) => pk.realm === s.realm);
     if (perk && s.realm > 2) setTimeout(() => this.hud.notify(`Realm power: <b>${perk.name}</b>. ${perk.desc}`, 'gold'), 4500);
     setTimeout(() => this.hud.notify(`You earned skill points. Press <kbd>${codeLabel(settings.key('panelSkills'))}</kbd> to open your skill tree.`, 'yl'), 6000);
-    if (s.realm === 1) setTimeout(() => this.hud.notify('You can fly! <b>Double-tap Space</b> to take to the sky.', 'gold'), 4000);
+    if (s.realm === 1) setTimeout(() => this.hud.notify(`You can fly! <b>Double-tap ${codeLabel(settings.key('jump'))}</b> to take to the sky.`, 'gold'), 4000);
     if (s.realm === 2) setTimeout(() => this.hud.notify('Your body can survive the void. Fly up and out of the atmosphere, and build a <b>starship</b> at a shipyard to reach other stars.', 'gold'), 4000);
     if (s.realm === MAX_REALM && !s.won) {
       s.won = true;
@@ -1624,6 +1656,7 @@ export class Game {
       if (d < 260 && !s.discovered.includes(id)) {
         s.discovered.push(id);
         this.hud.notify(`Discovered: <b>${POI_LABEL[poi.poi.kind]}</b> on ${esc(f.body.name)}.`, 'yl');
+        this.nix.once(`disc_${poi.poi.kind}`, `discover.${poi.poi.kind}`, {}, 0);
         this.applyBounties(progressBounties(s, { kind: 'discover' }));
       }
       if (poi.poi.kind === 'ore') {
@@ -1763,6 +1796,9 @@ export class Game {
       if (!s.home || s.home.star !== this.star.key) s.bind = { star: this.star.key, body: this.frame ? this.frame.body.id : null, site: city || null };
       if (city) this.applyBounties(progressBounties(s, { kind: 'arrive', city }));
       if (s.offers.length < 3) s.offers.push(...generateOffers(s, this.offerContext(), 3 - s.offers.length));
+      // bottlenecked cultivators can always earn an insight at a Martial Hall
+      const needs = s.stage === 3 && (s.insight || 0) < 1;
+      if (vk === 'hall' && needs && ![...s.offers, ...s.bounties].some((b) => b.type === 'insight')) s.offers.unshift(insightTrial(s));
       const panel = {
         station: 'shop', hall: 'bounties', shipyard: 'shipyard', exchange: 'shop', pills: 'shop', forge: 'forge',
         clinic: 'clinic', chamber: 'chamber', bar: 'bar', food: 'food', home: 'home', arena: 'arena', camp: 'shop',
@@ -1823,7 +1859,10 @@ export class Game {
         deck = { st, M, inv, q: new THREE.Quaternion().setFromRotationMatrix(M) };
       }
     }
-    if (deck && (!this.deck || this.deck.st !== deck.st)) this.hud.notify(`You set foot on <b>${esc(deck.st.def.name)}</b>.`, 'yl');
+    if (deck && (!this.deck || this.deck.st !== deck.st)) {
+      this.hud.notify(`You set foot on <b>${esc(deck.st.def.name)}</b>.`, 'yl');
+      this.nix.once('station', 'station', {}, 0);
+    }
     this.deck = deck;
     if (moved) this.positionCamera(0);
   }
@@ -1876,6 +1915,7 @@ export class Game {
     const prev = this.inVenue;
     this.inVenue = found;
     if (found && (!prev || prev.v !== found.v) && found.v.kind !== 'lobby') {
+      this.nix.once(`venue_${found.v.kind}`, `venue.${found.v.kind}`, {}, 0);
       this.hud.notify(`<b>${esc(found.v.name)}</b> <span class="cn">${found.v.cn}</span>`, 'yl');
     }
     rt.chamber = !!found && found.v.kind === 'chamber' && s.chamberUntil > s.playtime;
@@ -1910,6 +1950,146 @@ export class Game {
 
   geneCap() {
     return 3 + this.state.realm * 2;
+  }
+
+  // --------------------------------------------------- destruction --
+  // Attacks break nearby trees, rocks and street lamps, and scare people.
+  breakAt(local, radius, dir) {
+    const f = this.frame;
+    if (!f || !f.body.landable || !this.env.inAtmo) return;
+    const broken = f.breakProps(local, radius, dir);
+    for (const b of broken) {
+      const col = b.top ? new THREE.Color(0.5, 0.48, 0.44) : b.type === 4 ? new THREE.Color(1.6, 1.2, 2.4) : new THREE.Color(0.35, 0.5, 0.25);
+      this.particles.burst(b.pos, col, 24, 14, 0.9, 1.2, 1.2);
+    }
+    if (broken.length && this.time - (this.lastCrack || 0) > 0.15) {
+      this.lastCrack = this.time;
+      this.sound.explosion(local, false);
+    }
+    if (f.details) {
+      for (const st of f.details.settlements) {
+        if (local.distanceTo(st.group.position) > st.radius + 80) continue;
+        st.panic(local);
+        for (const pos of st.breakAt(local, radius)) this.particles.burst(pos, new THREE.Color(2.4, 2.0, 1.4), 20, 18, 0.6, 0.6);
+      }
+    }
+  }
+
+  // A fading scorch mark on the ground.
+  scorch(local, size) {
+    const f = this.frame;
+    if (!f || !f.terrain || !this.env.inAtmo) return;
+    if (!this.scorchPool) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const x = c.getContext('2d');
+      const grd = x.createRadialGradient(32, 32, 2, 32, 32, 31);
+      grd.addColorStop(0, 'rgba(10,6,4,0.95)');
+      grd.addColorStop(0.6, 'rgba(20,12,8,0.6)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = grd;
+      x.fillRect(0, 0, 64, 64);
+      const tex = new THREE.CanvasTexture(c);
+      this.scorchGeo = new THREE.CircleGeometry(1, 20);
+      this.scorchPool = [];
+      for (let i = 0; i < 40; i++) {
+        const m = new THREE.Mesh(this.scorchGeo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, fog: true }));
+        m.visible = false;
+        m.userData.life = 0;
+        this.localRoot.add(m);
+        this.scorchPool.push(m);
+      }
+      this.scorchIdx = 0;
+    }
+    const d = local.clone().normalize();
+    const m = this.scorchPool[this.scorchIdx++ % this.scorchPool.length];
+    m.position.copy(d).multiplyScalar(f.floorRadius(d.x, d.y, d.z) + 0.06);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d);
+    m.rotateZ(Math.random() * 6.28);
+    m.scale.setScalar(size);
+    m.material.opacity = 1;
+    m.userData.life = 30;
+    m.visible = true;
+  }
+
+  updateScorch(dt) {
+    if (!this.scorchPool) return;
+    for (const m of this.scorchPool) {
+      if (!m.visible) continue;
+      m.userData.life -= dt;
+      m.material.opacity = Math.min(1, m.userData.life / 8);
+      if (m.userData.life <= 0) m.visible = false;
+    }
+  }
+
+  // ---------------------------------------------- insight and radar --
+  gainInsight(source) {
+    const s = this.state;
+    s.insight = (s.insight || 0) + 1;
+    this.hud.notify(`You gain a <b>Realm Insight</b> from ${esc(source)}. It will carry you through your next breakthrough.`, 'gold');
+    this.peakNotified = false;
+    if (s.stage === 3 && s.xp >= this.stats.xpNeed) this.addXp(0);
+    this.save();
+  }
+
+  buyRadar() {
+    const s = this.state;
+    const next = RADARS[(s.radar || 0) + 1];
+    if (!next || s.coins < next.price) return this.sound.deny();
+    s.coins -= next.price;
+    s.radar = (s.radar || 0) + 1;
+    this.sound.confirm();
+    this.hud.notify(`Installed the <b>${next.name}</b> <span class="cn">${next.cn}</span>. ${next.desc}`, 'violet');
+    this.nix.event('shop');
+    this.save();
+  }
+
+  // Pulse the radar: undiscovered sites in range show on the compass.
+  radarPing() {
+    const s = this.state, rt = this.rt, p = this.player, f = this.frame;
+    if (rt.pingCd > 0) return;
+    rt.pingCd = 6;
+    const R = RADARS[s.radar || 0];
+    this.hud.pulse();
+    this.combat.shockwave(p.pos, Math.min(R.ping, 260), 0x3ef2ff, 1.4);
+    this.sound.lock();
+    if (!f || !f.details) {
+      this.nix.event('ping.none', {}, 1);
+      return;
+    }
+    const counts = {};
+    let n = 0;
+    for (const r of f.details.pois) {
+      const k = r.poi.kind;
+      if (!R.finds.includes(k)) continue;
+      if (s.discovered.includes(r.poi.id) || s.explored.includes(r.poi.id) || s.rumors.includes(r.poi.id)) continue;
+      if (r.pos.distanceTo(p.pos) > R.ping) continue;
+      s.rumors.push(r.poi.id);
+      counts[k] = (counts[k] || 0) + 1;
+      n++;
+    }
+    if (!n) {
+      this.nix.event('ping.none', {}, 1);
+      return;
+    }
+    const names = { ore: 'ore vein', wreck: 'wreck', camp: 'camp', ruin: 'ruin', spring: 'spring', obelisk: 'obelisk', nest: 'nest', lair: 'lair' };
+    const what = Object.entries(counts).map(([k, c]) => `${c} ${names[k]}${c > 1 ? 's' : ''}`).join(', ');
+    this.nix.cool['ping.some'] = -1e9;
+    this.nix.event('ping.some', { n, s: n > 1 ? 's' : '', what }, 1);
+    this.save();
+  }
+
+  // Situations Nix comments on that aren't tied to a single event.
+  nixWatch() {
+    const s = this.state, p = this.player, f = this.frame;
+    if (s.playtime > 200) this.nix.once('radar', 'radarHint', {}, 0);
+    if (s.playtime > 30) this.nix.once(`path_${s.path}`, `path.${s.path || 'mind'}`, {}, 0);
+    if (p.mode === 'space') this.nix.once('space', 'firstSpace', {}, 1);
+    if (f && f.body.landable && this.env.up && f.body.sites.city && f.body.sites.city.main) {
+      const tier = this.locTier();
+      if (tier > 0.15) this.nix.once('wilds', 'wilds', {}, 0);
+      if (tier > s.realm + 0.7) this.nix.event('dangerRising');
+    }
   }
 
   buyGene() {
@@ -2087,6 +2267,8 @@ export class Game {
     const s = this.state;
     s.explored.push(tr.poi.poi.id);
     s.bonusPoints = (s.bonusPoints || 0) + 1;
+    this.gainInsight('the obelisk');
+    this.nix.event('trialWin', {}, 1);
     const k = this.randomUpgradableTech();
     if (k) s.mastery[k] = (s.mastery[k] || 1) + 1;
     this.addXp(this.stats.xpNeed * 0.25);
@@ -2137,6 +2319,8 @@ export class Game {
     if (!left.length) {
       const s = this.state;
       s.arena = a.wave;
+      if (a.wave % 5 === 0) this.gainInsight(`arena wave ${a.wave}`);
+      this.nix.event('arenaWin');
       s.coins += a.prize;
       this.addXp(this.stats.xpNeed * 0.08);
       this.hud.banner('VICTORY', `Wave ${a.wave} cleared`, `+${fmt(a.prize)} ◈ · the crowd roars`, '#ffe44d', 3);
@@ -2376,6 +2560,7 @@ export class Game {
     }
     s.ship = { tier, star: this.star.key, body: f ? f.body.id : null, pos: this.shipObj.pos.toArray(), quat: this.shipObj.quat.toArray(), landed: this.shipObj.landed, hull: this.shipObj.hull };
     this.sound.breakthrough();
+    this.nix.event('ship', {}, 1);
     this.hud.banner('SHIPYARD', def.name, `<span class="cn">${def.cn}</span>Warp range ${def.range} light years · waiting on the pad`, hex(def.color), 4);
     this.save();
   }
@@ -2519,6 +2704,7 @@ export class Game {
   }
 
   startWarp(star) {
+    this.nix.event('warp', {}, 1);
     this.mode = 'warping';
     this.warp = { t: 0, t2: 0, star, from: this.star, sys: null, swapped: false, failed: false };
     this.rt.meditating = false;
@@ -2625,6 +2811,7 @@ export class Game {
     const kicker = this.star.key === HOME_KEY ? 'HOMECOMING' : 'WARP COMPLETE';
     this.hud.banner(kicker, this.star.name, `<span class="cn">${reg.cn}</span>${esc(reg.name)} · ${esc(realmOf(this.star.tier).name)}-level threat${lair ? ` · ${esc(BOSSES[this.star.boss].name)} lairs here` : ''}`, reg.sky[3], 4.5);
     this.sound.arrive();
+    this.nix.event('arrive');
     this.clock.getDelta();
   }
 
@@ -2769,7 +2956,7 @@ export class Game {
     }
     for (const it of this.loot.items) add(it.g.position, it.kind === 'ore' ? '#3ef2ff' : '#ff3c7d', 2);
     this.hud.drawCompass(heading, compass);
-    this.hud.drawRadar(dt, radar, this.frame && this.env.inAtmo ? 600 : 4000);
+    this.hud.drawRadar(dt, radar, this.frame && this.env.inAtmo ? RADARS[this.state.radar || 0].range : 4000);
   }
 
   updateMarkers(camWorld) {
@@ -2815,7 +3002,7 @@ export class Game {
         const d = poi.pos.distanceTo(origin);
         const known = s.discovered.includes(poi.poi.id);
         const rumored = s.rumors && s.rumors.includes(poi.poi.id) && !known;
-        if (d > (known ? 4000 : rumored ? 1e9 : 1200)) continue;
+        if (d > (known ? 4000 : rumored ? 1e9 : RADARS[s.radar || 0].reveal)) continue;
         if (poi.poi.kind === 'ore' && s.explored.includes(poi.poi.id)) continue;
         const done = (poi.poi.kind === 'ruin' || poi.poi.kind === 'wreck' || poi.poi.kind === 'obelisk') && s.explored.includes(poi.poi.id);
         const color = POI_COLOR[poi.poi.kind];

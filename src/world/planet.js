@@ -19,6 +19,7 @@ const PROP_SHAPE = {
 const PCELL = 16;
 const cellKey = (x, y, z) => `${Math.floor(x / PCELL)},${Math.floor(y / PCELL)},${Math.floor(z / PCELL)}`;
 const tC = new THREE.Vector3();
+const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
 
 const RES = 32;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -55,6 +56,8 @@ export class Planet {
     this.details = null;
     this.textures = [];
     this.propHash = new Map();
+    this.brokenProps = [];
+    this.fallers = [];
     if (body.landable) {
       this.terrain = makeTerrain(this.params);
       this.setupQuadtree();
@@ -166,6 +169,7 @@ export class Planet {
       const m = new THREE.Matrix4();
       const s = new THREE.Vector3();
       const yaw = new THREE.Quaternion();
+      const instOf = new Map();
       for (const [type, list] of byType) {
         const geoP = this.propGeos[type];
         if (!geoP) continue;
@@ -180,6 +184,7 @@ export class Planet {
           s.set(sc, sc, sc);
           m.compose(tA, tQ, s);
           inst.setMatrixAt(k, m);
+          instOf.set(i, [inst, k]);
         });
         inst.computeBoundingSphere();
         mesh.add(inst);
@@ -191,7 +196,8 @@ export class Planet {
           if (!shape) continue;
           const sc = out.props[i + 4];
           const base = new THREE.Vector3(out.props[i + 1], out.props[i + 2], out.props[i + 3]).add(mesh.position);
-          const e = { base, up: base.clone().normalize(), r: shape[0] * sc, h: shape[1] * sc, top: shape[2], mesh };
+          const io = instOf.get(i);
+          const e = { base, up: base.clone().normalize(), r: shape[0] * sc, h: shape[1] * sc, top: shape[2], mesh, inst: io && io[0], k: io ? io[1] : -1, type: out.props[i] };
           const k = cellKey(base.x, base.y, base.z);
           if (!this.propHash.has(k)) this.propHash.set(k, []);
           this.propHash.get(k).push(e);
@@ -209,6 +215,7 @@ export class Planet {
     node.children = null;
     if (node.propKeys) {
       for (const [k, e] of node.propKeys) {
+        e.dead = true;
         const list = this.propHash.get(k);
         if (!list) continue;
         const i = list.indexOf(e);
@@ -325,7 +332,7 @@ export class Planet {
             const list = this.propHash.get(`${ix},${iy},${iz}`);
             if (!list) continue;
             for (const e of list) {
-              if (!e.mesh.visible) continue;
+              if (!e.mesh.visible || e.broken) continue;
               tA.subVectors(local, e.base);
               const along = tA.dot(e.up);
               const feet = along - eye;
@@ -344,6 +351,80 @@ export class Planet {
       }
     }
     return roof;
+  }
+
+  // Break trees and rocks near a planet-local point. Trees topple away from
+  // dir; everything regrows a few minutes later. Returns what broke.
+  breakProps(local, radius, dir) {
+    if (!this.propHash.size) return [];
+    const out = [];
+    const now = performance.now() / 1000;
+    const reach = Math.ceil(radius / PCELL) + 1;
+    const cx = Math.floor(local.x / PCELL), cy = Math.floor(local.y / PCELL), cz = Math.floor(local.z / PCELL);
+    for (let ix = cx - reach; ix <= cx + reach; ix++) {
+      for (let iy = cy - reach; iy <= cy + reach; iy++) {
+        for (let iz = cz - reach; iz <= cz + reach; iz++) {
+          const list = this.propHash.get(`${ix},${iy},${iz}`);
+          if (!list) continue;
+          for (const e of list) {
+            if (e.broken || !e.inst || !e.mesh.visible) continue;
+            tA.subVectors(local, e.base);
+            const along = tA.dot(e.up);
+            if (along < -3 || along > e.h + radius) continue;
+            tA.addScaledVector(e.up, -along);
+            if (tA.length() > radius + e.r) continue;
+            e.broken = true;
+            e.regrowAt = now + 200 + Math.random() * 120;
+            e.mat = e.mat || new THREE.Matrix4();
+            e.inst.getMatrixAt(e.k, e.mat);
+            e.inst.setMatrixAt(e.k, ZERO_M);
+            e.inst.instanceMatrix.needsUpdate = true;
+            this.brokenProps.push(e);
+            if (!e.top && this.propGeos[e.type]) {
+              // a falling copy of the tree
+              const fm = new THREE.Mesh(this.propGeos[e.type], this.propMat);
+              e.mat.decompose(fm.position, fm.quaternion, fm.scale);
+              e.mesh.add(fm);
+              let away = dir ? dir.clone() : tA.clone();
+              away.addScaledVector(e.up, -away.dot(e.up));
+              if (away.lengthSq() < 1e-6) away.set(1, 0, 0).addScaledVector(e.up, -e.up.x);
+              away.normalize();
+              const axis = new THREE.Vector3().crossVectors(e.up, away).normalize();
+              this.fallers.push({ mesh: fm, axis, q0: fm.quaternion.clone(), t: 0, s0: fm.scale.x, parent: e.mesh });
+            }
+            out.push({ pos: e.base.clone().addScaledVector(e.up, Math.min(e.h, 3)), type: e.type, top: e.top });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  updateBroken(dt) {
+    for (let i = this.fallers.length - 1; i >= 0; i--) {
+      const f = this.fallers[i];
+      f.t += dt;
+      const k = Math.min(1, f.t / 1.3);
+      const ang = 1.5 * k * k;
+      f.mesh.quaternion.copy(f.q0).premultiply(tQ.setFromAxisAngle(f.axis, ang));
+      if (f.t > 6) f.mesh.scale.setScalar(f.s0 * Math.max(0, 1 - (f.t - 6) / 1.5));
+      if (f.t > 7.5 || !f.parent.parent) {
+        f.parent.remove(f.mesh);
+        this.fallers.splice(i, 1);
+      }
+    }
+    if (!this.brokenProps.length) return;
+    const now = performance.now() / 1000;
+    for (let i = this.brokenProps.length - 1; i >= 0; i--) {
+      const e = this.brokenProps[i];
+      if (e.dead) { this.brokenProps.splice(i, 1); continue; }
+      if (now > e.regrowAt && e.base.distanceTo(this.camLocal) > 60) {
+        e.inst.setMatrixAt(e.k, e.mat);
+        e.inst.instanceMatrix.needsUpdate = true;
+        e.broken = false;
+        this.brokenProps.splice(i, 1);
+      }
+    }
   }
 
   // Settlement objects are built when you come near and freed when you leave.
@@ -488,6 +569,7 @@ export class Planet {
       this.clouds.uniforms.uSunDir.value.subVectors(sunWorld, this.worldPos).normalize().transformDirection(camera.matrixWorldInverse);
     }
     if (this.ocean) this.ocean.time.value = t;
+    this.updateBroken(dt);
   }
 
   // Local "sky" state for fog and lighting when the camera is inside the atmosphere.

@@ -56,6 +56,14 @@ export class HUD {
     this.applyScale();
   }
 
+  // Expanding ring when the radar pulses.
+  pulse() {
+    const r = document.getElementById('ping-ring');
+    r.classList.remove('go');
+    void r.offsetWidth;
+    r.classList.add('go');
+  }
+
   applyScale() {
     document.documentElement.style.setProperty('--hud-scale', String(settings.get('hudScale') || 1));
   }
@@ -241,7 +249,7 @@ export class HUD {
     e.essence.textContent = fmt(state.essence);
     e['med-rate'].textContent = `+${fmt(info.medRate)}/S`;
     if (info.speed >= 10000) { e.speed.textContent = (info.speed / 1000).toFixed(1); e['speed-unit'].textContent = 'KM/S'; } else { e.speed.textContent = Math.round(info.speed); e['speed-unit'].textContent = 'M/S'; }
-    e.formation.textContent = info.formation.toUpperCase();
+    e.formation.textContent = info.path && info.path !== 'mind' ? '—' : info.formation.toUpperCase();
     e['view-mode'].textContent = info.camMode === 'first' ? 'FIRST PERSON' : 'THIRD PERSON';
     if (info.nav) {
       e['nav-info'].classList.remove('hidden');
