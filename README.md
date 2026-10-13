@@ -1,5 +1,7 @@
 # Starsea Ascension · 星海飞升
 
+**Play it at [starsea.dev](https://starsea.dev)**
+
 A first-person 3D cultivation game that runs in the browser. You start as a Warrior in Base City 07 on the planet Terra. You choose a path, hunt the beasts that roam between Terra's walled cities, and break through ten realms. In time you fly, then leave the planet, build a starship and warp to any star you can see in an endless galaxy. Inspired by xianxia space epics like 吞噬星空 (Swallowed Star).
 
 Built with [Three.js](https://threejs.org/) and Vite. Every planet, city, interior, beast, star, ship and sound is generated in code at runtime, so there are no asset downloads.
