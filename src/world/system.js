@@ -4,7 +4,7 @@ import { withLogDepth } from '../core/logdepth.js';
 import { mulberry32 } from '../core/rng.js';
 import { STAR_TYPES, REGIONS } from '../game/data.js';
 import { glowTexture, puffTexture, softDotTexture } from './textures.js';
-import { buildStation } from './models.js';
+import { buildDockStation } from './station.js';
 import { generateSystem } from './systemgen.js';
 import { Planet } from './planet.js';
 
@@ -172,11 +172,11 @@ export class StarSystem {
     this.field = new AsteroidField(this.root, g.belts);
     for (const st of g.stations) {
       const parent = byId.get(st.parent);
-      const model = buildStation(st.name, 0x3ef2ff);
+      const model = buildDockStation(st.name, 0x3ef2ff);
       const holder = new THREE.Group();
       holder.add(model.group);
       (parent ? parent.orbitGroup : this.root).add(holder);
-      this.stations.push({ def: st, ...model, holder, parent, worldPos: new THREE.Vector3(), orbit: { a: st.a, e: 0, inc: st.inc, node: 0, peri: 0, phase: st.phase, rate: st.rate } });
+      this.stations.push({ def: st, ...model, model, holder, parent, worldPos: new THREE.Vector3(), orbit: { a: st.a, e: 0, inc: st.inc, node: 0, peri: 0, phase: st.phase, rate: st.rate } });
     }
     for (const c of g.comets) this.buildComet(c);
     for (const n of g.nebulae) this.buildNebula(n);

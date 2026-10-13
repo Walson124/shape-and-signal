@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { BEASTS, BOSSES, power } from './data.js';
 import { glowTexture } from '../world/textures.js';
 import { rimMaterial } from '../world/models.js';
+import { buildCreature } from './creatures.js';
+import { pickSpecies } from './bestiary.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tmpA = new THREE.Vector3();
@@ -456,6 +458,7 @@ function buildBoss(def, index) {
 }
 
 const BUILDERS = { mite: buildMite, ray: buildRay, rockback: buildRockback, wraith: buildWraith };
+const def0 = (b) => b.def;
 
 // ----------------------------------------------------------- manager --
 export class BeastManager {
@@ -467,6 +470,7 @@ export class BeastManager {
     this.beasts = [];
     this.groupId = 0;
     this.uid = 0;
+    this.species = new Map();
     this.system = null;
     this.onKill = null;
   }
@@ -486,6 +490,13 @@ export class BeastManager {
     const tier = sp.tier;
     const roll = Math.random();
     let type;
+    if (sp.kind === 'ground' && env.species && env.species.length) {
+      const def = pickSpecies(env.species, tier);
+      this.species.set(def.id, def);
+      const n = def.pack[0] + Math.floor(Math.random() * (def.pack[1] - def.pack[0] + 1));
+      this.spawnGroup(def.id, sp.pos, n, tier);
+      return;
+    }
     if (sp.kind === 'belt') type = roll < 0.6 ? 'rockback' : 'mite';
     else if (sp.kind === 'hotspot') type = tier >= 2 && roll < 0.45 ? 'wraith' : roll < 0.75 ? 'ray' : 'mite';
     else if (sp.kind === 'ground') type = roll < 0.5 ? 'mite' : roll < 0.75 ? 'ray' : tier >= 1 ? 'rockback' : 'mite';
@@ -533,16 +544,18 @@ export class BeastManager {
     const gid = ++this.groupId;
     const out = [];
     for (let i = 0; i < n; i++) {
-      const pos = center.clone().add(new THREE.Vector3((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 60));
+      const spread = this.species.has(type) ? 30 : 60;
+      const pos = center.clone().add(new THREE.Vector3((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread * 0.5, (Math.random() - 0.5) * spread));
       out.push(this.spawn(type, pos, tier, { gid, elite: Math.random() < 0.08, aggro }));
     }
     return out;
   }
 
   spawn(type, pos, tier, { gid = 0, elite = false, aggro = false } = {}) {
-    const def = BEASTS[type];
-    const model = BUILDERS[type](elite ? 0xffd040 : def.color);
-    const scale = elite ? 1.35 : 1;
+    const def = BEASTS[type] || this.species.get(type);
+    const model = BUILDERS[type] ? BUILDERS[type](elite ? 0xffd040 : def.color) : buildCreature(def, elite ? 0xffd040 : null);
+    // higher-grade beasts are visibly bigger
+    const scale = (elite ? 1.35 : 1) * (1 + Math.min(0.8, Math.max(0, tier) * 0.12));
     model.group.scale.multiplyScalar(scale);
     model.group.position.copy(pos);
     this.scene.add(model.group);
@@ -680,8 +693,20 @@ export class BeastManager {
         if (b.flashT > 0) b.flashT -= dt;
         continue;
       }
+      // status effects
+      b.stunT = Math.max(0, (b.stunT || 0) - dt);
+      b.fleeT = Math.max(0, (b.fleeT || 0) - dt);
+      b.markT = Math.max(0, (b.markT || 0) - dt);
+      if (b.held) {
+        b.vel.set(0, 0, 0);
+        b.model.anim(time * 3 + b.phase);
+        if (b.flashT > 0) b.flashT -= dt;
+        continue;
+      }
+      const disabled = b.stunT > 0 || b.fleeT > 0;
       const ground = env && env.ground ? env.ground(b.pos) : null;
       const bUp = ground ? ground.up : UP;
+      const walker = def0(b).walker ?? (b.type === 'mite' || b.type === 'rockback');
       const toP = tmpA.subVectors(player.pos, b.pos);
       const d = toP.length();
       const dirP = toP.clone().divideScalar(Math.max(d, 0.001));
@@ -696,7 +721,11 @@ export class BeastManager {
         b.state = 'move';
       }
 
-      if (!b.aggro) {
+      if (b.stunT > 0) {
+        desired.set(0, 0, 0);
+      } else if (b.fleeT > 0) {
+        desired.copy(dirP).multiplyScalar(-def.speed * 1.3);
+      } else if (!b.aggro) {
         b.wanderT -= dt;
         if (b.wanderT <= 0) {
           b.wanderT = 3 + Math.random() * 4;
@@ -706,16 +735,16 @@ export class BeastManager {
         const dl = desired.length();
         desired.multiplyScalar(dl > 20 ? (def.speed * 0.35) / dl : 0);
       } else if (def.behavior === 'swarm') {
-        const side = new THREE.Vector3().crossVectors(dirP, UP).normalize().multiplyScalar(Math.sin(time * 2 + b.phase) * 0.6);
+        const side = new THREE.Vector3().crossVectors(dirP, bUp).normalize().multiplyScalar(Math.sin(time * 2 + b.phase) * 0.6);
         desired.copy(dirP).add(side).normalize().multiplyScalar(def.speed * 1.15);
       } else if (def.behavior === 'ranged') {
         const ideal = 190;
         const radial = d > ideal + 30 ? 1 : d < ideal - 30 ? -1 : 0;
-        const side = new THREE.Vector3().crossVectors(dirP, UP).normalize();
+        const side = new THREE.Vector3().crossVectors(dirP, bUp).normalize();
         desired.copy(dirP).multiplyScalar(radial).addScaledVector(side, Math.sin(time * 0.5 + b.phase) > 0 ? 0.8 : -0.8).normalize().multiplyScalar(def.speed);
         faceDir = dirP;
         b.cd -= dt;
-        if (b.cd <= 0 && d < 600 && playerAlive) {
+        if (b.cd <= 0 && d < 600 && playerAlive && !disabled) {
           b.cd = def.fireRate * (0.8 + Math.random() * 0.4);
           const muzzle = b.pos.clone().addScaledVector(dirP, b.radius);
           this.combat.enemyShot(muzzle, this.aimAt(b, player, def.shotSpeed), def.shotSpeed, b.dmg, b.elite ? 0xffd040 : def.color, 1.5);
@@ -770,20 +799,16 @@ export class BeastManager {
         if (sd < min && sd > 0.001) desired.addScaledVector(sep.divideScalar(sd), (min - sd) * 6);
       }
 
+      if (ctx.slowAt) desired.multiplyScalar(ctx.slowAt(b));
       const accel = b.state === 'charge' ? 6 : 2.2;
-      if (ground) {
-        // keep movement along the surface for walkers
-        const walker = b.type === 'mite' || b.type === 'rockback';
-        if (walker) desired.addScaledVector(ground.up, -desired.dot(ground.up));
-      }
+      if (ground && walker) desired.addScaledVector(ground.up, -desired.dot(ground.up));
       b.vel.lerp(desired, 1 - Math.exp(-dt * accel));
       b.pos.addScaledVector(b.vel, dt);
       if (env && env.resolve) env.resolve(b.pos, b.radius);
       if (ground) {
         const D = b.pos.length();
-        const walker = b.type === 'mite' || b.type === 'rockback';
         const g2 = env.ground(b.pos);
-        const floor = g2.floorR + b.radius * (walker ? 0.75 : 1);
+        const floor = g2.floorR + b.radius * (walker ? (def.footing ?? 0.75) : 1);
         if (walker) b.pos.multiplyScalar(floor / D);
         else {
           const hover = floor + (b.boss ? 60 : 18 + (b.phase % 1) * 20);
@@ -791,10 +816,10 @@ export class BeastManager {
         }
       }
       let fd = faceDir || (b.vel.lengthSq() > 4 ? b.vel.clone().normalize() : dirP);
-      if (ground && (b.type === 'mite' || b.type === 'rockback')) fd = fd.clone().addScaledVector(bUp, -fd.dot(bUp)).normalize();
+      if (ground && walker) fd = fd.clone().addScaledVector(bUp, -fd.dot(bUp)).normalize();
       this.face(b, fd, dt, b.boss ? 2.5 : 6, bUp);
 
-      if (playerAlive && b.aggro && d < b.radius + player.radius + 1.5) {
+      if (playerAlive && b.aggro && !disabled && d < b.radius + player.radius + 1.5) {
         b.cd3 -= dt;
         if (b.cd3 <= 0) {
           b.cd3 = 1.0;
@@ -805,7 +830,7 @@ export class BeastManager {
         b.cd3 -= dt;
       }
 
-      b.model.anim(time + b.phase);
+      b.model.anim(time + b.phase, b.vel.length(), b);
       if (b.flashT > 0) b.flashT -= dt;
       const f = b.flashT > 0 ? 4 : 1;
       for (const m of b.model.flash) {

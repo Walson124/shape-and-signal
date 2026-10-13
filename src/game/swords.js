@@ -152,7 +152,7 @@ export class SwordArray {
     this.sound.swordLaunch();
   }
 
-  storm(center, beasts, damage, color) {
+  storm(center, beasts, damage, color, up = new THREE.Vector3(0, 1, 0)) {
     if (!this.phantomGeo) {
       const m = buildSword(SWORD_GRADES[0]);
       this.phantomGeo = m.group.children[0].geometry.clone();
@@ -164,7 +164,7 @@ export class SwordArray {
     for (let i = 0; i < n; i++) {
       const target = targets.length ? targets[i % targets.length] : null;
       const aim = target ? target.pos.clone() : center.clone().add(new THREE.Vector3((Math.random() - 0.5) * 300, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 300));
-      const start = aim.clone().add(new THREE.Vector3((Math.random() - 0.5) * 160, 220 + Math.random() * 120, (Math.random() - 0.5) * 160));
+      const start = aim.clone().add(new THREE.Vector3((Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160)).addScaledVector(up, 220 + Math.random() * 120);
       const mesh = new THREE.Mesh(this.phantomGeo, mat);
       mesh.scale.setScalar(3.2);
       mesh.position.copy(start);

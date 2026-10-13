@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import { REALMS, STAGES, MAX_REALM, TECHNIQUES, ACTIVE_TECHNIQUES, PILLS, realmOf } from '../game/data.js';
+import { REALMS, STAGES, MAX_REALM, PILLS, realmOf } from '../game/data.js';
+import { PATHS, TECHS } from '../game/paths.js';
 import { settings } from '../core/settings.js';
+import { codeLabel } from '../core/bindings.js';
 
 export function fmt(n) {
   n = Math.max(0, n);
@@ -46,7 +48,16 @@ export class HUD {
     this.pipCount = -1;
     this.lastBounties = '';
     this.radarSweep = 0;
-    this.buildSkills();
+    this.buildSkills('mind');
+    settings.onChange((k) => {
+      if (k === 'bindings') this.buildSkills(this.path || 'mind');
+      if (k === 'hudScale') this.applyScale();
+    });
+    this.applyScale();
+  }
+
+  applyScale() {
+    document.documentElement.style.setProperty('--hud-scale', String(settings.get('hudScale') || 1));
   }
 
   setupCanvas(c, w, h) {
@@ -60,14 +71,23 @@ export class HUD {
     this.el.hud.classList.toggle('hidden', !v);
   }
 
-  buildSkills() {
+  buildSkills(pathId) {
+    this.path = pathId;
+    const P = PATHS[pathId] || PATHS.mind;
+    const key = (a) => codeLabel(settings.key(a));
+    const short = (id) => TECHS[id].name.split(' ').slice(-1)[0];
+    this.techSlots = [
+      { id: P.primary, key: key('fire') },
+      { id: P.secondary, key: key('focus') },
+      ...P.skills.map((id, i) => ({ id, key: key(`skill${i + 1}`) })),
+    ];
     const slots = [
-      ...ACTIVE_TECHNIQUES.map((k) => ({ id: k, key: k === 'swords' ? 'Q' : TECHNIQUES[k].key, name: { bolt: 'Bolt', swords: 'Swords', burst: 'Burst', body: 'Golden', storm: 'Storm' }[k], cn: TECHNIQUES[k].cn })),
+      ...this.techSlots.map((t) => ({ id: t.id, key: t.key, name: short(t.id), cn: TECHS[t.id].cn })),
       { sep: true },
-      { id: 'meditate', key: 'C', name: 'Cultivate', cn: '修炼' },
-      { id: 'breakthrough', key: 'B', name: 'Break', cn: '突破' },
+      { id: 'meditate', key: key('cultivate'), name: 'Cultivate', cn: '修炼' },
+      { id: 'breakthrough', key: key('breakthrough'), name: 'Break', cn: '突破' },
       { sep: true },
-      ...Object.entries(PILLS).map(([k, p]) => ({ id: `pill-${k}`, key: p.key, name: { heal: 'Heal', energy: 'Elixir', cult: 'Insight' }[k], cn: p.cn, pill: true })),
+      ...Object.entries(PILLS).map(([k, p], i) => ({ id: `pill-${k}`, key: key(`pill${i + 1}`), name: { heal: 'Heal', energy: 'Elixir', cult: 'Insight' }[k], cn: p.cn, pill: true })),
     ];
     this.skillEls = {};
     this.el.skills.innerHTML = '';
@@ -79,7 +99,7 @@ export class HUD {
         continue;
       }
       d.className = 'skill';
-      d.innerHTML = `<div class="s-cd"></div><span class="s-key">${s.key}</span><span class="s-cn">${s.cn}</span><span class="s-name">${esc(s.name)}</span>${s.pill ? '<span class="s-count"></span>' : ''}`;
+      d.innerHTML = `<div class="s-cd"></div><span class="s-key">${esc(s.key)}</span><span class="s-cn">${s.cn}</span><span class="s-name">${esc(s.name)}</span>${s.pill ? '<span class="s-count"></span>' : ''}`;
       this.el.skills.appendChild(d);
       this.skillEls[s.id] = { el: d, cd: d.querySelector('.s-cd'), count: d.querySelector('.s-count'), wasCd: false };
     }
@@ -94,14 +114,16 @@ export class HUD {
     e['sp-fill'].style.width = `${(100 * rt.spirit) / stats.maxSpirit}%`;
     e['xp-fill'].style.width = `${Math.min(100, (100 * state.xp) / stats.xpNeed)}%`;
 
-    for (const k of ACTIVE_TECHNIQUES) {
+    if (info.path && info.path !== this.path) this.buildSkills(info.path);
+    for (const slot of this.techSlots) {
+      const k = slot.id;
       const s = this.skillEls[k];
-      const t = TECHNIQUES[k];
+      const t = TECHS[k];
       const unlocked = state.realm >= t.unlockRealm;
       const pool = t.res === 'spirit' ? rt.spirit : rt.energy;
       s.el.classList.toggle('locked', !unlocked);
       s.el.classList.toggle('low', unlocked && pool < t.cost);
-      s.el.classList.toggle('active', (k === 'body' && rt.shieldT > 0) || (k === 'swords' && info.controlling));
+      s.el.classList.toggle('active', ((k === 'barrier') && rt.shieldT > 0) || (k === 'will' && rt.willT > 0) || (k === 'steer' && info.controlling) || (k === 'guard' && rt.guarding));
       const cd = rt.cooldowns[k] || 0;
       s.cd.style.setProperty('--p', `${unlocked ? Math.min(100, (cd / t.cd) * 100) : 0}%`);
       if (s.wasCd && cd <= 0 && unlocked && t.cd > 1) {

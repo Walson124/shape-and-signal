@@ -196,7 +196,7 @@ export function makeClouds(body) {
         float n2 = fbm(p * 14.0 + vec3(0.0, uSeed, uTime * 0.005));
         float c = smoothstep(uCover, uCover + 0.22, n * 0.75 + n2 * 0.35);
         float lit = clamp(dot(normalize(vN), normalize(uSunDir)) * 0.9 + 0.25, 0.04, 1.0);
-        gl_FragColor = vec4(uColor * lit, c * 0.88);
+        gl_FragColor = vec4(uColor * lit * 0.82, c * 0.88);
       }`,
   }));
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(R, 128, 64), mat);

@@ -7,6 +7,18 @@ import { makeAtmosphere, makeOcean, makeClouds, makeRings } from './planetfx.js'
 import { buildSettlement } from './city.js';
 import { buildPoi } from './pois.js';
 import { PLANET_INFO } from '../game/data.js';
+import { settings } from '../core/settings.js';
+import { PROP } from './terrain.js';
+import { glowTexture } from './textures.js';
+
+// Collision shapes for props: trunk radius, height, and whether you can stand on top.
+const PROP_SHAPE = {
+  [PROP.PINE]: [0.45, 10, false], [PROP.BROAD]: [0.55, 9, false], [PROP.ROCK]: [1.45, 1.5, true], [PROP.CACTUS]: [0.5, 4.5, false],
+  [PROP.CRYSTAL]: [0.9, 4.5, false], [PROP.SHROOM]: [0.55, 3.4, false], [PROP.DEAD]: [0.35, 5, false], [PROP.ICE]: [0.9, 6, false],
+};
+const PCELL = 16;
+const cellKey = (x, y, z) => `${Math.floor(x / PCELL)},${Math.floor(y / PCELL)},${Math.floor(z / PCELL)}`;
+const tC = new THREE.Vector3();
 
 const RES = 32;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -34,7 +46,7 @@ export class Planet {
     this.tilt.add(this.spin);
     this.params = {
       key: this.key, type: body.type, seed: body.seed, radius: this.R, amp: body.amp, sea: body.sea,
-      city: body.sites.city, outposts: body.sites.outposts,
+      city: body.sites.city, outposts: [...body.sites.outposts, ...(body.sites.towns || [])],
     };
     this.atmoR = body.atmo ? this.R * (1 + body.atmo.height) : this.R + body.amp * 1.5 + 200;
     this.soi = Math.max(this.atmoR * 2.4, this.R * 3.5);
@@ -42,6 +54,7 @@ export class Planet {
     this.camLocal = new THREE.Vector3();
     this.details = null;
     this.textures = [];
+    this.propHash = new Map();
     if (body.landable) {
       this.terrain = makeTerrain(this.params);
       this.setupQuadtree();
@@ -136,7 +149,14 @@ export class Planet {
     node.radius = out.radius;
     node.mesh = mesh;
     node.ready = true;
-    if (out.props && out.props.length) {
+    const density = settings.get('propDensity') ?? 1;
+    if (out.props && out.props.length && density > 0) {
+      if (density < 1) {
+        // thin the props deterministically
+        const kept = [];
+        for (let i = 0, k = 0; i < out.props.length; i += 6, k++) if ((k * 7919) % 100 < density * 100) kept.push(...out.props.slice(i, i + 6));
+        out.props = kept;
+      }
       const byType = new Map();
       for (let i = 0; i < out.props.length; i += 6) {
         const t = out.props[i];
@@ -164,6 +184,20 @@ export class Planet {
         inst.computeBoundingSphere();
         mesh.add(inst);
       }
+      if (node.level >= this.maxLevel - 1) {
+        node.propKeys = [];
+        for (let i = 0; i < out.props.length; i += 6) {
+          const shape = PROP_SHAPE[out.props[i]];
+          if (!shape) continue;
+          const sc = out.props[i + 4];
+          const base = new THREE.Vector3(out.props[i + 1], out.props[i + 2], out.props[i + 3]).add(mesh.position);
+          const e = { base, up: base.clone().normalize(), r: shape[0] * sc, h: shape[1] * sc, top: shape[2], mesh };
+          const k = cellKey(base.x, base.y, base.z);
+          if (!this.propHash.has(k)) this.propHash.set(k, []);
+          this.propHash.get(k).push(e);
+          node.propKeys.push([k, e]);
+        }
+      }
     }
     this.terrainGroup.add(mesh);
     this.chunkCount++;
@@ -173,6 +207,16 @@ export class Planet {
     node.alive = false;
     if (node.children) node.children.forEach((c) => this.disposeNode(c));
     node.children = null;
+    if (node.propKeys) {
+      for (const [k, e] of node.propKeys) {
+        const list = this.propHash.get(k);
+        if (!list) continue;
+        const i = list.indexOf(e);
+        if (i >= 0) list.splice(i, 1);
+        if (!list.length) this.propHash.delete(k);
+      }
+      node.propKeys = null;
+    }
     if (node.mesh) {
       this.terrainGroup.remove(node.mesh);
       for (const c of node.mesh.children) c.dispose();
@@ -206,7 +250,7 @@ export class Planet {
     node.dist = Math.max(0, cam.distanceTo(node.center) - node.radius);
     if (!node.ready) this.request(node);
     const visible = this.horizonVisible(node, cam, D);
-    const want = near && visible && node.level < this.maxLevel && node.dist < node.size * this.splitK;
+    const want = near && visible && node.level < this.maxLevel && node.dist < node.size * this.splitK * (settings.get('terrainDetail') || 1);
     if (want) {
       if (!node.children) node.children = [0, 1, 2, 3].map((k) => this.makeNode(node.face, node.level + 1, node.x * 2 + (k & 1), node.y * 2 + (k >> 1), node));
       let ready = true;
@@ -245,23 +289,56 @@ export class Planet {
     return this.R + this.terrain.height(dirX, dirY, dirZ);
   }
 
-  // Push a point out of buildings; returns a roof radius if standing on one.
-  collide(local, radius) {
-    if (!this.details) return null;
+  // Push a point out of buildings, walls, furniture, trees and rocks.
+  // eye: how far the point sits above the feet (1.7 for the player).
+  // Returns a roof radius if the feet rest on top of something.
+  collide(local, radius, eye = 0) {
     let roof = null;
-    for (const s of this.details.settlements) {
-      if (local.distanceTo(s.group.position) > s.radius * 1.3 + 200) continue;
-      for (const c of s.colliders) {
-        tA.subVectors(local, c.pos);
-        const along = tA.dot(c.up);
-        if (along < -2 || along > c.height + 3) continue;
-        tB.copy(tA).addScaledVector(c.up, -along);
-        const hd = tB.length();
-        if (hd < c.radius + radius) {
-          if (along > c.height - 1.5) {
-            roof = Math.max(roof ?? 0, c.pos.length() + c.height);
-          } else if (hd > 0.001) {
-            local.addScaledVector(tB.divideScalar(hd), c.radius + radius - hd);
+    if (this.details) {
+      for (const s of this.details.settlements) {
+        if (local.distanceTo(s.group.position) > s.radius * 1.3 + 200) continue;
+        for (const c of s.colliders) {
+          tA.subVectors(local, c.pos);
+          const along = tA.dot(c.up);
+          const feet = along - eye;
+          if (along < -2 || feet > c.height + 0.5) continue;
+          tB.copy(tA).addScaledVector(c.up, -along);
+          const hd = tB.length();
+          if (hd < c.radius + radius) {
+            if (feet > c.height - 0.8) {
+              roof = Math.max(roof ?? 0, c.pos.length() + c.height);
+            } else if (hd > 0.001) {
+              local.addScaledVector(tB.divideScalar(hd), c.radius + radius - hd);
+            }
+          }
+        }
+        const r2 = s.collideBoxes(local, radius, eye);
+        if (r2 !== null) roof = Math.max(roof ?? 0, r2);
+      }
+    }
+    // props near the point
+    if (this.propHash.size) {
+      const cx = Math.floor(local.x / PCELL), cy = Math.floor(local.y / PCELL), cz = Math.floor(local.z / PCELL);
+      for (let ix = cx - 1; ix <= cx + 1; ix++) {
+        for (let iy = cy - 1; iy <= cy + 1; iy++) {
+          for (let iz = cz - 1; iz <= cz + 1; iz++) {
+            const list = this.propHash.get(`${ix},${iy},${iz}`);
+            if (!list) continue;
+            for (const e of list) {
+              if (!e.mesh.visible) continue;
+              tA.subVectors(local, e.base);
+              const along = tA.dot(e.up);
+              const feet = along - eye;
+              if (along < -1.5 || feet > e.h + 0.3) continue;
+              tC.copy(tA).addScaledVector(e.up, -along);
+              const hd = tC.length();
+              if (hd >= e.r + radius) continue;
+              if (e.top && feet > e.h - 0.6) {
+                roof = Math.max(roof ?? 0, e.base.length() + e.h);
+              } else if (hd > 0.001) {
+                local.addScaledVector(tC.divideScalar(hd), e.r + radius - hd);
+              }
+            }
           }
         }
       }
@@ -269,18 +346,43 @@ export class Planet {
     return roof;
   }
 
-  // ------------------------------------------------------------- details --
+  // Settlement objects are built when you come near and freed when you leave.
+  allSites() {
+    const s = this.body.sites;
+    return [s.city, ...(s.towns || []), ...s.outposts].filter(Boolean);
+  }
+
+  ensureSettlement(site) {
+    this.buildDetails();
+    const entry = this.details.sites.find((e) => e.site === site);
+    if (!entry) return null;
+    if (!entry.obj) {
+      entry.obj = buildSettlement(site, this.R, { crowd: (this.ctx.preset.crowd ?? 1) * (settings.get('crowds') ? 1 : 0) });
+      this.spin.add(entry.obj.group);
+      this.refreshSettlements();
+    }
+    return entry.obj;
+  }
+
+  refreshSettlements() {
+    const d = this.details;
+    d.settlements = d.sites.filter((e) => e.obj).map((e) => e.obj);
+    d.services = [...(d.campServices || [])];
+    for (const s of d.settlements) d.services.push(...s.services);
+  }
+
   buildDetails() {
     if (this.details || !this.body.landable) return;
-    const d = { settlements: [], pois: [], services: [] };
-    const sites = [];
-    if (this.body.sites.city) sites.push(this.body.sites.city);
-    sites.push(...this.body.sites.outposts);
-    for (const site of sites) {
-      const s = buildSettlement(site, this.R);
-      this.spin.add(s.group);
-      d.settlements.push(s);
-      d.services.push(...s.services);
+    const d = { sites: [], settlements: [], pois: [], services: [] };
+    for (const site of this.allSites()) {
+      const dir = new THREE.Vector3(site.x, site.y, site.z).normalize();
+      // a light pillar marks every settlement from afar
+      const col = site.size === 'outpost' ? 0x7affd8 : site.main ? 0xffe44d : 0x3ef2ff;
+      const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(col).multiplyScalar(1.6), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      beacon.position.copy(dir).multiplyScalar(this.R + site.height + 60);
+      beacon.scale.setScalar(site.radius * 0.9);
+      this.spin.add(beacon);
+      d.sites.push({ site, dir, obj: null, beacon });
     }
     const accent = this.body.type === 'toxic' ? 0xb4ff4a : this.body.type === 'lava' ? 0xffa040 : this.body.type === 'crystal' ? 0xb98cff : 0x3ef2ff;
     for (const poi of this.body.pois) {
@@ -298,15 +400,27 @@ export class Planet {
       obj.group.quaternion.setFromUnitVectors(UP, dir);
       this.spin.add(obj.group);
       d.pois.push({ poi, obj, pos: obj.group.position.clone(), up: dir.clone(), alive: true, hp: 1 });
+      if (obj.trader) {
+        d.campServices = d.campServices || [];
+        const tp = obj.trader.clone().applyQuaternion(obj.group.quaternion).add(obj.group.position);
+        const td = tp.clone().normalize();
+        tp.copy(td).multiplyScalar(this.floorRadius(td.x, td.y, td.z) + 1.6);
+        d.campServices.push({ kind: 'camp', name: 'Hunters Camp Trader', pos: tp, range: 9, city: null });
+      }
     }
     this.details = d;
+    this.refreshSettlements();
   }
 
   disposeDetails() {
     if (!this.details) return;
-    for (const s of this.details.settlements) {
-      this.spin.remove(s.group);
-      s.dispose();
+    for (const e of this.details.sites) {
+      if (e.obj) {
+        this.spin.remove(e.obj.group);
+        e.obj.dispose();
+      }
+      this.spin.remove(e.beacon);
+      e.beacon.material.dispose();
     }
     for (const p of this.details.pois) {
       this.spin.remove(p.obj.group);
@@ -337,7 +451,25 @@ export class Planet {
     if (D < this.R * 6) this.buildDetails();
     else if (D > this.R * 10) this.disposeDetails();
     if (this.details) {
-      for (const s of this.details.settlements) s.update(dt);
+      let changed = false;
+      for (const e of this.details.sites) {
+        const center = tB.copy(e.dir).multiplyScalar(this.R + e.site.height);
+        const d = center.distanceTo(this.camLocal);
+        if (!e.obj && d < 6500) {
+          e.obj = buildSettlement(e.site, this.R, { crowd: (this.ctx.preset.crowd ?? 1) * (settings.get('crowds') ? 1 : 0) });
+          this.spin.add(e.obj.group);
+          changed = true;
+        } else if (e.obj && d > 9500) {
+          this.spin.remove(e.obj.group);
+          e.obj.dispose();
+          e.obj = null;
+          changed = true;
+        }
+        e.beacon.visible = d > 2500;
+        e.beacon.material.opacity = Math.min(1, (d - 2500) / 4000);
+      }
+      if (changed) this.refreshSettlements();
+      for (const s of this.details.settlements) s.update(dt, this.camLocal);
       for (const p of this.details.pois) if (p.alive) p.obj.update(dt);
     }
     if (this.atmo) {

@@ -55,13 +55,70 @@ export class Combat {
     return shot;
   }
 
-  firePlayerBolt(origin, dir, damage, color, speed = 700) {
+  firePlayerBolt(origin, dir, damage, color, speed = 700, opts = {}) {
+    const size = opts.size || 1;
     const mesh = new THREE.Mesh(this.boltGeo, this.mat(color, 3.5));
-    mesh.scale.set(1, 1, 9);
+    mesh.scale.set(size, size, 9 * size);
     mesh.quaternion.setFromUnitVectors(Z, dir);
     const glow = new THREE.Sprite(this.spriteMat(color, 1.1));
-    glow.scale.setScalar(4.5);
-    this.addShot({ kind: 'bolt', owner: 'player', pos: origin.clone(), vel: dir.clone().multiplyScalar(speed), life: 2.2, damage, radius: 1.3, color: new THREE.Color(color).multiplyScalar(1.4), mesh, glow });
+    glow.scale.setScalar(4.5 * size);
+    this.addShot({ kind: 'bolt', owner: 'player', pos: origin.clone(), vel: dir.clone().multiplyScalar(speed), life: 2.2, damage, radius: 1.3 * size, color: new THREE.Color(color).multiplyScalar(1.4), mesh, glow, pierce: opts.pierce || 0, hitSet: new Set() });
+  }
+
+  // A crescent of light that cuts through everything along its path.
+  fireWave(origin, dir, up, damage, color, opts = {}) {
+    const width = opts.width || 10;
+    const geo = new THREE.RingGeometry(width * 0.42, width * 0.5, 24, 1, -Math.PI * 0.42, Math.PI * 0.84);
+    geo.rotateZ(Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(3), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    // the arc faces forward, spanning sideways across the travel direction
+    const side = new THREE.Vector3().crossVectors(dir, up).normalize();
+    const u = new THREE.Vector3().crossVectors(side, dir).normalize();
+    const m = new THREE.Matrix4().makeBasis(side, u, dir.clone().negate());
+    mesh.quaternion.setFromRotationMatrix(m);
+    if (opts.vertical) mesh.rotateZ(Math.PI / 2);
+    const glow = new THREE.Sprite(this.spriteMat(color, 0.9));
+    glow.scale.setScalar(width * 0.8);
+    this.addShot({
+      kind: opts.kind || 'wave', owner: 'player', pos: origin.clone(), vel: dir.clone().multiplyScalar(opts.speed || 260), life: opts.life || 0.9, damage,
+      radius: width * 0.45, color: new THREE.Color(color).multiplyScalar(1.6), mesh, glow, pierce: 999, hitSet: new Set(), ownMat: mat, ownGeo: geo, fade: true,
+    });
+  }
+
+  // Instant beam drawn between two points (hit-scan attacks).
+  beam(a, b, color, width = 0.6, life = 0.25) {
+    const len = a.distanceTo(b);
+    const geo = new THREE.CylinderGeometry(width, width * 0.4, len, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, len / 2);
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(3), transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(a);
+    mesh.lookAt(b);
+    this.addEffect(mesh, life, (e) => {
+      const k = e.life / e.maxLife;
+      mat.opacity = k;
+      mesh.scale.set(k * 1.4, k * 1.4, 1);
+    });
+    this.particles.burst(b, new THREE.Color(color).multiplyScalar(2), 10, 30, 0.8, 0.3, 3);
+  }
+
+  // A sweeping arc in front of the attacker for melee cuts.
+  slash(pos, dir, up, radius, color, flip = false) {
+    const geo = new THREE.RingGeometry(radius * 0.55, radius, 28, 1, -Math.PI * 0.45, Math.PI * 0.9);
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(2.6), transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    const side = new THREE.Vector3().crossVectors(dir, up).normalize();
+    const u = new THREE.Vector3().crossVectors(side, dir).normalize();
+    // lie the arc in the plane of the swing, opening toward dir
+    const m = new THREE.Matrix4().makeBasis(dir.clone(), side.clone().multiplyScalar(flip ? -1 : 1), u.clone());
+    mesh.quaternion.setFromRotationMatrix(m);
+    mesh.rotateX(flip ? 0.5 : -0.5);
+    mesh.position.copy(pos);
+    this.addEffect(mesh, 0.22, (e) => {
+      const k = e.life / e.maxLife;
+      mat.opacity = k;
+      mesh.rotateZ((flip ? 1 : -1) * 0.12);
+    });
   }
 
   enemyShot(origin, dir, speed, damage, color, size = 1.6) {
@@ -102,6 +159,8 @@ export class Combat {
   removeShot(i) {
     const s = this.shots[i];
     this.scene.remove(s.group);
+    if (s.ownMat) s.ownMat.dispose();
+    if (s.ownGeo) s.ownGeo.dispose();
     this.shots.splice(i, 1);
   }
 
@@ -268,22 +327,38 @@ export class Combat {
       if (Math.random() < 0.6) this.particles.emit(s.pos.x, s.pos.y, s.pos.z, 0, 0, 0, s.color, s.owner === 'player' ? 0.6 : 1.2, 0.25, 0, 0.5);
 
       let dead = false;
+      if (s.fade && s.ownMat) {
+        s.ownMat.opacity = Math.min(0.9, s.life * 3);
+        s.mesh.scale.setScalar(1 + (1 - s.life) * 0.3);
+      }
       if (s.owner === 'player') {
-        for (const b of beasts) {
-          if (!b.alive) continue;
+        for (const b of [...beasts]) {
+          if (!b.alive || (s.hitSet && s.hitSet.has(b))) continue;
           if (segPointDist(prevPos, s.pos, b.pos) < b.radius + s.radius) {
             ctx.hitBeast(b, s.damage, s.pos.clone(), s.kind, s.vel.clone().normalize().multiplyScalar(15));
             this.particles.burst(s.pos, s.color, 12, 50, 0.8, 0.35, 3);
-            dead = true;
-            break;
+            if (s.hitSet) s.hitSet.add(b);
+            if (!s.pierce || s.hitSet.size > s.pierce) { dead = true; break; }
           }
         }
       } else if (ctx.playerAlive && segPointDist(prevPos, s.pos, player.pos) < player.radius + s.radius) {
-        ctx.hurtPlayer(s.damage, s.pos.clone());
+        const res = ctx.hurtPlayer(s.damage, s.pos.clone(), s);
+        if (res === 'reflect') {
+          // turned aside: the shot flies back at the beasts
+          s.owner = 'player';
+          s.vel.negate();
+          s.pos.addScaledVector(s.vel, 0.03);
+          s.hitSet = new Set();
+          s.pierce = 0;
+          s.damage *= 2.5;
+          s.life = 2;
+          this.particles.burst(s.pos, s.color, 18, 50, 1, 0.3, 3);
+          continue;
+        }
         this.particles.burst(s.pos, s.color, 14, 40, 1.2, 0.4, 3);
         dead = true;
       }
-      if (!dead && ctx.solid && ctx.solid(s.pos)) {
+      if (!dead && s.kind !== 'wave' && s.kind !== 'heaven' && ctx.solid && ctx.solid(s.pos)) {
         dead = true;
         this.particles.burst(s.pos, s.color, 8, 30, 1, 0.3, 3);
       }

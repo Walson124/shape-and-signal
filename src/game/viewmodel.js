@@ -11,6 +11,10 @@ const POSES = {
   mudra: { pos: [0.055, -0.15, -0.38], rot: [1.25, 0.05, -1.57], curl: [0.15, 0.12, 0.15, 0.2], thumb: 0.25 },
   fist: { pos: [0.2, -0.2, -0.38], rot: [0.35, 0.3, -0.6], curl: [1.45, 1.5, 1.5, 1.5], thumb: 1.1 },
   throw: { pos: [0.1, -0.1, -0.52], rot: [0.02, 0.15, -1.5], curl: [0.02, 0.02, 0.05, 0.08], thumb: 0.15 },
+  grip: { pos: [0.17, -0.2, -0.36], rot: [0.55, 0.15, -1.45], curl: [1.4, 1.45, 1.5, 1.5], thumb: 1.0 },
+  slashA: { pos: [-0.05, -0.08, -0.5], rot: [0.9, -0.9, -1.4], curl: [1.4, 1.45, 1.5, 1.5], thumb: 1.0 },
+  slashB: { pos: [0.26, -0.24, -0.42], rot: [-0.2, 0.9, -1.6], curl: [1.4, 1.45, 1.5, 1.5], thumb: 1.0 },
+  guard: { pos: [0.06, -0.1, -0.42], rot: [0.9, 0.4, -0.1], curl: [1.4, 1.45, 1.5, 1.5], thumb: 1.0 },
 };
 
 function beamTexture() {
@@ -195,6 +199,26 @@ export class ViewModel {
     this.right = new Hand(this.mats, false);
     this.left = new Hand(this.mats, true);
     this.scene.add(this.right.root, this.left.root);
+    // energy saber for the Blade path, held in the right fist
+    this.saber = new THREE.Group();
+    this.saberMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.6, 0.6) });
+    const hilt = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.16, 8), this.mats.joint);
+    const guardM = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.012, 0.03), this.mats.plate);
+    guardM.position.y = 0.085;
+    const bladeGeo = new THREE.BoxGeometry(0.012, 0.85, 0.045).translate(0, 0.52, 0);
+    const pos = bladeGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) if (pos.getY(i) > 0.9) pos.setZ(i, pos.getZ(i) * 0.2);
+    const blade = new THREE.Mesh(bladeGeo, this.saberMat);
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.85, 0.07).translate(0, 0.52, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.8, 0.2), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.saberEdge = edge;
+    this.saber.add(hilt, guardM, blade, edge);
+    this.saber.position.set(0, -0.02, -0.06);
+    this.saber.rotation.set(-1.45, 0, 0);
+    this.right.arm.add(this.saber);
+    this.saber.visible = false;
+    this.style = 'mind';
+    this.swingT = 0;
+    this.swingFlip = false;
     this.sway = new THREE.Vector2();
     this.time = 0;
     this.hurt = 0;
@@ -251,6 +275,17 @@ export class ViewModel {
   castLeft() { this.left.holdT = 0.16; this.left.kick = 1; }
   throwLeft() { this.left.throwT = 0.35; this.left.kick = 0.6; }
   hit() { this.hurt = 1; }
+  swing(flip) { this.swingT = 0.22; this.swingFlip = flip; this.right.kick = 0.4; }
+
+  setPath(id, color) {
+    this.style = id;
+    this.saber.visible = id === 'blade';
+    if (color !== undefined) {
+      const c = new THREE.Color(color);
+      this.saberMat.color.copy(c).multiplyScalar(2.6);
+      this.saberEdge.material.color.copy(c).multiplyScalar(1.4);
+    }
+  }
 
   update(dt, s) {
     this.time += dt;
@@ -279,10 +314,17 @@ export class ViewModel {
     if (s.meditating) { rp = 'mudra'; lp = 'mudra'; }
     else if (s.boost) { rp = 'fist'; lp = 'fist'; }
     if (r.holdT > 0) rp = 'cast';
+    this.swingT = Math.max(0, this.swingT - dt);
+    if (this.style === 'blade') {
+      rp = s.meditating ? 'mudra' : 'grip';
+      if (s.guarding) { rp = 'guard'; }
+      if (this.swingT > 0) rp = (this.swingT > 0.11) !== this.swingFlip ? 'slashA' : 'slashB';
+    }
+    if (this.style === 'psychic' && s.gripping) lp = 'cast';
     if (l.holdT > 0) lp = 'cast';
     if (s.controlling) lp = 'sword';
     if (l.throwT > 0) lp = 'throw';
-    r.update(dt, rp, rp === 'cast' ? 26 : 9, extra(1));
+    r.update(dt, rp, rp === 'cast' ? 26 : rp.startsWith('slash') ? 34 : 9, extra(1));
     l.update(dt, lp, lp === 'cast' || lp === 'throw' ? 26 : 9, extra(-1));
 
     const glowBase = 0.5 + 0.5 * Math.min(1, s.energyFrac * 1.2);

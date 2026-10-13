@@ -133,7 +133,8 @@ export class PostFX {
     this.vmPass = new RenderPass(this.vmScene, this.vmCamera);
     this.vmPass.clear = false;
     this.vmPass.clearDepth = true;
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(width * pixelRatio, height * pixelRatio), preset.bloomStrength * 0.85, 0.55, 0.86);
+    // threshold above 1 so only emissive neon, stars and techniques bloom, not a bright sky
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(width * pixelRatio, height * pixelRatio), preset.bloomStrength * 0.85, 0.55, 1.08);
     this.final = new ShaderPass(FinalShader);
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.vmPass);
@@ -168,6 +169,8 @@ export class PostFX {
     u.time.value = time;
     u.aberration.value = settings.get('aberration') ? 0.0028 : 0;
     u.grain.value = settings.get('grain') ? 0.04 : 0;
+    u.vignette.value = settings.get('vignette') ? 0.45 : 0.08;
+    this.bloom.enabled = settings.get('bloom') !== false;
     u.speed.value = settings.get('speedBlur') ? fx.speed : 0;
     u.damage.value = fx.damage;
     u.tint.value.copy(fx.tint);

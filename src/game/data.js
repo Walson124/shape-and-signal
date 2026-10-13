@@ -5,15 +5,15 @@ import { pick } from '../core/rng.js';
 // separates one realm from the next.
 // ---------------------------------------------------------------------------
 export const REALMS = [
-  { name: 'Warrior', cn: '战士', color: 0x8fb8ff, blurb: 'A mortal body tempered by cosmic energy. You are bound to your homeworld, but three spirit swords answer your will.' },
-  { name: 'War God', cn: '战神', color: 0x3ef2ff, blurb: 'Your strikes shatter mountains. You can take to the skies of any world.' },
-  { name: 'Planetary', cn: '行星级', color: 0x5dffa8, blurb: 'Your body survives the void. The stars are open to you, and Domain Burst awakens.' },
-  { name: 'Stellar', cn: '恒星级', color: 0xffe066, blurb: 'Your body burns like a star and your swords move faster than sight.' },
-  { name: 'Cosmic', cn: '宇宙级', color: 0xffa040, blurb: 'Space bends around you. The Golden Body manifests.' },
-  { name: 'Domain Lord', cn: '域主', color: 0xff3c7d, blurb: 'You rule a domain of your own. Lesser beasts flee your presence.' },
-  { name: 'Realm Lord', cn: '界主', color: 0xe05cff, blurb: 'The laws of the universe obey you. Ten Thousand Swords descend at your call.' },
-  { name: 'Immortal', cn: '不朽', color: 0xb69cff, blurb: 'Your soul can no longer be extinguished by ordinary means.' },
-  { name: 'Venerable', cn: '尊者', color: 0xf2f4ff, blurb: 'Galaxies bow as you pass. Only the Primordial Core remains.' },
+  { name: 'Warrior', cn: '战士', color: 0x8fb8ff, blurb: 'A mortal body tempered by cosmic energy. You can run, leap and fight, but you are bound to your homeworld.' },
+  { name: 'War God', cn: '战神', color: 0x3ef2ff, blurb: 'Your strikes shatter boulders. You can take to the skies of any world and leap over rooftops.' },
+  { name: 'Planetary', cn: '行星级', color: 0x5dffa8, blurb: 'Your body survives the void. The stars are open to you, and you may own a starship.' },
+  { name: 'Stellar', cn: '恒星级', color: 0xffe066, blurb: 'Your body burns like a star. Star Step lets you blink across a battlefield.' },
+  { name: 'Cosmic', cn: '宇宙级', color: 0xffa040, blurb: 'Space bends around you. Lesser beasts sense your aura and flee.' },
+  { name: 'Domain Lord', cn: '域主', color: 0xff3c7d, blurb: 'You rule a domain of your own. Within it, beasts slow and weaken.' },
+  { name: 'Realm Lord', cn: '界主', color: 0xe05cff, blurb: 'The laws of the universe obey you. Weak beasts are crushed by your presence alone.' },
+  { name: 'Immortal', cn: '不朽', color: 0xb69cff, blurb: 'Your soul can no longer be extinguished by ordinary means. Death itself hesitates.' },
+  { name: 'Venerable', cn: '尊者', color: 0xf2f4ff, blurb: 'Galaxies bow as you pass. You cross a star system in moments.' },
   { name: 'Universe Master', cn: '宇宙之主', color: 0xfff0b8, blurb: 'You stand at the summit of the cosmos.' },
 ];
 export const MAX_REALM = REALMS.length - 1;
@@ -34,32 +34,26 @@ export const swordCount = (realm) => Math.min(12, 3 + realm);
 // ---------------------------------------------------------------------------
 // Techniques. Energy fuels bolts and arts; spirit sense fuels the swords.
 // ---------------------------------------------------------------------------
-export const TECHNIQUES = {
-  bolt: { name: 'Star Bolt', cn: '星芒', key: 'LMB', cost: 3, cd: 0.15, unlockRealm: 0, res: 'energy', desc: 'Fire condensed starlight from your palms.' },
-  swords: { name: 'Flying Swords', cn: '飞剑', key: 'RMB · Q', cost: 25, cd: 2.4, unlockRealm: 0, res: 'spirit', desc: 'Hold right mouse to steer your swords with your mind. Q looses them at targets. Z switches formation.' },
-  burst: { name: 'Domain Burst', cn: '领域爆发', key: 'R', cost: 40, cd: 7, unlockRealm: 2, res: 'energy', desc: 'Expand your domain in a shockwave that crushes nearby beasts.' },
-  body: { name: 'Golden Body', cn: '金身', key: 'F', cost: 30, cd: 16, duration: 6, unlockRealm: 4, res: 'energy', desc: 'Harden your body for 6 seconds, taking 70% less damage.' },
-  storm: { name: 'Ten Thousand Swords', cn: '万剑归宗', key: 'V', cost: 90, cd: 30, unlockRealm: 6, res: 'energy', desc: 'Call a storm of phantom swords down upon every beast around you.' },
-  devour: { name: 'Devouring Art', cn: '吞噬秘法', key: 'passive', unlockRealm: 99, desc: 'Passive. Slain beasts restore your life and you cultivate 50% faster. Found only in ancient ruins.' },
-};
-export const ACTIVE_TECHNIQUES = ['bolt', 'swords', 'burst', 'body', 'storm'];
+export const DEVOUR = { name: 'Devouring Art', cn: '吞噬秘法', desc: 'Passive. Slain beasts restore your life and you cultivate 50% faster. Found only in ancient ruins.' };
 export const masteryMult = (m) => 1 + 0.25 * (m - 1);
 
 // Sword grades are forged at stations with star coins and beast essence.
 export const SWORD_GRADES = [
   { name: 'Cold Iron', cn: '寒铁', mult: 1, blade: 0xb8c8dc, glow: 0x8fd8ff, coins: 0, essence: 0 },
-  { name: 'Star Steel', cn: '星钢', mult: 1.7, blade: 0xd8e4ff, glow: 0x3ef2ff, coins: 600, essence: 300 },
-  { name: 'Void Crystal', cn: '虚晶', mult: 2.9, blade: 0xc8b0ff, glow: 0xb06cff, coins: 14000, essence: 9000 },
-  { name: 'Nebula Jade', cn: '星玉', mult: 4.8, blade: 0xb8ffe0, glow: 0x3dffb0, coins: 300000, essence: 220000 },
-  { name: 'Primordial Edge', cn: '原初', mult: 8, blade: 0xfff0d0, glow: 0xff3c7d, coins: 6000000, essence: 5000000 },
+  { name: 'Star Steel', cn: '星钢', mult: 1.7, blade: 0xd8e4ff, glow: 0x3ef2ff, coins: 250, essence: 120 },
+  { name: 'Void Crystal', cn: '虚晶', mult: 2.9, blade: 0xc8b0ff, glow: 0xb06cff, coins: 4000, essence: 2500 },
+  { name: 'Nebula Jade', cn: '星玉', mult: 4.8, blade: 0xb8ffe0, glow: 0x3dffb0, coins: 60000, essence: 40000 },
+  { name: 'Primordial Edge', cn: '原初', mult: 8, blade: 0xfff0d0, glow: 0xff3c7d, coins: 900000, essence: 700000 },
 ];
 
 export const PILLS = {
-  heal: { name: 'Rejuvenation Pill', cn: '回春丹', key: '1', price: 30, desc: 'Restore 60% of your life.' },
-  energy: { name: 'Primal Elixir', cn: '元能液', key: '2', price: 20, desc: 'Restore all energy and spirit sense.' },
-  cult: { name: 'Cultivation Pill', cn: '修炼丹', key: '3', price: 140, desc: 'Gain a third of your current stage experience.' },
+  heal: { name: 'Rejuvenation Pill', cn: '回春丹', key: '1', price: 15, desc: 'Restore 60% of your life.' },
+  energy: { name: 'Primal Elixir', cn: '元能液', key: '2', price: 10, desc: 'Restore all energy and spirit sense.' },
+  cult: { name: 'Cultivation Pill', cn: '修炼丹', key: '3', price: 70, desc: 'Gain a third of your current stage experience.' },
 };
-export const MANUAL_PRICE = 320;
+export const MANUAL_PRICE = 160;
+// What the exchange pays for raw materials.
+export const SELL = { ore: (realm) => Math.round(9 * Math.pow(1.9, realm)), essence: 0.5 };
 export const priceFor = (base, realm) => Math.round(base * Math.pow(2.2, realm));
 export const essenceFor = (tier) => Math.round(4 * xpScale(tier));
 
@@ -154,11 +148,11 @@ export const FLIGHT = {
 
 // Starships, built at a city shipyard once you reach the Planetary realm.
 export const SHIPS = [
-  { name: 'Skiff', cn: '星舟', range: 15, cruise: 120000, speed: 900, hull: 1, coins: 2500, ore: 30, essence: 400, color: 0x3ef2ff },
-  { name: 'Corvette', cn: '护卫舰', range: 35, cruise: 300000, speed: 1400, hull: 2.6, coins: 40000, ore: 120, essence: 6000, color: 0x5dffa8 },
-  { name: 'Frigate', cn: '巡航舰', range: 80, cruise: 800000, speed: 2200, hull: 7, coins: 600000, ore: 400, essence: 90000, color: 0xffe066 },
-  { name: 'Cruiser', cn: '战列舰', range: 170, cruise: 2000000, speed: 3500, hull: 18, coins: 9000000, ore: 1200, essence: 1500000, color: 0xff3c7d },
-  { name: 'Star Ark', cn: '星槎', range: 450, cruise: 5000000, speed: 6000, hull: 50, coins: 140000000, ore: 4000, essence: 25000000, color: 0xfff0b8 },
+  { name: 'Skiff', cn: '星舟', range: 15, cruise: 120000, speed: 900, hull: 1, coins: 800, ore: 15, essence: 150, color: 0x3ef2ff },
+  { name: 'Corvette', cn: '护卫舰', range: 35, cruise: 300000, speed: 1400, hull: 2.6, coins: 12000, ore: 60, essence: 2000, color: 0x5dffa8 },
+  { name: 'Frigate', cn: '巡航舰', range: 80, cruise: 800000, speed: 2200, hull: 7, coins: 150000, ore: 200, essence: 30000, color: 0xffe066 },
+  { name: 'Cruiser', cn: '战列舰', range: 170, cruise: 2000000, speed: 3500, hull: 18, coins: 2000000, ore: 600, essence: 400000, color: 0xff3c7d },
+  { name: 'Star Ark', cn: '星槎', range: 450, cruise: 5000000, speed: 6000, hull: 50, coins: 25000000, ore: 2000, essence: 5000000, color: 0xfff0b8 },
 ];
 
 const SYL_A = ['Ka', 'Vel', 'Or', 'Zeph', 'Tal', 'Mir', 'Sar', 'Quo', 'Ny', 'Ar', 'Lux', 'Dra', 'Ser', 'Xi', 'Hel', 'Cor', 'Ves', 'Ul', 'Rhe', 'Tau', 'Ae', 'Bel', 'Cyr', 'Eld', 'Fen', 'Gal', 'Ith', 'Jor'];
@@ -167,14 +161,17 @@ export const makeName = (rand) => pick(rand, SYL_A) + pick(rand, SYL_B);
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 export const TIPS = [
-  'Hold right mouse to steer your flying swords with your mind. Sweep them through beasts.',
-  'You are bound to your homeworld until you reach the Planetary realm. War Gods can already fly through the sky.',
-  'Double-tap Space to take flight once you reach the War God realm.',
-  'Every star in the sky is a real system. Build a starship, aim at a star with T and warp there with G.',
-  'Cosmic energy is densest near energy springs, stars and nebulae. Cultivate there with C.',
-  'Ancient ruins hide inheritances. Planets far from home hide stronger ones.',
-  'Shatter glowing ore deposits for star metal. Shipyards need it to build ships.',
-  'At Peak stage, press B to face the Heavenly Tribulation. Keep moving.',
-  'The further a star lies from home, the deadlier its beasts and the richer its energy.',
-  'Each region of the galaxy is ruled by Overlords. Their lairs show on your target scanner.',
+  'Three paths: Mind Control steers a host of flying swords, Blade fights up close with a saber, Mental Attack strikes the mind directly.',
+  'You earn a skill point every stage and two every breakthrough. Spend them in your skill tree.',
+  'Terra has six walled base cities and several outposts. Walk into any building with a glowing door.',
+  'Rent a Cultivation Chamber in any city: cultivating inside is two and a half times faster.',
+  'The capital has an Arena. Each wave you clear pays more than the last.',
+  'Buy a round at a teahouse and the hunters will tell you where treasure lies.',
+  'Every world has its own beasts. Terra’s wolves and rhinos are nothing like the crawlers of a lava world.',
+  'At the Stellar realm you learn Star Step, an instant blink. At higher realms weak beasts flee, then simply die in your presence.',
+  'Ancient obelisks hold a trial. Beat the guardians to earn a bonus skill point.',
+  'Orbital stations can be landed on. Fly or pilot your ship onto the deck to trade at the booths.',
+  'Every star in the sky is a real system. Build a starship, aim at a star and warp there.',
+  'At Peak stage, face the Heavenly Tribulation to break through. Keep moving.',
+  'Change every key, your view and your graphics detail in Settings.',
 ];

@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import {
-  REALMS, STAGES, MAX_REALM, TECHNIQUES, ACTIVE_TECHNIQUES, PILLS, REGIONS, BOSSES, FINAL_BOSS, SWORD_GRADES, SHIPS, FLIGHT,
+  REALMS, STAGES, MAX_REALM, PILLS, REGIONS, BOSSES, FINAL_BOSS, SWORD_GRADES, SHIPS, FLIGHT, SELL,
   xpScale, masteryMult, priceFor, MANUAL_PRICE, realmOf, essenceFor,
 } from './data.js';
+import { PATHS, TECHS, REALM_PERKS, canLearn, nodeById } from './paths.js';
+import { Arts } from './arts.js';
+import { speciesForBody } from './bestiary.js';
+import { codeLabel } from '../core/bindings.js';
 import { newState, loadState, saveState, clearSave, derive } from './state.js';
 import { generateOffers, progressBounties, MAX_BOUNTIES } from './missions.js';
 import { settings } from '../core/settings.js';
@@ -35,8 +39,8 @@ const tQ = new THREE.Quaternion();
 const tM = new THREE.Matrix4();
 const Y = new THREE.Vector3(0, 1, 0);
 const SCAN_TIME = 1.6;
-const POI_LABEL = { ruin: 'Ancient Ruins', spring: 'Energy Spring', ore: 'Star Metal Deposit', nest: 'Beast Nest', wreck: 'Wreck', lair: 'Overlord Lair' };
-const POI_COLOR = { ruin: '#ffc857', spring: '#7affd8', ore: '#3ef2ff', nest: '#ff4466', wreck: '#b98cff', lair: '#ff3c7d' };
+const POI_LABEL = { ruin: 'Ancient Ruins', spring: 'Energy Spring', ore: 'Star Metal Deposit', nest: 'Beast Nest', wreck: 'Wreck', lair: 'Overlord Lair', obelisk: 'Trial Obelisk', camp: 'Hunters Camp' };
+const POI_COLOR = { ruin: '#ffc857', spring: '#7affd8', ore: '#3ef2ff', nest: '#ff4466', wreck: '#b98cff', lair: '#ff3c7d', obelisk: '#c08cff', camp: '#9affc8' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class Game {
@@ -77,6 +81,7 @@ export class Game {
     this.beasts.onKill = (b) => this.onBeastKilled(b);
     this.loot = new Loot(this.localRoot, this.particles, this.sound);
     this.swords = new SwordArray(this.localRoot, this.particles, this.combat, this.sound);
+    this.arts = new Arts(this);
     this.player = new Player(this.localRoot, this.particles);
     this.shipObj = null;
     this.input = new Input(canvas);
@@ -110,6 +115,8 @@ export class Game {
     this.statics = new Map();
     this.nestTriggered = new Set();
     this.lastSpace = -1;
+    this.prevVel = new THREE.Vector3();
+    this.wasGrounded = true;
     this.markerList = [];
     this.nearStars = [];
 
@@ -135,7 +142,7 @@ export class Game {
   freshRuntime() {
     return {
       hp: this.stats.maxHp, energy: this.stats.maxEnergy, spirit: this.stats.maxSpirit,
-      cooldowns: { bolt: 0, swords: 0, burst: 0, body: 0, storm: 0 },
+      cooldowns: {}, willT: 0, guarding: false, guardStart: -9, blinkCd: 0, undyingCd: 0, medToggle: false, chamber: false,
       shieldT: 0, meditating: false, medBlock: 0, hurtFlash: 0, lastHurt: -99,
       trib: null, deadT: 0, invuln: 0, nav: null, cruise: false, shake: 0, hand: 1,
       lock: null, controlling: false, spiritLock: false, scanT: 0, firingT: 0,
@@ -248,6 +255,10 @@ export class Game {
     this.localRoot.position.set(0, 0, 0);
     this.localRoot.quaternion.identity();
     if (this.system) this.system.dispose();
+    this.arts.reset();
+    this.arena = null;
+    this.trial = null;
+    this.deck = null;
     this.combat.clear();
     this.particles.clear();
     this.loot.clear();
@@ -303,6 +314,7 @@ export class Game {
       this.swords.rebase(m, q);
       this.loot.rebase(m, q);
       this.particles.rebase(m, q);
+      this.arts.rebase(m);
       if (this.rt.trib) {
         this.rt.trib.clouds.position.applyMatrix4(m);
         this.rt.trib.clouds.quaternion.premultiply(q);
@@ -315,6 +327,7 @@ export class Game {
     this.localRoot.quaternion.identity();
     this.localRoot.updateWorldMatrix(true, false);
     this.frame = planet;
+    for (const st of this.system.stations) st.prevM = null;
     this.statics.forEach((b) => this.beasts.removeBeast(b));
     this.statics.clear();
     this.nestTriggered.clear();
@@ -335,7 +348,7 @@ export class Game {
   homePlanet() {
     const ps = this.system.planets;
     return ps.find((p) => p.body.sites.city && p.body.sites.city.main)
-      || ps.find((p) => p.body.landable && (p.body.sites.city || p.body.sites.outposts.length));
+      || ps.find((p) => p.body.landable && p.allSites().length);
   }
 
   restoreLocation() {
@@ -371,6 +384,7 @@ export class Game {
       this.shipObj.hull = Math.min(this.shipObj.maxHull, sh.hull ?? this.shipObj.maxHull);
       this.shipObj.sync();
       if (loc && loc.inShip && loc.star === this.star.key) this.rt.inShip = true;
+      this.updateStations();
     } else if (sh) {
       // a ship saved elsewhere (or by an older version) is delivered next to its owner
       this.shipObj = new Ship(this.localRoot, sh.tier);
@@ -386,8 +400,8 @@ export class Game {
     this.camQuat.copy(p.quat);
   }
 
-  spawnAtSettlement(preferred) {
-    let planet = preferred && (preferred.body.sites.city || preferred.body.sites.outposts.length) ? preferred : this.homePlanet();
+  spawnAtSettlement(preferred, siteName) {
+    const planet = preferred && preferred.body.landable && preferred.allSites().length ? preferred : this.homePlanet();
     const p = this.player;
     if (!planet) {
       this.setFrame(null, true);
@@ -398,8 +412,9 @@ export class Game {
       return;
     }
     this.setFrame(planet, true);
-    planet.buildDetails();
-    const s = planet.details.settlements[0];
+    const sites = planet.allSites();
+    const site = (siteName && sites.find((x) => x.name === siteName)) || sites[0];
+    const s = planet.ensureSettlement(site);
     const up = s.spawnLocal.clone().normalize();
     const pos = s.spawnLocal.clone().addScaledVector(up, EYE + 0.5);
     p.placeAt(pos, s.group.position.clone().addScaledVector(up, 30), up);
@@ -428,8 +443,11 @@ export class Game {
   }
 
   async newGame() {
+    const path = await this.menus.choosePath(null);
+    if (!path) return;
     clearSave();
     this.state = newState();
+    this.state.path = path;
     this.stats = derive(this.state);
     this.rt = this.freshRuntime();
     this.player.setRealm(0);
@@ -454,7 +472,12 @@ export class Game {
     this.startPlaying();
   }
 
-  continueGame() {
+  async continueGame() {
+    if (!this.state.path) {
+      const path = await this.menus.choosePath(this.state);
+      if (!path) return;
+      this.state.path = path;
+    }
     this.stats = derive(this.state);
     const inShip = this.rt.inShip;
     this.rt = this.freshRuntime();
@@ -473,6 +496,9 @@ export class Game {
     this.swords.setVisible(!this.rt.inShip);
     this.swords.reset(this.player);
     this.viewmodel.setColor(REALMS[this.state.realm].color);
+    this.viewmodel.setPath(this.state.path || 'mind', (PATHS[this.state.path] || PATHS.mind).color);
+    this.hud.buildSkills(this.state.path || 'mind');
+    this.arts.reset();
     this.sound.init();
     this.input.lock();
     this.camera.fov = settings.get('fov');
@@ -483,8 +509,9 @@ export class Game {
       const tips = [
         ['Welcome to <b>Base City 07</b>, Warrior. Beasts roam the wilds beyond the walls.', 'gold'],
         ['Your body is still bound to Terra. Reach the <b>War God</b> realm to fly, and <b>Planetary</b> to leave the planet.', 'violet'],
-        ['Hold <kbd>RMB</kbd> to steer your flying swords. <kbd>LMB</kbd> fires Star Bolts. <kbd>Q</kbd> looses your swords.', ''],
-        ['Hold <kbd>C</kbd> to cultivate. Energy springs, the beams of light in the wilds, are the richest places.', 'gold'],
+        [this.pathTip(), ''],
+        [`Press <kbd>${codeLabel(settings.key('cultivate'))}</kbd> to cultivate. Energy springs, the beams of light in the wilds, are the richest places.`, 'gold'],
+        ['Many city buildings are open. Walk in through any glowing door to shop, train, take jobs or fight in the arena.', 'yl'],
         ['Visit the <b>Martial Hall</b> and <b>Exchange</b> in the city with <kbd>E</kbd> for bounties, pills and the sword forge.', 'yl'],
       ];
       tips.forEach(([t, k], i) => setTimeout(() => this.inGame && this.hud.notify(t, k), 900 + i * 3400));
@@ -539,10 +566,12 @@ export class Game {
       return;
     }
     if (this.mode !== 'playing' || !m.$('settings').classList.contains('hidden') || !m.$('modal').classList.contains('hidden')) return;
-    if (code === 'KeyK') this.togglePanel('cultivation');
-    else if (code === 'KeyJ') this.togglePanel('bounties');
-    else if (code === 'KeyH') this.togglePanel('guide');
-    else if (code === 'KeyN') this.hud.notify(this.sound.toggleMute() ? 'Sound muted.' : 'Sound on.');
+    const k = (a) => code === settings.key(a);
+    if (k('panelCult')) this.togglePanel('cultivation');
+    else if (k('panelSkills')) this.togglePanel('skills');
+    else if (k('panelBounty')) this.togglePanel('bounties');
+    else if (k('panelGuide')) this.togglePanel('guide');
+    else if (k('mute')) this.hud.notify(this.sound.toggleMute() ? 'Sound muted.' : 'Sound on.');
   }
 
   togglePanel(kind, tab) {
@@ -650,13 +679,13 @@ export class Game {
     this.lastMouse = mouse;
     const move = { x: 0, y: 0, z: 0 };
     if (alive) {
-      if (inp.down('KeyW') || inp.down('ArrowUp')) move.z += 1;
-      if (inp.down('KeyS') || inp.down('ArrowDown')) move.z -= 1;
-      if (inp.down('KeyD') || inp.down('ArrowRight')) move.x += 1;
-      if (inp.down('KeyA') || inp.down('ArrowLeft')) move.x -= 1;
-      if (inp.down('Space')) move.y += 1;
-      if (inp.down('KeyX')) move.y -= 1;
-      if (inp.pressed.has('KeyP')) {
+      if (inp.act('forward') || inp.down('ArrowUp')) move.z += 1;
+      if (inp.act('back') || inp.down('ArrowDown')) move.z -= 1;
+      if (inp.act('right') || inp.down('ArrowRight')) move.x += 1;
+      if (inp.act('left') || inp.down('ArrowLeft')) move.x -= 1;
+      if (inp.act('jump')) move.y += 1;
+      if (inp.act('down')) move.y -= 1;
+      if (inp.hit('camera')) {
         this.camMode = this.camMode === 'first' ? 'third' : 'first';
         settings.set('camera', this.camMode);
         this.applyCamMode();
@@ -664,11 +693,20 @@ export class Game {
     }
     const manual = move.x !== 0 || move.y !== 0 || move.z !== 0;
     rt.medBlock = Math.max(0, rt.medBlock - dt);
-    rt.meditating = alive && !rt.inShip && inp.down('KeyC') && !manual && !rt.trib && rt.medBlock <= 0;
+    // cultivation: tap to toggle (or hold, per settings); moving or fighting breaks it
+    const canMed = alive && !rt.inShip && !rt.trib && rt.medBlock <= 0;
+    if (settings.get('cultivateMode') === 'hold') {
+      rt.meditating = canMed && inp.act('cultivate') && !manual;
+    } else {
+      if (inp.hit('cultivate')) rt.medToggle = !rt.meditating;
+      if (inp.rel('cultivate') && inp.heldFor('cultivate') > 0.45) rt.medToggle = false;
+      if (manual || !canMed || inp.act('fire')) rt.medToggle = false;
+      rt.meditating = canMed && (rt.medToggle || (inp.act('cultivate') && !manual));
+    }
 
     // ---- sword control
     if (!inp.right) rt.spiritLock = false;
-    rt.controlling = alive && !rt.inShip && inp.right && !rt.spiritLock && !rt.meditating && rt.spirit > 0;
+    rt.controlling = alive && !rt.inShip && (s.path || 'mind') === 'mind' && inp.right && !rt.spiritLock && !rt.meditating && rt.spirit > 0;
     if (rt.controlling) {
       rt.spirit -= (8 + st.swords * 0.6) * dt;
       if (rt.spirit <= 0) {
@@ -691,49 +729,44 @@ export class Game {
     // ---- world update (moves planets, refreshes terrain detail)
     this.system.update(dt, s.worldTime, this.camera, this.playerWorld());
     this.checkFrame();
+    this.updateStations();
+    this.updateVenue(dt);
 
     // ---- aim and targeting
     const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
     this.aimTarget = this.pickAimTarget(camFwd);
     if (rt.lock && (!rt.lock.alive || rt.lock.pos.distanceTo(p.pos) > 2500)) rt.lock = null;
-    if (alive && inp.pressed.has('Tab')) this.cycleLock(camFwd);
+    if (alive && inp.hit('lock')) this.cycleLock(camFwd);
     const aimBeast = this.aimTarget || rt.lock;
     const aimPoint = this.aimTarget
       ? this.aimTarget.pos.clone().addScaledVector(this.aimTarget.vel, this.aimTarget.pos.distanceTo(p.pos) / 700)
       : this.camera.position.clone().addScaledVector(camFwd, 1500);
 
     // ---- techniques
-    for (const k of ACTIVE_TECHNIQUES) rt.cooldowns[k] = Math.max(0, rt.cooldowns[k] - dt);
     rt.shieldT = Math.max(0, rt.shieldT - dt);
     rt.invuln = Math.max(0, rt.invuln - dt);
     rt.firingT = Math.max(0, rt.firingT - dt);
-    const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.swords);
+    const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg * ((s.path || 'mind') === 'mind' ? 1 : 0.7);
+    this.arts.update(dt, { alive, camFwd, aimPoint, aimBeast, swordDamage });
     if (alive && !rt.meditating) {
-      if (inp.left && rt.cooldowns.bolt <= 0 && (rt.inShip || rt.energy >= TECHNIQUES.bolt.cost)) this.fireBolt(aimPoint, st);
-      if (!rt.inShip) {
-        if (inp.pressed.has('KeyQ')) this.castLaunch(camFwd, swordDamage * 1.6);
-        if (inp.pressed.has('KeyZ')) this.hud.notify(`Sword formation: <b>${this.swords.toggleFormation() === 'swarm' ? 'Swarm' : 'Lance'}</b>.`, 'violet');
-        if (inp.pressed.has('KeyR')) this.castBurst();
-        if (inp.pressed.has('KeyF')) this.castBody();
-        if (inp.pressed.has('KeyV')) this.castStorm(swordDamage * 2.2);
-      }
-      if (inp.pressed.has('Digit1')) this.usePill('heal');
-      if (inp.pressed.has('Digit2')) this.usePill('energy');
-      if (inp.pressed.has('Digit3')) this.usePill('cult');
+      if (inp.hit('pill1')) this.usePill('heal');
+      if (inp.hit('pill2')) this.usePill('energy');
+      if (inp.hit('pill3')) this.usePill('cult');
     }
     if (alive) {
-      if (inp.pressed.has('KeyB')) this.tryBreakthrough();
-      if (inp.pressed.has('KeyT')) this.setTarget();
-      if (inp.pressed.has('KeyG')) this.engage();
+      if (inp.hit('breakthrough')) this.tryBreakthrough();
+      if (inp.hit('target')) this.setTarget();
+      if (inp.hit('engage')) this.engage();
     }
 
     // ---- regeneration & cultivation
     const density = this.densityHere();
     const tier = this.locTier();
-    const medRate = 1.0 * xpScale(tier) * density * (s.devour ? 1.5 : 1);
+    const medRate = 1.0 * xpScale(tier) * density * (s.devour ? 1.5 : 1) * st.cultivate * (rt.chamber ? 2.5 : 1);
     if (alive) {
-      if (!p.boosting) rt.energy = Math.min(st.maxEnergy, rt.energy + st.regen * dt * (rt.meditating ? 2.2 : 1));
-      if (!rt.controlling) rt.spirit = Math.min(st.maxSpirit, rt.spirit + st.spiritRegen * dt * (rt.meditating ? 2 : 1));
+      const brew = this.mealActive('broth') ? 1.5 : 1;
+      if (!p.boosting) rt.energy = Math.min(st.maxEnergy, rt.energy + st.regen * dt * (rt.meditating ? 2.2 : 1) * brew);
+      if (!rt.controlling) rt.spirit = Math.min(st.maxSpirit, rt.spirit + st.spiritRegen * dt * (rt.meditating ? 2 : 1) * brew);
       if (this.time - rt.lastHurt > 6) rt.hp = Math.min(st.maxHp, rt.hp + st.maxHp * 0.012 * dt);
       if (rt.meditating) {
         rt.hp = Math.min(st.maxHp, rt.hp + st.maxHp * 0.035 * dt);
@@ -752,7 +785,7 @@ export class Game {
 
     // ---- beasts, swords, combat, loot
     this.beasts.setEnv(this.beastEnv(tier));
-    const ctx = { player: p, playerAlive: alive && rt.invuln <= 0, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock) };
+    const ctx = { player: p, playerAlive: alive && rt.invuln <= 0, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
     this.beasts.update(dt, ctx);
     this.swords.setup(st.swords, s.swordGrade);
     this.swords.update(dt, {
@@ -764,7 +797,7 @@ export class Game {
       beasts: this.beasts.beasts, player: p, playerAlive: alive && rt.invuln <= 0,
       solid: (pos) => this.isSolid(pos),
       hitBeast: (b, dmg, pos, kind, knock) => this.hitBeast(b, dmg, pos, kind, knock),
-      hurtPlayer: (d, pos) => this.hurtPlayer(d, pos),
+      hurtPlayer: (d, pos, shot) => this.hurtPlayer(d, pos, null, false, shot),
     });
     this.loot.update(dt, p, 70 + s.realm * 12, (it) => {
       if (it.kind === 'ore') {
@@ -797,12 +830,18 @@ export class Game {
   // ------------------------------------------------------- environment --
   computeEnv(pos) {
     const planet = this.frame;
+    const dk = this.deck;
+    if (dk && !this.rt.inShip) {
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(dk.q).normalize();
+      const sp = pos.clone().applyMatrix4(dk.inv);
+      return { planet, up, floorR: null, inAtmo: false, alt: Math.max(0, sp.y - EYE), D: pos.length(), deck: dk };
+    }
     if (!planet) return { planet: null, up: null, floorR: null, inAtmo: false, alt: null, D: 0 };
     const D = pos.length();
     const up = pos.clone().divideScalar(Math.max(D, 1e-6));
     if (!planet.body.landable) return { planet, up, floorR: null, inAtmo: D < planet.atmoR, alt: D - planet.R, D, gas: true };
     let floorR = planet.floorRadius(up.x, up.y, up.z);
-    const roof = planet.collide(pos, this.rt.inShip ? 10 : this.player.radius);
+    const roof = planet.collide(pos, this.rt.inShip ? 10 : this.player.radius, this.rt.inShip ? 0 : EYE);
     if (roof && roof > floorR && D > roof - 2) floorR = roof;
     return { planet, up, floorR, inAtmo: D < planet.atmoR, alt: D - floorR - (this.rt.inShip ? 0 : EYE), D };
   }
@@ -813,9 +852,13 @@ export class Game {
       let t = f.body.tier;
       const city = f.body.sites.city;
       if (city && city.main && this.env.up) {
-        // danger grows with distance from the home city
-        const ang = Math.acos(clamp(this.env.up.dot(tA.set(city.x, city.y, city.z).normalize()), -1, 1));
-        t = Math.max(t, Math.min(1.6, (ang / Math.PI) * 2.2));
+        // danger grows with distance from the nearest city
+        let ang = Math.PI;
+        for (const st of f.allSites()) {
+          if (st.size === 'outpost') continue;
+          ang = Math.min(ang, Math.acos(clamp(this.env.up.dot(tA.set(st.x, st.y, st.z).normalize()), -1, 1)));
+        }
+        t = Math.max(t, Math.min(1.6, (ang / Math.PI) * 4));
       }
       return t;
     }
@@ -846,9 +889,10 @@ export class Game {
   beastEnv(tier) {
     const f = this.frame;
     if (f && f.body.landable && this.env.inAtmo) {
-      const settlements = f.details && f.details.settlements;
+      const sites = f.allSites();
       return {
         max: 6 + Math.round(tier * 2.5),
+        species: speciesForBody(f.body),
         interval: 5,
         despawn: 2200,
         ground: (pos) => {
@@ -867,7 +911,10 @@ export class Game {
           const terr = f.terrain;
           if (terr && terr.sea !== null && terr.height(dir.x, dir.y, dir.z) < terr.sea) return null;
           const pos = dir.clone().multiplyScalar(f.floorRadius(dir.x, dir.y, dir.z) + 6);
-          if (settlements) for (const s of settlements) if (pos.distanceTo(s.group.position) < s.radius * 1.4) return null;
+          for (const st of sites) {
+            const ang = Math.acos(clamp(dir.dot(tB.set(st.x, st.y, st.z).normalize()), -1, 1)) * f.R;
+            if (ang < st.radius * 1.5) return null;
+          }
           return { pos, kind: 'ground', tier };
         },
       };
@@ -904,8 +951,11 @@ export class Game {
   controlPlayer(dt, move, look, env, alive, manual) {
     const p = this.player, rt = this.rt, st = this.stats, s = this.state;
     const canFly = FLIGHT.canFly(s.realm), canSpace = FLIGHT.canSpace(s.realm);
-    const onWorld = env.planet && env.planet.body.landable;
-    if (onWorld && env.inAtmo) {
+    const onDeck = !!env.deck;
+    const onWorld = !onDeck && env.planet && env.planet.body.landable;
+    if (onDeck) {
+      if (p.mode === 'space') p.mode = 'ground';
+    } else if (onWorld && env.inAtmo) {
       if (p.mode === 'space') p.mode = 'fly';
       if (!canFly) p.mode = 'ground';
     } else if (canSpace || !env.planet) {
@@ -913,8 +963,8 @@ export class Game {
     }
     // a double tap on Space toggles flight on a world
     let jump = false;
-    if (alive && this.input.pressed.has('Space')) {
-      if (onWorld && env.inAtmo && canFly && this.time - this.lastSpace < 0.32) {
+    if (alive && this.input.hit('jump')) {
+      if (((onWorld && env.inAtmo) || onDeck) && canFly && this.time - this.lastSpace < 0.32) {
         p.mode = p.mode === 'fly' ? 'ground' : 'fly';
         this.hud.notify(p.mode === 'fly' ? 'You take to the sky.' : 'You drop back to the ground.', 'violet');
         this.lastSpace = -1;
@@ -930,7 +980,8 @@ export class Game {
     if (p.mode === 'fly' && onWorld && p.grounded && move.y < 0) p.mode = 'ground';
 
     let speed;
-    let boost = alive && (this.input.down('ShiftLeft') || this.input.down('ShiftRight')) && manual && (p.mode === 'ground' || rt.energy > 1);
+    const sprintKey = this.input.act('sprint') || this.input.down('ShiftRight');
+    let boost = alive && (settings.get('autoSprint') ? !sprintKey : sprintKey) && manual && (p.mode === 'ground' || rt.energy > 1);
     if (p.mode === 'ground') speed = st.walk;
     else if (p.mode === 'fly') speed = onWorld ? Math.min(st.flySpeed, 160 + s.realm * 60) : st.flySpeed;
     else speed = st.spaceSpeed;
@@ -976,7 +1027,37 @@ export class Game {
       }
     }
     // settlements: walls and buildings push you out
-    if (onWorld && env.D < env.planet.R + env.planet.body.amp + 400) env.planet.collide(p.pos, p.radius);
+    if (onWorld && env.D < env.planet.R + env.planet.body.amp + 400) env.planet.collide(p.pos, p.radius, EYE);
+    // a hard landing from a War God or stronger cracks the ground
+    if (onWorld && env.up) {
+      const vDown = -this.prevVel.dot(env.up);
+      if (p.grounded && !this.wasGrounded && vDown > 22 && s.realm >= 1) {
+        const radius = 6 + s.realm * 2.5;
+        this.combat.shockwave(p.pos.clone().addScaledVector(env.up, -EYE + 0.3), radius, REALMS[s.realm].color, 0.5);
+        for (const b of [...this.beasts.beasts]) if (!b.static && b.pos.distanceTo(p.pos) < radius + b.radius) this.hitBeast(b, st.atk * (1 + vDown / 30), b.pos.clone(), 'burst', b.pos.clone().sub(p.pos).normalize().multiplyScalar(60));
+        rt.shake = Math.max(rt.shake, Math.min(1, vDown / 60));
+        this.sound.burst();
+      }
+      this.wasGrounded = p.grounded;
+      this.prevVel.copy(p.vel);
+    }
+    if (onDeck) {
+      // the deck is a plane at y = 0 in the station frame; booths block movement
+      const dk = env.deck;
+      const sp = p.pos.clone().applyMatrix4(dk.inv);
+      const top = dk.st.model.collide(sp, p.radius, EYE);
+      const floorY = Math.max(0, top ?? 0);
+      p.grounded = false;
+      if (sp.y - EYE <= floorY + 0.02) {
+        sp.y = floorY + EYE;
+        const vn = p.vel.dot(env.up);
+        if (vn < 0) p.vel.addScaledVector(env.up, -vn);
+        p.grounded = true;
+        if (p.mode === 'fly' && move.y < 0) p.mode = 'ground';
+      }
+      p.pos.copy(sp.applyMatrix4(dk.M));
+      p.syncRoot();
+    }
     this.hazards(dt, p.pos, env);
   }
 
@@ -984,12 +1065,29 @@ export class Game {
     const ship = this.shipObj, rt = this.rt, p = this.player;
     const onWorld = env.planet && env.planet.body.landable;
     let speed = env.inAtmo ? Math.min(600, ship.def.speed) : ship.def.speed;
-    const boost = alive && (this.input.down('ShiftLeft') || this.input.down('ShiftRight'));
+    const boost = alive && (this.input.act('sprint') || this.input.down('ShiftRight'));
     if (rt.cruise) {
       if (!alive || move.z < 0 || env.inAtmo) rt.cruise = false;
       else {
         speed = this.cruiseSpeed(ship.def.speed, ship.def.cruise);
         this.steerCruise(dt, look, move, ship);
+      }
+    }
+    if (ship.dockedAt) {
+      if (alive && (move.y > 0 || move.z !== 0)) {
+        const st = ship.dockedAt;
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(new THREE.Quaternion().setFromRotationMatrix(st.localM || new THREE.Matrix4()));
+        ship.dockedAt = null;
+        ship.landed = false;
+        ship.vel.copy(up).multiplyScalar(18);
+        this.hud.notify('Clamps released. You lift off the pad.', 'yl');
+      } else {
+        ship.look(0, 0, {});
+        p.pos.copy(ship.pos);
+        p.quat.copy(ship.quat);
+        p.vel.set(0, 0, 0);
+        p.syncRoot();
+        return;
       }
     }
     ship.look(look.x, look.y, { up: env.inAtmo ? env.up : null });
@@ -1080,7 +1178,7 @@ export class Game {
       const target = p.mode === 'ground' ? 0 : clamp(-localX * 0.0009 - yawRate * 0.004, -0.12, 0.12);
       this.roll += (target - this.roll) * (1 - Math.exp(-dt * 4));
       this.camera.position.copy(p.pos);
-      if (p.mode === 'ground' && p.grounded) {
+      if (p.mode === 'ground' && p.grounded && settings.get('headBob')) {
         const bob = Math.sin(p.walkPhase * 2) * Math.min(1, p.vel.length() / 8) * 0.05;
         this.camera.position.addScaledVector(p.up, bob);
       }
@@ -1145,104 +1243,6 @@ export class Game {
   }
 
   // ------------------------------------------------------- techniques --
-  fireBolt(aimPoint, st) {
-    const rt = this.rt, T = TECHNIQUES.bolt;
-    rt.cooldowns.bolt = T.cd * (rt.inShip ? 0.6 : 1);
-    if (!rt.inShip) rt.energy -= T.cost;
-    rt.firingT = 0.12;
-    const cam = this.camera;
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
-    const down = new THREE.Vector3(0, -1, 0).applyQuaternion(cam.quaternion);
-    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
-    let origin;
-    rt.hand = -rt.hand;
-    if (rt.inShip && this.shipObj) {
-      const sf = this.shipObj.forward();
-      const sr = new THREE.Vector3(1, 0, 0).applyQuaternion(this.shipObj.quat);
-      origin = this.shipObj.pos.clone().addScaledVector(sf, 14 * this.shipObj.scale).addScaledVector(sr, rt.hand * 3 * this.shipObj.scale);
-    } else if (this.camMode === 'first') {
-      if (rt.controlling) rt.hand = 1;
-      origin = cam.position.clone().addScaledVector(fwd, 1.4).addScaledVector(right, rt.hand * 0.55).addScaledVector(down, 0.42);
-      if (rt.hand > 0) this.viewmodel.castRight();
-      else this.viewmodel.castLeft();
-    } else {
-      origin = this.player.pos.clone().addScaledVector(fwd, 1.5).addScaledVector(right, rt.hand * 0.5);
-    }
-    const dir = aimPoint.clone().sub(origin).normalize();
-    const shipK = rt.inShip && this.shipObj ? 1.2 + this.shipObj.tier * 0.4 : 1;
-    const dmg = st.atk * masteryMult(this.state.mastery.bolt) * shipK;
-    const color = rt.inShip && this.shipObj ? SHIPS[this.shipObj.tier].color : REALMS[this.state.realm].color;
-    this.combat.firePlayerBolt(origin, dir, dmg, color, rt.inShip ? 1400 : 700);
-    this.sound.bolt();
-  }
-
-  castLaunch(camFwd, damage) {
-    const s = this.state, rt = this.rt, T = TECHNIQUES.swords;
-    if (rt.cooldowns.swords > 0) return;
-    if (rt.spirit < T.cost) return this.denied('Not enough spirit sense.');
-    rt.cooldowns.swords = T.cd;
-    rt.spirit -= T.cost;
-    const p = this.player;
-    let targets = [];
-    if (rt.lock && rt.lock.alive) targets.push(rt.lock);
-    const range = (260 + 50 * s.realm) * 1.6;
-    const cands = this.beasts.beasts
-      .filter((b) => b !== rt.lock)
-      .map((b) => ({ b, d: b.pos.distanceTo(p.pos), ang: tA.subVectors(b.pos, p.pos).normalize().angleTo(camFwd) }))
-      .filter((c) => c.d < range && c.ang < 0.75)
-      .sort((a, b) => a.ang - b.ang);
-    targets = targets.concat(cands.map((c) => c.b));
-    if (!targets.length) {
-      const n = this.beasts.nearest(p.pos, 900);
-      if (n) targets = [n];
-    }
-    targets = targets.slice(0, Math.max(1, Math.ceil(this.swords.swords.length / 2)));
-    this.swords.launch(targets, damage);
-    if (this.camMode === 'first') this.viewmodel.throwLeft();
-  }
-
-  castBurst() {
-    const s = this.state, rt = this.rt, T = TECHNIQUES.burst;
-    if (s.realm < T.unlockRealm) return this.denied(`Domain Burst unlocks at the ${REALMS[T.unlockRealm].name} realm.`);
-    if (rt.cooldowns.burst > 0) return;
-    if (rt.energy < T.cost) return this.denied('Not enough energy.');
-    rt.cooldowns.burst = T.cd;
-    rt.energy -= T.cost;
-    const p = this.player;
-    const radius = 60 + s.realm * 12;
-    const dmg = this.stats.atk * 3.2 * masteryMult(s.mastery.burst);
-    for (const b of [...this.beasts.beasts]) {
-      if (b.pos.distanceTo(p.pos) < radius + b.radius) this.hitBeast(b, dmg, b.pos.clone(), 'burst', b.pos.clone().sub(p.pos).normalize().multiplyScalar(160));
-    }
-    this.combat.shockwave(p.pos, radius, REALMS[s.realm].color, 0.6);
-    rt.shake = 0.8;
-    this.post.fx.flash = 0.25;
-    this.sound.burst();
-  }
-
-  castBody() {
-    const s = this.state, rt = this.rt, T = TECHNIQUES.body;
-    if (s.realm < T.unlockRealm) return this.denied(`Golden Body unlocks at the ${REALMS[T.unlockRealm].name} realm.`);
-    if (rt.cooldowns.body > 0) return;
-    if (rt.energy < T.cost) return this.denied('Not enough energy.');
-    rt.cooldowns.body = T.cd;
-    rt.energy -= T.cost;
-    rt.shieldT = T.duration;
-    this.particles.burst(this.player.pos, new THREE.Color(2, 1.6, 0.5), 50, 20, 0.6, 0.7);
-    this.sound.shield();
-  }
-
-  castStorm(damage) {
-    const s = this.state, rt = this.rt, T = TECHNIQUES.storm;
-    if (s.realm < T.unlockRealm) return this.denied(`Ten Thousand Swords unlocks at the ${REALMS[T.unlockRealm].name} realm.`);
-    if (rt.cooldowns.storm > 0) return;
-    if (rt.energy < T.cost) return this.denied('Not enough energy.');
-    rt.cooldowns.storm = T.cd;
-    rt.energy -= T.cost;
-    this.swords.storm(this.player.pos, this.beasts.beasts.filter((b) => !b.static), damage * masteryMult(s.mastery.storm), SWORD_GRADES[s.swordGrade].glow);
-    this.hud.banner('ULTIMATE', 'Ten Thousand Swords', '<span class="cn">万剑归宗</span>', '#ffe44d', 2, true);
-  }
-
   denied(msg) {
     if (this.time < (this.notifyGate[msg] || 0)) return;
     this.notifyGate[msg] = this.time + 2.5;
@@ -1269,8 +1269,10 @@ export class Game {
 
   hitBeast(b, dmg, pos, kind, knock) {
     if (!b.alive) return;
-    const crit = Math.random() < 0.12;
-    const amount = dmg * (crit ? 2 : 1) * (0.9 + Math.random() * 0.2);
+    const crit = kind !== 'pressure' && Math.random() < this.stats.crit;
+    const amount = dmg * (crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(b);
+    const steal = this.arts.lifesteal();
+    if (steal > 0 && !b.static) this.rt.hp = Math.min(this.stats.maxHp, this.rt.hp + amount * steal);
     this.dmgNum(pos, fmt(amount), crit ? 'crit' : kind === 'sword' || kind === 'storm' ? 'sword' : '');
     if (kind === 'bolt') this.sound.hit(pos);
     if (b.static && b.def.color) this.particles.burst(pos, new THREE.Color(b.def.color).multiplyScalar(2), 8, 20, 0.5, 0.4);
@@ -1278,9 +1280,16 @@ export class Game {
     this.hud.hitmarker(killed);
   }
 
-  hurtPlayer(amount, pos, knock, silent = false) {
+  hurtPlayer(amount, pos, knock, silent = false, shot = null) {
     const rt = this.rt;
-    if (this.mode !== 'playing' || rt.invuln > 0) return;
+    if (this.mode !== 'playing' || rt.invuln > 0) return null;
+    if (!rt.inShip && !silent) {
+      const d = this.arts.defend(amount, pos, shot);
+      if (d.reflect) return 'reflect';
+      if (d.parried) return null;
+      amount = d.amount;
+      if (amount <= 0) return null;
+    }
     if (rt.inShip && this.shipObj) {
       // the hull soaks damage until it fails
       this.shipObj.hull -= amount * 0.6;
@@ -1289,13 +1298,21 @@ export class Game {
         this.post.fx.damage = Math.min(1, this.post.fx.damage + 0.3);
         this.sound.hurt();
       }
-      if (this.shipObj.hull > 0) return;
+      if (this.shipObj.hull > 0) return null;
       this.shipObj.hull = this.shipObj.maxHull * 0.25;
       this.hud.notify('Hull breach! You are thrown from your ship.', 'red');
       this.exitShip(true);
       amount *= 0.5;
     }
-    if (rt.shieldT > 0) amount *= 0.3;
+    if (rt.hp - amount <= 0 && this.state.realm >= 7 && rt.undyingCd <= 0) {
+      // Immortal realm: death hesitates
+      rt.undyingCd = 300;
+      rt.hp = this.stats.maxHp * 0.3;
+      rt.invuln = 2;
+      this.hud.banner('UNDYING', 'Death Hesitates', '<span class="cn">不朽</span>Your soul refuses to fall', '#b69cff', 2.5, true);
+      this.particles.burst(this.player.pos, new THREE.Color(1.6, 1.2, 2.4), 120, 30, 1.2, 1);
+      return null;
+    }
     rt.hp -= amount;
     rt.lastHurt = this.time;
     if (!silent) {
@@ -1310,6 +1327,7 @@ export class Game {
     }
     if (knock) this.player.vel.add(knock);
     if (rt.hp <= 0) this.die();
+    return null;
   }
 
   die() {
@@ -1348,6 +1366,8 @@ export class Game {
   respawn() {
     this.rt = this.freshRuntime();
     this.rt.invuln = 3;
+    this.arts.reset();
+    this.arena = null;
     this.mode = 'playing';
     this.beasts.clear();
     this.combat.clear();
@@ -1356,7 +1376,7 @@ export class Game {
     const bind = this.state.bind;
     let planet = null;
     if (bind && bind.star === this.star.key && bind.body) planet = this.system.byId.get(bind.body) || null;
-    this.spawnAtSettlement(planet);
+    this.spawnAtSettlement(planet, bind && bind.site);
     this.applyCamMode();
     this.swords.setVisible(true);
     this.swords.reset(this.player);
@@ -1375,10 +1395,10 @@ export class Game {
       xp *= 1.2;
       rt.hp = Math.min(this.stats.maxHp, rt.hp + this.stats.maxHp * 0.04);
     }
-    const coins = Math.round(5 * Math.pow(2.2, b.tier) * b.def.coins * b.coinMult);
+    const coins = Math.round(12 * Math.pow(2.2, b.tier) * b.def.coins * b.coinMult * this.stats.loot);
     s.coins += coins;
     const cores = Math.max(1, Math.round((b.def.cores || 1) * (b.elite ? 3 : 1)));
-    this.loot.spawn(b.pos, essenceFor(b.tier) * cores, b.boss ? b.def.accent : 0xff3c7d, Math.min(cores, 12));
+    this.loot.spawn(b.pos, essenceFor(b.tier) * cores * this.stats.loot, b.boss ? b.def.accent : 0xff3c7d, Math.min(cores, 12));
     const up = this.env.up || Y;
     this.dmgNum(b.pos.clone().addScaledVector(up, b.radius), `+${fmt(xp)} EXP`, 'xp');
     if (b.boss) {
@@ -1392,7 +1412,7 @@ export class Game {
       let extra = '';
       if (k) {
         s.mastery[k]++;
-        extra = ` · ${TECHNIQUES[k].name} mastery ${s.mastery[k]}`;
+        extra = ` · ${TECHS[k].name} mastery ${s.mastery[k]}`;
       }
       this.hud.banner('OVERLORD SLAIN', b.def.name, `<span class="cn">${b.def.cn}</span>+10% life and attack${extra}`, hex(b.def.accent), 5);
       this.post.fx.flash = 0.5;
@@ -1574,9 +1594,14 @@ export class Game {
     this.post.fx.flash = 0.7;
     this.hud.banner('BREAKTHROUGH', realm.name, `<span class="cn">${realm.cn}</span>${esc(realm.blurb)}`, hex(realm.color), 5);
     if (this.stats.swords > derive({ ...s, realm: s.realm - 1 }).swords) setTimeout(() => this.hud.notify(`A new flying sword answers your call. You now command <b>${this.stats.swords}</b>.`, 'violet'), 2000);
-    for (const t of Object.values(TECHNIQUES)) {
-      if (t.unlockRealm === s.realm) setTimeout(() => this.hud.notify(`New technique: <b>${t.name}</b> <span class="cn">${t.cn}</span>. Press <kbd>${t.key}</kbd>.`, 'violet'), 3000);
-    }
+    const P = PATHS[s.path] || PATHS.mind;
+    P.skills.forEach((id, i) => {
+      const t = TECHS[id];
+      if (t.unlockRealm === s.realm) setTimeout(() => this.hud.notify(`New technique: <b>${t.name}</b> <span class="cn">${t.cn}</span>. Press <kbd>${codeLabel(settings.key(`skill${i + 1}`))}</kbd>.`, 'violet'), 3000);
+    });
+    const perk = REALM_PERKS.find((pk) => pk.realm === s.realm);
+    if (perk && s.realm > 2) setTimeout(() => this.hud.notify(`Realm power: <b>${perk.name}</b>. ${perk.desc}`, 'gold'), 4500);
+    setTimeout(() => this.hud.notify(`You earned skill points. Press <kbd>${codeLabel(settings.key('panelSkills'))}</kbd> to open your skill tree.`, 'yl'), 6000);
     if (s.realm === 1) setTimeout(() => this.hud.notify('You can fly! <b>Double-tap Space</b> to take to the sky.', 'gold'), 4000);
     if (s.realm === 2) setTimeout(() => this.hud.notify('Your body can survive the void. Fly up and out of the atmosphere, and build a <b>starship</b> at a shipyard to reach other stars.', 'gold'), 4000);
     if (s.realm === MAX_REALM && !s.won) {
@@ -1646,11 +1671,20 @@ export class Game {
     if (f && f.details) {
       for (const sv of f.details.services) list.push({ kind: 'service', service: sv, name: sv.name, pos: sv.pos, range: sv.range });
       for (const poi of f.details.pois) {
-        if (poi.poi.kind === 'ruin' || poi.poi.kind === 'wreck') list.push({ kind: 'poi', poi, name: POI_LABEL[poi.poi.kind], pos: poi.pos, range: poi.obj.range || 30 });
+        if (poi.poi.kind === 'ruin' || poi.poi.kind === 'wreck' || poi.poi.kind === 'obelisk') list.push({ kind: 'poi', poi, name: POI_LABEL[poi.poi.kind], pos: poi.pos, range: poi.obj.range || 30 });
       }
     }
     for (const st of this.system.stations) {
-      list.push({ kind: 'station', station: st, name: st.def.name, pos: this.toLocal(st.worldPos), range: 350 });
+      if (!st.localM) continue;
+      const center = new THREE.Vector3().applyMatrix4(st.localM);
+      if (this.rt.inShip) {
+        if (!this.shipObj.dockedAt) list.push({ kind: 'dock', station: st, name: st.def.name, pos: center, range: 600 });
+        continue;
+      }
+      if (!this.deck || this.deck.st !== st) continue;
+      for (const sv of st.model.services) {
+        list.push({ kind: 'service', service: { ...sv, city: st.def.name, station: st }, name: sv.name, pos: sv.local.clone().applyMatrix4(st.localM), range: sv.range });
+      }
     }
     return list;
   }
@@ -1662,7 +1696,7 @@ export class Game {
       const ref = rt.inShip && this.shipObj ? this.shipObj.pos : p.pos;
       let bd = Infinity;
       for (const it of this.gatherInteractables()) {
-        if (rt.inShip && it.kind !== 'station') continue;
+        if (rt.inShip && it.kind !== 'dock') continue;
         const d = ref.distanceTo(it.pos);
         if (d < it.range && d < bd) { bd = d; this.interact = it; }
       }
@@ -1670,7 +1704,7 @@ export class Game {
     }
     const it = this.interact;
     let progress = 0;
-    if (it && it.kind === 'poi' && !this.state.explored.includes(it.poi.poi.id) && inp.down('KeyE')) {
+    if (it && it.kind === 'poi' && !this.state.explored.includes(it.poi.poi.id) && inp.act('interact')) {
       rt.scanT += dt;
       progress = rt.scanT / SCAN_TIME;
       this.sound.scanTick();
@@ -1680,7 +1714,7 @@ export class Game {
       }
     } else {
       rt.scanT = 0;
-      if (it && inp.pressed.has('KeyE')) this.doInteract(it);
+      if (it && inp.hit('interact')) this.doInteract(it);
     }
     this.hud.setPrompt(this.promptText(it), progress);
   }
@@ -1690,10 +1724,11 @@ export class Game {
     if (it.kind === 'leave') return this.canExitShip() ? '<kbd>E</kbd> LEAVE SHIP' : null;
     if (it.kind === 'ship') return '<kbd>E</kbd> BOARD YOUR SHIP';
     if (it.kind === 'service') return `<kbd>E</kbd> ${esc(it.name.toUpperCase())}`;
-    if (it.kind === 'station') return `<kbd>E</kbd> DOCK AT ${esc(it.name.toUpperCase())}`;
+    if (it.kind === 'dock') return `<kbd>E</kbd> LAND ON ${esc(it.name.toUpperCase())}`;
     if (it.kind === 'poi') {
       if (this.state.explored.includes(it.poi.poi.id)) return `${esc(it.name.toUpperCase())} · ALREADY SEARCHED`;
-      return `HOLD <kbd>E</kbd> ${it.poi.poi.kind === 'wreck' ? 'SALVAGE THE WRECK' : 'SEARCH THE RUINS'}`;
+      if (it.poi.poi.kind === 'obelisk' && this.trial) return 'THE TRIAL IS UNDER WAY';
+      return `HOLD <kbd>E</kbd> ${it.poi.poi.kind === 'wreck' ? 'SALVAGE THE WRECK' : it.poi.poi.kind === 'obelisk' ? 'TOUCH THE OBELISK · BEGIN THE TRIAL' : 'SEARCH THE RUINS'}`;
     }
     return null;
   }
@@ -1701,6 +1736,7 @@ export class Game {
   canExitShip() {
     const env = this.env;
     if (!this.shipObj) return false;
+    if (this.shipObj.dockedAt) return true;
     if (this.shipObj.landed) return true;
     if (env.planet && env.planet.body.landable && env.inAtmo) return FLIGHT.canFly(this.state.realm);
     return FLIGHT.canSpace(this.state.realm);
@@ -1713,19 +1749,407 @@ export class Game {
       else this.denied('You cannot leave the ship here. Land first.');
     } else if (it.kind === 'ship') {
       this.boardShip();
+    } else if (it.kind === 'dock') {
+      this.dockShip(it.station);
     } else if (it.kind === 'service' || it.kind === 'station') {
+      const vk = it.kind === 'station' ? 'station' : it.service.kind;
       this.rt.hp = this.stats.maxHp;
       this.rt.energy = this.stats.maxEnergy;
       this.rt.spirit = this.stats.maxSpirit;
       if (this.shipObj && this.rt.inShip) this.shipObj.hull = this.shipObj.maxHull;
       this.lastService = it;
-      s.bind = { star: this.star.key, body: this.frame ? this.frame.body.id : null };
-      if (s.offers.length < 3) s.offers.push(...generateOffers(s, { star: this.star }, 3 - s.offers.length));
-      const kind = it.kind === 'station' ? 'shop' : it.service.kind === 'hall' ? 'bounties' : it.service.kind === 'shipyard' ? 'shipyard' : 'shop';
-      this.menus.openPanel(kind);
+      this.venueKind = vk;
+      const city = it.service && it.service.city;
+      if (!s.home || s.home.star !== this.star.key) s.bind = { star: this.star.key, body: this.frame ? this.frame.body.id : null, site: city || null };
+      if (city) this.applyBounties(progressBounties(s, { kind: 'arrive', city }));
+      if (s.offers.length < 3) s.offers.push(...generateOffers(s, this.offerContext(), 3 - s.offers.length));
+      const panel = {
+        station: 'shop', hall: 'bounties', shipyard: 'shipyard', exchange: 'shop', pills: 'shop', forge: 'forge',
+        clinic: 'clinic', chamber: 'chamber', bar: 'bar', food: 'food', home: 'home', arena: 'arena', camp: 'shop',
+      }[vk] || 'shop';
+      this.menus.openPanel(panel);
       this.input.unlock();
       this.sound.confirm();
       this.save();
+    }
+  }
+
+  // ---------------------------------------------------- stations --
+  // Orbital stations are moving platforms: whatever stands or rests on a deck
+  // is carried along by the station's motion in our frame.
+  updateStations() {
+    const p = this.player, rt = this.rt, ship = this.shipObj;
+    this.localRoot.updateWorldMatrix(true, false);
+    const invRoot = this.localRoot.matrixWorld.clone().invert();
+    const ref = rt.inShip && ship ? ship.pos : p.pos;
+    let deck = null;
+    let moved = false;
+    for (const st of this.system.stations) {
+      st.group.updateWorldMatrix(true, false);
+      const M = invRoot.clone().multiply(st.group.matrixWorld);
+      const prev = st.prevM;
+      st.prevM = M;
+      st.localM = M;
+      const inv = M.clone().invert();
+      const here = ref.clone().applyMatrix4(inv);
+      if (here.length() > 900) { st.prevM = M; continue; }
+      if (prev) {
+        const D = M.clone().multiply(prev.clone().invert());
+        const q = new THREE.Quaternion().setFromRotationMatrix(D);
+        if (this.deck && this.deck.st === st && !rt.inShip) {
+          p.pos.applyMatrix4(D);
+          p.vel.applyQuaternion(q);
+          p.quat.premultiply(q);
+          p.up.applyQuaternion(q);
+          this.camQuat.premultiply(q);
+          p.syncRoot();
+          moved = true;
+        }
+        if (ship && ship.dockedAt === st) {
+          ship.pos.applyMatrix4(D);
+          ship.quat.premultiply(q);
+          ship.sync();
+          if (rt.inShip) {
+            p.pos.copy(ship.pos);
+            p.quat.copy(ship.quat);
+            this.camQuat.premultiply(q);
+            p.syncRoot();
+            moved = true;
+          }
+        }
+      }
+      if (ship && ship.landed && !ship.dockedAt && st.model.onDeck(ship.pos.clone().applyMatrix4(inv))) ship.dockedAt = st;
+      if (!rt.inShip && st.model.onDeck(p.pos.clone().applyMatrix4(inv))) {
+        deck = { st, M, inv, q: new THREE.Quaternion().setFromRotationMatrix(M) };
+      }
+    }
+    if (deck && (!this.deck || this.deck.st !== deck.st)) this.hud.notify(`You set foot on <b>${esc(deck.st.def.name)}</b>.`, 'yl');
+    this.deck = deck;
+    if (moved) this.positionCamera(0);
+  }
+
+  dockShip(st) {
+    const ship = this.shipObj, p = this.player;
+    if (!ship || !st.localM) return;
+    const M = st.localM;
+    const q = new THREE.Quaternion().setFromRotationMatrix(M);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+    const padL = st.model.pads[Math.floor(Math.random() * st.model.pads.length)];
+    const pad = padL.clone().applyMatrix4(M);
+    const center = new THREE.Vector3(0, 0, 0).applyMatrix4(M);
+    ship.placeAt(pad.clone().addScaledVector(up, ship.gearHeight), center.clone().addScaledVector(up, ship.gearHeight), up);
+    ship.vel.set(0, 0, 0);
+    ship.landed = true;
+    ship.dockedAt = st;
+    this.rt.inShip = false;
+    this.rt.cruise = false;
+    const side = new THREE.Vector3(1, 0, 0).applyQuaternion(ship.quat);
+    const at = ship.pos.clone().addScaledVector(side, 16 * ship.scale).addScaledVector(up, EYE - ship.gearHeight + 0.2);
+    p.placeAt(at, center.clone().addScaledVector(up, EYE), up);
+    p.vel.set(0, 0, 0);
+    p.mode = 'ground';
+    this.swords.setVisible(true);
+    this.swords.reset(p);
+    this.applyCamMode();
+    this.camQuat.copy(p.quat);
+    this.hud.notify(`Docked at <b>${esc(st.def.name)}</b>. The booths around the spire are open for business.`, 'yl');
+    this.sound.confirm();
+  }
+
+  // ------------------------------------------------------- city life --
+  mealActive(kind) {
+    const m = this.state.meal;
+    return !!m && m.kind === kind && this.state.playtime < m.until;
+  }
+
+  updateVenue(dt) {
+    const p = this.player, rt = this.rt, s = this.state;
+    const f = this.frame;
+    let found = null;
+    if (f && f.details && !rt.inShip) {
+      for (const st of f.details.settlements) {
+        if (p.pos.distanceTo(st.group.position) > st.radius + 60) continue;
+        const v = st.venueAt(p.pos);
+        if (v) { found = { v, st }; break; }
+      }
+    }
+    const prev = this.inVenue;
+    this.inVenue = found;
+    if (found && (!prev || prev.v !== found.v) && found.v.kind !== 'lobby') {
+      this.hud.notify(`<b>${esc(found.v.name)}</b> <span class="cn">${found.v.cn}</span>`, 'yl');
+    }
+    rt.chamber = !!found && found.v.kind === 'chamber' && s.chamberUntil > s.playtime;
+    this.updateArena(dt);
+    this.updateTrial();
+  }
+
+  sell(kind, frac) {
+    const s = this.state;
+    if (kind === 'ore') {
+      const n = Math.floor(s.ore * frac);
+      if (n <= 0) return this.sound.deny();
+      s.ore -= n;
+      const coins = n * SELL.ore(Math.min(s.realm, this.star.tier + 1));
+      s.coins += coins;
+      this.hud.notify(`Sold ${n} star metal for <b>${fmt(coins)} ◈</b>.`, 'gold');
+    } else {
+      const n = Math.floor(s.essence * frac);
+      if (n <= 0) return this.sound.deny();
+      s.essence -= n;
+      const coins = Math.max(1, Math.round(n * SELL.essence));
+      s.coins += coins;
+      this.hud.notify(`Sold ${fmt(n)} essence for <b>${fmt(coins)} ◈</b>.`, 'gold');
+    }
+    this.sound.pickup();
+    this.save();
+  }
+
+  geneCost() {
+    return priceFor(220 * Math.pow(1.45, this.state.gene || 0), Math.max(0, this.state.realm - 1));
+  }
+
+  geneCap() {
+    return 3 + this.state.realm * 2;
+  }
+
+  buyGene() {
+    const s = this.state;
+    const cost = this.geneCost();
+    if (s.coins < cost || (s.gene || 0) >= this.geneCap()) return this.sound.deny();
+    s.coins -= cost;
+    s.gene = (s.gene || 0) + 1;
+    const ratio = this.rt.hp / this.stats.maxHp;
+    this.stats = derive(s);
+    this.rt.hp = ratio * this.stats.maxHp;
+    this.particles.burst(this.player.pos, new THREE.Color(2.4, 0.6, 1.2), 60, 16, 0.6, 0.9);
+    this.sound.breakthrough();
+    this.hud.notify(`Gene enhancement level <b>${s.gene}</b>: +6% life and attack.`, 'violet');
+    this.save();
+  }
+
+  chamberCost() {
+    return priceFor(25, this.state.realm);
+  }
+
+  rentChamber() {
+    const s = this.state;
+    const cost = this.chamberCost();
+    if (s.coins < cost) return this.sound.deny();
+    s.coins -= cost;
+    s.chamberUntil = Math.max(s.chamberUntil, s.playtime) + 300;
+    this.sound.confirm();
+    this.hud.notify('The gravity chamber hums to life. Cultivate inside for <b>2.5×</b> experience for 5 minutes.', 'violet');
+    this.save();
+  }
+
+  mealCost(kind) {
+    return priceFor({ spicy: 12, broth: 10, dumpling: 14 }[kind] || 10, this.state.realm);
+  }
+
+  buyMeal(kind) {
+    const s = this.state;
+    const cost = this.mealCost(kind);
+    if (s.coins < cost) return this.sound.deny();
+    s.coins -= cost;
+    s.meal = { kind, until: s.playtime + 600 };
+    if (kind === 'dumpling') this.rt.hp = this.stats.maxHp;
+    this.sound.pickup();
+    const txt = { spicy: '+25% damage for 10 minutes', broth: '+50% energy and spirit recovery for 10 minutes', dumpling: 'full life and +30% defence for 10 minutes' }[kind];
+    this.hud.notify(`You eat well: ${txt}.`, 'green');
+    this.save();
+  }
+
+  rumorCost() {
+    return priceFor(18, this.state.realm);
+  }
+
+  buyRumor() {
+    const s = this.state, f = this.frame;
+    const cost = this.rumorCost();
+    if (s.coins < cost || !f || !f.details) return this.sound.deny();
+    const p = this.player;
+    const cands = f.details.pois
+      .filter((r) => !s.discovered.includes(r.poi.id) && !s.rumors.includes(r.poi.id) && r.poi.kind !== 'nest')
+      .sort((a, b) => a.pos.distanceTo(p.pos) - b.pos.distanceTo(p.pos));
+    if (!cands.length) {
+      this.hud.notify('“Nothing new out there, friend. You’ve seen it all.”', '');
+      return this.sound.deny();
+    }
+    s.coins -= cost;
+    const pick = cands[Math.floor(Math.random() * Math.min(3, cands.length))];
+    s.rumors.push(pick.poi.id);
+    const names = { ruin: 'ancient ruins', spring: 'an energy spring', ore: 'a rich star metal vein', wreck: 'a crashed wreck', lair: 'an Overlord’s lair' };
+    this.hud.notify(`“They say there’s ${names[pick.poi.kind] || 'something'} out past the walls.” It now shows on your compass.`, 'yl');
+    this.sound.confirm();
+    this.save();
+  }
+
+  homeCost() {
+    return priceFor(150, this.state.realm);
+  }
+
+  rentHome() {
+    const s = this.state;
+    const city = this.lastService && this.lastService.service && this.lastService.service.city;
+    if (!city || !this.frame) return;
+    const cost = this.homeCost();
+    if (s.coins < cost) return this.sound.deny();
+    s.coins -= cost;
+    s.home = { star: this.star.key, body: this.frame.body.id, site: city };
+    s.bind = { ...s.home };
+    this.sound.confirm();
+    this.hud.notify(`You rent a room in <b>${esc(city)}</b>. You will wake here if you fall.`, 'gold');
+    this.save();
+  }
+
+  // Sleep until the local sun is up.
+  sleep() {
+    const s = this.state, f = this.frame;
+    if (!f || !this.env.up) return;
+    const period = f.body.spin.period;
+    const up = this.env.up.clone();
+    // sample the planet's real rotation over one day to find the next sunrise
+    const sunLocalAt = (t) => {
+      f.prepare(t);
+      f.spin.updateMatrixWorld(true);
+      return f.spin.worldToLocal(this.system.root.position.clone()).normalize();
+    };
+    let best = 0;
+    const nowUp = sunLocalAt(s.worldTime).dot(up);
+    if (nowUp < 0.3) {
+      for (let k = 1; k <= 144; k++) {
+        const dtk = (period * k) / 144;
+        if (sunLocalAt(s.worldTime + dtk).dot(up) > 0.35) { best = dtk; break; }
+      }
+    }
+    f.prepare(s.worldTime);
+    f.spin.updateMatrixWorld(true);
+    if (best < 60) {
+      this.hud.notify('It is already day outside.', '');
+      return;
+    }
+    s.worldTime += best;
+    this.rt.hp = this.stats.maxHp;
+    this.rt.energy = this.stats.maxEnergy;
+    this.rt.spirit = this.stats.maxSpirit;
+    const fade = document.getElementById('fade');
+    fade.style.opacity = 1;
+    setTimeout(() => { fade.style.opacity = 0; }, 700);
+    this.hud.notify('You sleep through the night and wake rested.', 'gold');
+    this.save();
+  }
+
+  // ---- obelisk trials: two waves of guardians for a bonus skill point
+  startTrial(poiRec) {
+    if (this.trial) return;
+    this.trial = { poi: poiRec, wave: 0, beasts: [] };
+    this.nextTrialWave();
+    this.hud.banner('TRIAL', 'Trial of the Obelisk', '<span class="cn">试炼</span>Defeat the guardians', '#c08cff', 3);
+    this.sound.thunder();
+  }
+
+  nextTrialWave() {
+    const tr = this.trial, f = this.frame;
+    tr.wave++;
+    const species = speciesForBody(f.body);
+    const tier = this.locTier() + 0.3 + tr.wave * 0.25;
+    const up = tr.poi.up;
+    const n = tr.wave === 1 ? 4 : 3;
+    tr.beasts = [];
+    for (let i = 0; i < n; i++) {
+      const sp = tr.wave === 2 && i === 0 ? species.reduce((a, b) => (b.hp > a.hp ? b : a)) : species[Math.floor(Math.random() * species.length)];
+      this.beasts.species.set(sp.id, sp);
+      const a = (i / n) * Math.PI * 2;
+      const side = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)).projectOnPlane(up).normalize();
+      const pos = tr.poi.pos.clone().addScaledVector(side, 24).addScaledVector(up, 4);
+      const b = this.beasts.spawn(sp.id, pos, tier, { aggro: true, elite: tr.wave === 2 && i === 0 });
+      tr.beasts.push(b);
+    }
+    this.combat.shockwave(tr.poi.pos.clone().addScaledVector(up, 2), 40, 0xc08cff, 1);
+  }
+
+  updateTrial() {
+    const tr = this.trial;
+    if (!tr) return;
+    const far = !this.frame || !this.frame.details || tr.poi.pos.distanceTo(this.player.pos) > 400;
+    if (this.mode === 'dead' || far) {
+      for (const b of tr.beasts) if (b.alive) this.beasts.removeBeast(b);
+      this.hud.notify('The obelisk falls silent. The trial is lost; you may try again.', 'red');
+      this.trial = null;
+      return;
+    }
+    if (tr.beasts.some((b) => b.alive)) return;
+    if (tr.wave < 2) {
+      this.nextTrialWave();
+      this.hud.notify('A greater guardian answers the obelisk’s call!', 'red');
+      return;
+    }
+    const s = this.state;
+    s.explored.push(tr.poi.poi.id);
+    s.bonusPoints = (s.bonusPoints || 0) + 1;
+    const k = this.randomUpgradableTech();
+    if (k) s.mastery[k] = (s.mastery[k] || 1) + 1;
+    this.addXp(this.stats.xpNeed * 0.25);
+    this.hud.banner('TRIAL COMPLETE', 'The Obelisk Yields', `<span class="cn">传承</span>+1 skill point${k ? ` · ${TECHS[k].name} mastery ${s.mastery[k]}` : ''}`, '#c08cff', 4);
+    this.sound.reward();
+    this.trial = null;
+    this.save();
+  }
+
+  // ---- arena: waves of local beasts inside the ring
+  startArena() {
+    const it = this.lastService;
+    if (!it || !it.service || !it.service.venue || it.service.venue.kind !== 'arena') return;
+    const f = this.frame;
+    const st = f && f.details && f.details.settlements.find((x) => x.services.includes(it.service));
+    if (!st) return;
+    if (this.arena) return this.denied('A match is already under way.');
+    const s = this.state;
+    const wave = (s.arena || 0) + 1;
+    const v = it.service.venue;
+    const species = speciesForBody(f.body);
+    const tier = Math.max(0, s.realm - 0.6 + Math.min(1.2, wave * 0.12));
+    const n = Math.min(10, 2 + Math.floor(wave / 2));
+    const center = v.center.clone();
+    const beasts = [];
+    for (let i = 0; i < n; i++) {
+      const sp = species[Math.min(species.length - 1, Math.floor(Math.random() * Math.min(species.length, 2 + wave / 3)))];
+      this.beasts.species.set(sp.id, sp);
+      const a = (i / n) * Math.PI * 2;
+      const pos = st.toLocal(v.x + Math.cos(a) * 18, 3, v.z + Math.sin(a) * 18);
+      const b = this.beasts.spawn(sp.id, pos, tier, { aggro: true, elite: wave >= 5 && i === 0 });
+      b.home.copy(center);
+      b.arena = true;
+      beasts.push(b);
+    }
+    this.arena = { wave, beasts, venue: v, settlement: st, prize: Math.round(priceFor(40, s.realm) * (1 + wave * 0.35)) };
+    this.menus.closePanel();
+    this.input.lock();
+    this.hud.banner('ARENA', `Wave ${wave}`, `<span class="cn">竞技场</span>${n} beasts · prize ${fmt(this.arena.prize)} ◈`, '#ff3c7d', 2.5);
+    this.sound.thunder();
+  }
+
+  updateArena() {
+    const a = this.arena;
+    if (!a) return;
+    const left = a.beasts.filter((b) => b.alive);
+    const inside = this.inVenue && this.inVenue.v === a.venue;
+    if (!left.length) {
+      const s = this.state;
+      s.arena = a.wave;
+      s.coins += a.prize;
+      this.addXp(this.stats.xpNeed * 0.08);
+      this.hud.banner('VICTORY', `Wave ${a.wave} cleared`, `+${fmt(a.prize)} ◈ · the crowd roars`, '#ffe44d', 3);
+      this.sound.reward();
+      this.arena = null;
+      this.save();
+    } else if (!inside && this.mode === 'playing') {
+      for (const b of left) this.beasts.removeBeast(b);
+      this.hud.notify('You left the ring. The match is forfeit.', 'red');
+      this.arena = null;
+    } else if (this.mode === 'dead') {
+      for (const b of left) this.beasts.removeBeast(b);
+      this.arena = null;
     }
   }
 
@@ -1747,6 +2171,10 @@ export class Game {
 
   exitShip(forced = false) {
     const ship = this.shipObj, p = this.player;
+    if (ship.dockedAt && !forced) {
+      this.dockShip(ship.dockedAt);
+      return;
+    }
     this.rt.inShip = false;
     this.rt.cruise = false;
     this.rt.warpCharge = 0;
@@ -1772,6 +2200,7 @@ export class Game {
   searchPoi(poiRec) {
     const s = this.state;
     const id = poiRec.poi.id;
+    if (poiRec.poi.kind === 'obelisk') return this.startTrial(poiRec);
     if (!s.explored.includes(id)) s.explored.push(id);
     const tier = this.locTier();
     this.sound.reward();
@@ -1798,7 +2227,7 @@ export class Game {
       const k = this.randomUpgradableTech();
       if (k) {
         s.mastery[k]++;
-        this.hud.notify(`The ruins hold a manual. <b>${TECHNIQUES[k].name}</b> mastery rises to ${s.mastery[k]}.`, 'violet');
+        this.hud.notify(`The ruins hold a manual. <b>${TECHS[k].name}</b> mastery rises to ${s.mastery[k]}.`, 'violet');
       }
     }
     this.hud.notify(`Ancient energy flows from the ruins: +${fmt(xp)} experience.`, 'gold');
@@ -1807,9 +2236,67 @@ export class Game {
     this.save();
   }
 
+  // -------------------------------------------------------- paths --
+  pathTip() {
+    const key = (a) => `<kbd>${codeLabel(settings.key(a))}</kbd>`;
+    const p = this.state.path || 'mind';
+    if (p === 'blade') return `${key('fire')} swings your saber. Hold ${key('focus')} to guard, and tap it just before a hit to parry. ${key('skill1')} is Flash Cut.`;
+    if (p === 'psychic') return `${key('fire')} fires Mind Spikes that never miss. Hold ${key('focus')} to seize a beast with your mind. ${key('skill1')} throws a Soul Lance.`;
+    return `Hold ${key('focus')} to steer your flying swords. ${key('fire')} fires Star Bolts. ${key('skill1')} looses your swords.`;
+  }
+
+  learnSkill(id) {
+    const s = this.state;
+    const nd = nodeById(s.path, id);
+    if (!nd) return;
+    if (!canLearn(s, nd).ok) return this.sound.deny();
+    s.skills[id] = (s.skills[id] || 0) + 1;
+    const ratio = this.rt.hp / this.stats.maxHp;
+    this.stats = derive(s);
+    this.rt.hp = ratio * this.stats.maxHp;
+    this.swords.setup(this.stats.swords, s.swordGrade);
+    this.sound.stageUp();
+    this.save();
+  }
+
+  respecCost() {
+    return priceFor(60, this.state.realm);
+  }
+
+  // Refund every skill point, optionally switching path.
+  respec(newPath) {
+    const s = this.state;
+    const cost = this.respecCost() * (newPath && newPath !== s.path ? 3 : 1);
+    if (s.coins < cost) return this.sound.deny();
+    s.coins -= cost;
+    s.skills = {};
+    if (newPath) s.path = newPath;
+    this.stats = derive(s);
+    this.rt.hp = Math.min(this.rt.hp, this.stats.maxHp);
+    this.arts.reset();
+    this.swords.setup(this.stats.swords, s.swordGrade);
+    this.swords.reset(this.player);
+    this.viewmodel.setPath(s.path, PATHS[s.path].color);
+    this.hud.buildSkills(s.path);
+    this.sound.confirm();
+    this.hud.notify(newPath ? `You now walk the path of <b>${PATHS[s.path].name}</b> <span class="cn">${PATHS[s.path].cn}</span>.` : 'Your skill points have been refunded.', 'violet');
+    this.save();
+  }
+
+  offerContext() {
+    const f = this.frame;
+    const cities = [];
+    for (const p of this.system.planets) {
+      const sites = [p.body.sites.city, ...p.body.sites.outposts, ...(p.body.sites.towns || [])].filter(Boolean);
+      for (const site of sites) cities.push({ name: site.name, body: p.body.id, bodyName: p.body.name, dist: p === f ? 2000 : 20000 });
+    }
+    return { star: this.star, species: f && f.body.landable ? speciesForBody(f.body) : null, cities, here: this.interact && this.interact.city };
+  }
+
   randomUpgradableTech() {
     const s = this.state;
-    const list = ACTIVE_TECHNIQUES.filter((k) => s.realm >= TECHNIQUES[k].unlockRealm && s.mastery[k] < 5);
+    const P = PATHS[s.path] || PATHS.mind;
+    const list = [P.primary, ...P.skills].filter((k) => s.realm >= TECHS[k].unlockRealm && (s.mastery[k] || 1) < 5);
     return list.length ? list[Math.floor(Math.random() * list.length)] : null;
   }
 
@@ -1826,7 +2313,7 @@ export class Game {
     s.coins -= price;
     if (item === 'manual') {
       s.mastery[tech]++;
-      this.hud.notify(`<b>${TECHNIQUES[tech].name}</b> mastery rises to ${s.mastery[tech]}.`, 'violet');
+      this.hud.notify(`<b>${TECHS[tech].name}</b> mastery rises to ${s.mastery[tech]}.`, 'violet');
     } else {
       s.pills[item]++;
     }
@@ -2189,6 +2676,7 @@ export class Game {
     this.viewmodel.update(dt, {
       mouseX: this.lastMouse.x, mouseY: this.lastMouse.y, speed: p.mode === 'ground' ? speed * 8 : speed, boost: p.boosting && !rt.controlling && p.mode !== 'ground',
       meditating: rt.meditating, controlling: rt.controlling, energyFrac: rt.energy / this.stats.maxEnergy, sunDirView, sunColor: this.system.sunColor,
+      guarding: rt.guarding, gripping: !!this.arts.grip,
     });
     this.viewmodel.updateThread(dt, this.camera, this.toWorld(this.swords.controlPoint), rt.controlling && this.camMode === 'first', this.time);
     this.flare.update(this.camera, this.system.root.position, this.system.starRadius, this.flareOccluders(), dt);
@@ -2226,7 +2714,7 @@ export class Game {
     }
     const nav = rt.nav && rt.nav.kind !== 'star' ? rt.nav : null;
     this.hud.update(dt, {
-      state: s, stats: this.stats, rt, loc, density, medRate, bt: this.breakthroughStatus(),
+      state: s, stats: this.stats, rt, loc, density, medRate, bt: this.breakthroughStatus(), path: s.path || 'mind',
       boss: this.beasts.liveBoss, target, locked: !!rt.lock && target === rt.lock, targetDist: target ? target.pos.distanceTo(p.pos) : 0,
       nav, navDist: nav ? Math.max(0, nav.world().distanceTo(camWorld) - nav.arrive * 0.5) : 0, cruise: rt.cruise,
       swordStates: this.swords.states(), formation: this.swords.formation, controlRange: 260 + 50 * s.realm, speed,
@@ -2300,17 +2788,36 @@ export class Game {
     }
     const f = this.frame;
     if (f && f.details) {
-      for (const sv of f.details.services) {
-        const d = sv.pos.distanceTo(origin);
-        if (d > 3000) continue;
-        list.push({ key: `svc:${sv.name}`, kind: 'station', label: esc(sv.name), sub: fmtKm(d), pos: this.toWorld(sv.pos.clone().addScaledVector(sv.pos.clone().normalize(), 8)), dist: d, edge: false, compass: d < 1500 ? '#3ef2ff' : null });
+      for (const st of f.details.settlements) {
+        for (const v of st.venues) {
+          if (v.kind === 'lobby') continue;
+          const at = v.door || v.center;
+          const d = at.distanceTo(origin);
+          const major = v.kind === 'hall' || v.kind === 'arena';
+          if (d > (major ? 2500 : 220)) continue;
+          if (this.inVenue && this.inVenue.v === v) continue;
+          list.push({ key: `v:${st.site.name}:${v.kind}:${v.x | 0}`, kind: 'station', label: esc(v.name), sub: fmtKm(d), pos: this.toWorld(at.clone().addScaledVector(at.clone().normalize(), 7)), dist: d, edge: false, compass: major && d < 2500 ? '#ffe44d' : null });
+        }
+        for (const sv of st.services) {
+          if (sv.kind !== 'shipyard') continue;
+          const d = sv.pos.distanceTo(origin);
+          if (d > 2500) continue;
+          list.push({ key: `svc:${sv.name}`, kind: 'station', label: esc(sv.name), sub: fmtKm(d), pos: this.toWorld(sv.pos.clone().addScaledVector(sv.pos.clone().normalize(), 8)), dist: d, edge: false, compass: d < 1500 ? '#3ef2ff' : null });
+        }
+      }
+      for (const e of f.details.sites) {
+        const center = e.dir.clone().multiplyScalar(f.R + e.site.height + 40);
+        const d = center.distanceTo(origin);
+        if (d < e.site.radius * 1.6 || d > 60000) continue;
+        list.push({ key: `site:${e.site.name}`, kind: 'planet', label: esc(e.site.name.toUpperCase()), sub: fmtKm(d), pos: this.toWorld(center), dist: d, edge: false, compass: e.site.main ? '#ffe44d' : e.site.size === 'city' ? '#3ef2ff' : null });
       }
       for (const poi of f.details.pois) {
         const d = poi.pos.distanceTo(origin);
         const known = s.discovered.includes(poi.poi.id);
-        if (d > (known ? 4000 : 1200)) continue;
+        const rumored = s.rumors && s.rumors.includes(poi.poi.id) && !known;
+        if (d > (known ? 4000 : rumored ? 1e9 : 1200)) continue;
         if (poi.poi.kind === 'ore' && s.explored.includes(poi.poi.id)) continue;
-        const done = (poi.poi.kind === 'ruin' || poi.poi.kind === 'wreck') && s.explored.includes(poi.poi.id);
+        const done = (poi.poi.kind === 'ruin' || poi.poi.kind === 'wreck' || poi.poi.kind === 'obelisk') && s.explored.includes(poi.poi.id);
         const color = POI_COLOR[poi.poi.kind];
         list.push({ key: poi.poi.id, kind: 'hotspot', label: `<span style="color:${color}">${POI_LABEL[poi.poi.kind].toUpperCase()}${done ? ' ✓' : ''}</span>`, sub: fmtKm(d), pos: this.toWorld(poi.pos.clone().addScaledVector(poi.up, 10)), dist: d, edge: false, compass: d < 1500 ? color : null });
       }

@@ -1,8 +1,8 @@
 # Starsea Ascension · 星海飞升
 
-A first-person 3D cultivation game that runs in the browser. You start as a Warrior in Base City 07 on the planet Terra, with three spirit swords and a body that cannot yet leave the ground. You hunt beasts in the wilds, absorb energy at springs and break through ten realms. In time you fly, then leave the planet, build a starship and warp to any star you can see in an endless galaxy. Inspired by xianxia space epics like 吞噬星空 (Swallowed Star).
+A first-person 3D cultivation game that runs in the browser. You start as a Warrior in Base City 07 on the planet Terra. You choose a path, hunt the beasts that roam between Terra's walled cities, and break through ten realms. In time you fly, then leave the planet, build a starship and warp to any star you can see in an endless galaxy. Inspired by xianxia space epics like 吞噬星空 (Swallowed Star).
 
-Built with [Three.js](https://threejs.org/) and Vite. Every planet, city, star, nebula, beast, sword, ship and sound is generated in code at runtime, so there are no asset downloads.
+Built with [Three.js](https://threejs.org/) and Vite. Every planet, city, interior, beast, star, ship and sound is generated in code at runtime, so there are no asset downloads.
 
 ## Run it
 
@@ -17,47 +17,71 @@ It needs a desktop browser with WebGL 2, a keyboard and a mouse. Progress and se
 
 ## Controls
 
+Every key can be changed in Settings › Controls. The defaults are:
+
 | Action | Input |
 | --- | --- |
 | Look / steer | Mouse |
-| Move · sprint or boost | W A S D · Shift |
+| Move · sprint or boost | W A S D · Left Shift |
 | Jump · double-tap to fly | Space |
-| Rise / sink while flying | Space / X |
-| Star Bolt | Left mouse (hold) |
-| Steer flying swords | Right mouse (hold), wheel sets distance |
-| Loose swords at targets · formation | Q · Z |
-| Domain Burst · Golden Body · Ten Thousand Swords | R · F · V |
+| Sink while flying | X |
+| Primary attack · secondary | Left mouse · right mouse |
+| Techniques 1–3 · ultimate | Q R F · V |
+| Star Step blink (Stellar realm) | Left Alt |
+| Sword formation (Mind Control) | Z |
 | Lock / cycle target | Tab |
-| Cultivate · breakthrough | C (hold) · B |
-| Interact · search ruins · board or leave ship | E · hold E · E |
+| Cultivate (tap to toggle) · breakthrough | C · B |
+| Interact · search · board or leave ship | E (hold to search) |
 | Pills | 1 2 3 |
-| Target a marker or a star | T |
-| Cruise to target · warp to target star | G |
+| Target a marker or star · cruise or warp | T · G |
 | First / third person | P |
-| Cultivation · bounties · guide | K · J · H |
+| Cultivation · skill tree · bounties · guide | K · U · J · H |
 | Mute · pause | N · Esc |
 
-## How the world works
+## Paths
 
-- **Every planet is a whole world.** Rocky planets and moons are full-size spheres you can walk around. Terrain streams in as a level-of-detail quadtree built in web workers. Forests, cacti, crystals and rocks are scattered on top. Each world has a climate: living, desert, ice, lava, toxic, crystal or barren. Gas giants have no surface and crush anyone who dives in.
-- **Realms gate where you can go.** A Warrior is bound to the ground. A War God can fly, but only within the atmosphere. At the Planetary realm your body survives the void, so you can fly into space and land anywhere.
-- **Real star systems.** Planets follow inclined elliptical orbits around their star and spin on tilted axes, so day and night move across the surface. Moons orbit their planets. Systems also have asteroid belts you can collide with, comets, energy nebulae and orbital stations.
-- **An endless galaxy.** Stars are generated deterministically from their position in space, so the galaxy never runs out. Every star in the sky is a real system you can visit. Danger rises with distance from home, across five regions, each with its own Overlords. The last waits at the galaxy's heart.
-- **Starships instead of a map.** Build a ship at a city shipyard with star coins, star metal and beast essence. Aim at a star with T and press G to warp. Bigger ships reach further. Within a system, the cruise drive speeds up the further you are from anything massive.
-- **Things to find.** Cities and outposts hold a Martial Hall for bounties, an Exchange for pills and the sword forge, and a shipyard. In the wilds you find ancient ruins to search, energy springs to cultivate in, star metal deposits to shatter, beast nests and wrecks to salvage.
+You pick a path when you start and can retrain at any Martial Hall.
 
-## Other features
+- **Mind Control 精神掌控.** Fire Star Bolts and steer a large host of flying swords with right mouse. Techniques: Sword Volley, Thought Prison (seizes and crushes a pack), Mind Barrier, Ten Thousand Swords.
+- **Blade 刀者.** Swing a saber up close; every third cut throws a wave of blade light. Right mouse guards, and a well-timed guard parries and staggers. Techniques: Flash Cut, Crescent Wave, Battle Will, Heaven-Splitting Blade.
+- **Mental Attack 精神攻击.** Mind Spikes land instantly on whatever you aim at. Right mouse lifts and crushes a beast, and releasing hurls it. Techniques: Soul Lance, Psychic Shockwave, Terror, Soul Annihilation.
 
-- **Flying swords.** Idle swords fly beside you and knock enemy shots out of the air. Hold right mouse and they follow your crosshair, cutting anything they pass. Swarm formation whirls them around the aim point. Lance formation lines them into a spear. You gain a sword every realm, up to twelve, and can reforge them through five grades.
-- **Ten realms.** They run from Warrior 战士 to Universe Master 宇宙之主, with four stages each. A Heavenly Tribulation 天劫 guards every breakthrough.
-- **Presentation.** The game has first-person cyber gauntlets and a holographic HUD with compass, radar, target lock and hit markers. Planets have single-scattering atmospheres, clouds and oceans. Rendering includes a starfield baked from the real nearby stars, lens flares, bloom, chromatic aberration, speed blur and film grain. The music is generative and intensifies in combat.
-- **Settings.** You can choose a quality preset from Low to Ultra, set the render scale, and turn on dynamic resolution. You can also adjust FOV, sensitivity, invert-Y, volume levels and post effects.
+Each path has its own skill tree plus a shared general tree. You earn a skill point per stage, two per breakthrough, and one for every obelisk trial you win.
+
+## Realms
+
+The ten realms run from Warrior 战士 to Universe Master 宇宙之主. Each one changes how you play, not only your numbers:
+
+- War God flies inside an atmosphere and leaps over rooftops. Hard landings crack the ground.
+- Planetary survives the void and can own a starship.
+- Stellar gains Star Step, an instant blink.
+- From Cosmic up, weaker beasts flee your aura. A Domain Lord's domain slows and weakens beasts nearby. From Realm Lord, weak beasts are crushed by your presence alone.
+- Immortals survive one fatal blow every few minutes. Venerables cruise through space ten times faster.
+
+Running speed, jump height, flight speed and the size of your attacks and aura all grow with each realm. Beasts of higher grades are visibly larger.
+
+## The world
+
+- **Every planet is a whole world.** Rocky planets and moons are full-size spheres with streamed terrain, forests, rocks, oceans, clouds, and day and night. You collide with trees, rocks and buildings.
+- **Cities you can walk into.** Terra has a capital, five more base cities and three outposts; other civilised worlds have their own towns. Glowing doors lead into exchanges, sword forges, pill pavilions, gene clinics, cultivation chambers, teahouses, noodle bars, apartments and the Martial Hall. The capital has an arena. Interiors are built only when you are close, so they cost nothing elsewhere.
+- **Native beasts.** Terra has its own 怪兽: Ironhide Wolves, Bladewing Hawks, Thunder Lizards, Shadow Mantises, Golden-horn Rhinos, Frostclaw Bears, Earth Wyrms and Mountain Golems. Every other world generates its own species from its climate. Space has its own void beasts.
+- **Things to do.** Bounties and courier jobs between cities, arena waves, ancient ruins, energy springs, ore deposits, beast nests, wrecks, obelisk trials, hunters' camps with traders, rumours bought at teahouses, rented homes you can sleep in, meals that buff you, and permanent gene enhancement.
+- **Real star systems.** Planets follow inclined elliptical orbits. Systems have moons, asteroid belts, comets, nebulae and orbital stations you can land on.
+- **An endless galaxy.** Stars are generated from their position in space, so the galaxy never runs out. Every star in the sky is a real system you can warp to. Danger rises with distance from home, across five regions with their own Overlords.
+
+## Settings
+
+- **Graphics.** Quality presets from Minimal to Ultra, render scale, dynamic resolution, terrain detail, tree and rock density, and city crowds.
+- **Visuals.** Field of view, bloom, speed blur, chromatic aberration, film grain, vignette, screen shake, head bob, damage numbers and HUD scale.
+- **Controls.** Mouse sensitivity, invert-Y and every key binding.
+- **Gameplay.** First or third person, cultivate by tap or hold, and always-sprint.
+- **Audio.** Master, music and effects volume.
 
 ## Code map
 
 | Folder | Contents |
 | --- | --- |
-| `src/core/` | Settings, input, audio engine, post-processing, log-depth shader helper, noise helpers |
-| `src/world/` | Galaxy and star system generation, planet terrain and quadtree, atmospheres, cities, points of interest, props, worker pool, skybox baker, models |
-| `src/game/` | Game loop, player, starship, flying swords, first-person arms, beasts, combat, loot, bounties, data, save state |
+| `src/core/` | Settings, key bindings, input, audio engine, post-processing, log-depth shader helper |
+| `src/world/` | Galaxy and system generation, planet terrain and quadtree, atmospheres, cities, interiors, orbital stations, points of interest, props, worker pool, skybox |
+| `src/game/` | Game loop, paths and skill trees, techniques, player, starship, flying swords, first-person arms, beasts and bestiary, combat, loot, bounties, data, save state |
 | `src/ui/` | HUD, menus and in-game panels |

@@ -4,7 +4,7 @@ import { HOME_KEY } from './galaxy.js';
 import { makeTerrain } from './terrain.js';
 
 // Search the bare terrain for a flat, dry spot to build a settlement on.
-function findSite(body, siteR, prefLat, fine) {
+function findSite(body, siteR, prefLat, fine, avoid = [], prefLon = null) {
   const T = makeTerrain({ key: 'probe', type: body.type, seed: body.seed, radius: body.radius, amp: body.amp, sea: body.sea });
   const sea = body.sea ?? -Infinity;
   const R = body.radius;
@@ -31,13 +31,33 @@ function findSite(body, siteR, prefLat, fine) {
         }
       }
       if (minH < sea + body.amp * 0.01) continue;
-      const score = -(maxH - minH) / body.amp * 10 - Math.abs(lat - prefLat) * 0.05;
+      let score = -(maxH - minH) / body.amp * 10 - Math.abs(lat - prefLat) * 0.05;
+      if (prefLon !== null) score -= Math.abs(((lon - prefLon + 540) % 360) - 180) * 0.03;
+      let tooClose = false;
+      for (const s of avoid) {
+        const ang = Math.acos(Math.max(-1, Math.min(1, d[0] * s.x + d[1] * s.y + d[2] * s.z))) * R;
+        if (ang < (s.radius + siteR) * 2.6) tooClose = true;
+      }
+      if (tooClose) continue;
       if (score > bestScore) { bestScore = score; best = { d, h: Math.max(sum / n, sea + body.amp * 0.04) }; }
     }
   }
   if (!best) best = { d: dirFromLatLon(prefLat, 40), h: Math.max(0, sea) + body.amp * 0.1 };
   return { x: best.d[0], y: best.d[1], z: best.d[2], height: best.h };
 }
+
+const TERRA_TOWNS = [
+  { name: 'Jiangnan Base City', cn: '江南基地市', lat: 25, lon: 120 },
+  { name: 'Yangzhou Base City', cn: '扬州基地市', lat: 32, lon: 200 },
+  { name: 'Base City 12', cn: '十二号基地市', lat: -10, lon: 280 },
+  { name: 'Pacific Ring City', cn: '环太平洋城', lat: -28, lon: 30 },
+  { name: 'Frostgate Base City', cn: '霜门基地市', lat: 40, lon: 330 },
+];
+const TERRA_OUTPOSTS = [
+  { name: 'Ridge Watch Outpost', lat: 10, lon: 70 },
+  { name: 'Red Dust Relay', lat: -35, lon: 160 },
+  { name: 'Northern Hunters Camp', lat: 41, lon: 250 },
+];
 const latLonOf = (s) => [Math.asin(s.y) * 180 / Math.PI, Math.atan2(s.z, s.x) * 180 / Math.PI];
 
 // Lays out a star system: star, planets on inclined elliptical orbits, moons,
@@ -94,7 +114,7 @@ function makeBody(r, def) {
       rate: def.rate ?? orbitRate(def.a),
     },
     spin: { period: def.spin ?? range(r, 1500, 4800), tilt: def.tilt ?? range(r, -0.35, 0.35) },
-    sites: { city: null, outposts: [] },
+    sites: { city: null, outposts: [], towns: [] },
     pois: [],
   };
   if (info.atmo && !(def.kind === 'moon' && def.type === 'rocky')) {
@@ -146,9 +166,21 @@ export function generateSystem(star) {
     ];
     for (const d of defs) sys.bodies.push(makeBody(r, { ...d, kind: 'planet', seed: Math.floor(r() * 1e9) }));
     const terra = sys.bodies[2];
-    terra.sites.city = { ...findSite(terra, 340, 18, true), radius: 340, name: 'Base City 07', main: true };
+    terra.sites.city = { ...findSite(terra, 520, 18, true), radius: 520, name: 'Base City 07', cn: '七号基地市', main: true, size: 'capital' };
+    terra.sites.towns = [];
+    const placed = [terra.sites.city];
+    for (const t of TERRA_TOWNS) {
+      const site = { ...findSite(terra, 300, t.lat, false, placed, t.lon), radius: 300, name: t.name, cn: t.cn, size: 'city' };
+      terra.sites.towns.push(site);
+      placed.push(site);
+    }
+    for (const o of TERRA_OUTPOSTS) {
+      const site = { ...findSite(terra, 120, o.lat, false, placed, o.lon), radius: 120, name: o.name, size: 'outpost' };
+      terra.sites.outposts.push(site);
+      placed.push(site);
+    }
     const [cLat, cLon] = latLonOf(terra.sites.city);
-    addPois(r, terra, { ruin: 3, spring: 6, ore: 12, nest: 8, wreck: 4 });
+    addPois(r, terra, { ruin: 3, spring: 6, ore: 12, nest: 8, wreck: 4, obelisk: 3, camp: 5 });
     // guarantee a spring and an ore field near the city
     const near = (dlat, dlon) => dirFromLatLon(cLat + dlat / S, cLon + dlon / S);
     terra.pois.find((p) => p.kind === 'spring').dir = near(-4.5, 6);
@@ -165,7 +197,7 @@ export function generateSystem(star) {
     for (const m of moons) sys.bodies.push(makeBody(r, { ...m, kind: 'moon', seed: Math.floor(r() * 1e9), e: 0.01, inc: range(r, -0.08, 0.08) }));
     for (const b of sys.bodies) {
       if (b.id === 'p2' || !b.landable) continue;
-      addPois(r, b, { ruin: b.id === 'p2m0' || r() < 0.5 ? 1 + Math.floor(r() * 2) : 0, spring: 2 + Math.floor(r() * 3), ore: 4 + Math.floor(r() * 5), nest: 2 + Math.floor(r() * 3), wreck: 1 + Math.floor(r() * 2) });
+      addPois(r, b, { ruin: b.id === 'p2m0' || r() < 0.5 ? 1 + Math.floor(r() * 2) : 0, spring: 2 + Math.floor(r() * 3), ore: 4 + Math.floor(r() * 5), nest: 2 + Math.floor(r() * 3), wreck: 1 + Math.floor(r() * 2), obelisk: r() < 0.5 ? 1 : 0, camp: r() < 0.5 ? 1 : 0 });
     }
     sys.stations.push({ id: 's0', name: 'Martial Hall Orbital', parent: 'p2', a: 15000 * S, rate: 0.006, phase: 1.2, inc: 0.15 });
     sys.belts.push({ radius: 2.35e6 * S, width: 180e3 * S, thickness: 18e3 * S, inc: 0.03, seed: Math.floor(r() * 1e9) });
@@ -204,9 +236,20 @@ export function generateSystem(star) {
   const landable = sys.bodies.filter((b) => b.landable);
   for (const b of landable) {
     const t = b.tier;
-    addPois(r, b, { ruin: (r() < 0.45 + t * 0.06 ? 1 : 0) + (r() < 0.3 ? 1 : 0), spring: 2 + Math.floor(r() * 3), ore: 4 + Math.floor(r() * 5), nest: 2 + Math.floor(r() * 3), wreck: 1 + Math.floor(r() * 2) });
-    if (civilized && b.atmo && b.kind === 'planet' && r() < 0.45) {
-      b.sites.outposts.push({ ...findSite(b, 120, (r() - 0.5) * 60, false), radius: 120, name: `${b.name} Outpost` });
+    addPois(r, b, { ruin: (r() < 0.45 + t * 0.06 ? 1 : 0) + (r() < 0.3 ? 1 : 0), spring: 2 + Math.floor(r() * 3), ore: 4 + Math.floor(r() * 5), nest: 2 + Math.floor(r() * 3), wreck: 1 + Math.floor(r() * 2), obelisk: r() < 0.6 ? 1 + Math.floor(r() * 2) : 0, camp: civilized && b.atmo ? 1 + Math.floor(r() * 2) : 0 });
+    if (civilized && b.atmo && b.kind === 'planet') {
+      const placed = [];
+      const towns = b.type === 'terran' || b.type === 'crystal' ? 1 + Math.floor(r() * 2) : r() < 0.4 ? 1 : 0;
+      b.sites.towns = [];
+      for (let k = 0; k < towns; k++) {
+        const site = { ...findSite(b, 260, (r() - 0.5) * 60, false, placed, r() * 360), radius: 260, name: `${makeName(r)} City`, size: 'city' };
+        b.sites.towns.push(site);
+        placed.push(site);
+      }
+      if (r() < 0.7) {
+        const site = { ...findSite(b, 120, (r() - 0.5) * 60, false, placed, r() * 360), radius: 120, name: `${b.name} Outpost`, size: 'outpost' };
+        b.sites.outposts.push(site);
+      }
     }
   }
   if (civilized && sys.bodies.length) {

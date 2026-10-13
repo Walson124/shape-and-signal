@@ -92,6 +92,8 @@ export class Player {
     this.trailColor.copy(c).multiplyScalar(0.9);
     this.aura.material.color.copy(c).multiplyScalar(0.8);
     this.accent.color.copy(c).multiplyScalar(1.5);
+    // the aura swells with each realm
+    this.aura.scale.setScalar(5 + realm * 2.2);
   }
 
   forward(out = new THREE.Vector3()) {
