@@ -159,7 +159,8 @@ export class Companion {
   }
 
   // Queue a line. priority 2 interrupts, 1 jumps the queue, 0 waits.
-  say(text, priority = 0) {
+  say(text, priority = 0, force = false) {
+    if (this.g.state.nixAwake === false && !force) return;
     const level = settings.get('nixChatter');
     if (level === 'off') return;
     if (level === 'quiet' && priority < 1) return;
@@ -173,6 +174,7 @@ export class Companion {
 
   // Say a line for a situation, respecting cooldowns. Returns true if spoken.
   event(name, vars = {}, priority = 0) {
+    if (this.g.state.nixAwake === false) return false;
     const now = this.time;
     const cd = COOLDOWN[name.split('.')[0]] ?? 8;
     if ((this.cool[name] || -1e9) + cd > now) return false;

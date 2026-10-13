@@ -683,7 +683,7 @@ export class BeastManager {
     if (env) {
       for (let i = this.beasts.length - 1; i >= 0; i--) {
         const b = this.beasts[i];
-        if (b.boss || b.static || b.aggro) continue;
+        if (b.boss || b.static || b.aggro || b.tag) continue;
         if (b.pos.distanceTo(player.pos) > (env.despawn ?? 3000)) this.removeBeast(b);
       }
     }

@@ -478,3 +478,22 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .bind-row label { font-size: 14px; }
 .btn.bind { justify-self: end; min-width: 140px; font-family: var(--mono); }
 .btn.bind.listening { border-color: var(--yl); color: var(--yl); animation: blink 0.9s steps(2) infinite; }
+
+/* ---- story: letterbox, subtitles, mission tracker */
+#letterbox { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+#letterbox i { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height 0.7s ease; }
+#letterbox i:first-child { top: 0; }
+#letterbox i:last-child { bottom: 0; }
+#letterbox.on i { height: 11vh; }
+#subtitle { position: fixed; left: 50%; bottom: 14vh; transform: translateX(-50%); max-width: min(820px, calc(100vw - 32px)); padding: 8px 18px; text-align: center; font-family: Rajdhani, sans-serif; font-size: 21px; line-height: 1.35; color: #e8f4ff; text-shadow: 0 2px 6px #000, 0 0 2px #000; background: rgba(0, 0, 0, 0.35); z-index: 41; pointer-events: none; }
+#subtitle b { display: block; font-family: Orbitron, sans-serif; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 2px; }
+#subtitle i { color: #c8d8e8; }
+#skip-hint { position: fixed; right: 22px; bottom: calc(11vh + 12px); font-size: 11px; letter-spacing: 0.2em; color: rgba(255, 255, 255, 0.55); z-index: 41; pointer-events: none; }
+#mission { margin-bottom: 8px; padding: 8px 12px; border-left: 2px solid #ffc857; background: linear-gradient(90deg, rgba(40, 30, 6, 0.7), rgba(10, 8, 4, 0.35)); max-width: 300px; }
+#mission .dim { font-size: 10px; letter-spacing: 0.16em; color: #ffc857; opacity: 0.85; }
+#mission .m-obj { font-family: Rajdhani, sans-serif; font-size: 16px; font-weight: 600; color: #fff3d6; line-height: 1.25; margin: 2px 0; }
+#mission .m-meta { font-size: 11px; color: #ffd98a; }
+.path-cards.two { grid-template-columns: repeat(2, 1fr); }
+.item.story.done h4 { color: #9affc8; }
+.item.story.focus { border-color: #ffc857; }
+.item.story.locked { opacity: 0.5; }

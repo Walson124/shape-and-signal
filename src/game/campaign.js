@@ -1,0 +1,724 @@
+import * as THREE from 'three';
+import { buildNPC } from '../world/interiors.js';
+import { signTexture, glowTexture } from '../world/textures.js';
+import { speciesForBody } from './bestiary.js';
+import { LORE, RUIN_NAMES } from './lore.js';
+
+// Story mode. Act I: a convoy recruit survives an ambush in the ruins, finds a
+// ring holding Nix, passes the Warrior's Exam and holds Base City 07 against a
+// beast tide. Missions are lists of steps; the engine tracks objectives,
+// waypoints, dialogue, cutscenes and rewards.
+
+const EYE = 1.7;
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+
+const TIDE_KING = {
+  id: 'tideking', name: 'Ironjaw, the Tide King', cn: '铁颚兽王', arch: 'quad', variant: 'wolf', color: 0x2a2228, accent: 0xff3a2a,
+  radius: 10, hp: 22, dmg: 1.8, xp: 14, coins: 12, cores: 14, speed: 48, behavior: 'tank', aggro: 900, walker: true, footing: 0.71,
+  fireRate: 2, shotSpeed: 150, minTier: 9, pack: [1, 1], horns: true, spikes: 1,
+};
+
+export const ACT1 = [
+  { id: 'prologue', title: 'The Salvage Run', cn: '打捞', steps: [
+    { type: 'cutscene', text: '', play: (c) => c.convoyScene() },
+    { type: 'kill', text: 'Fight for your life: kill the Ironhide Wolves', count: 4, tag: 'prologue',
+      spawn: (c) => c.spawnPack('prologue', 'ironwolf', 4 - c.st.p, c.offset(c.g.player.pos, 30, 0), -0.2),
+      start: (c) => c.g.cutscene.say([['Driver', 'Rookie... you alive? Use what they taught you. Fight!'], ['', c.g.pathTip().replace(/<[^>]+>/g, '')]]) },
+    { type: 'reach', text: 'Take shelter in the old bunker', where: (c) => c.bunker(0), radius: 7,
+      start: (c) => c.g.cutscene.say([['Driver', 'There’s a Concord bunker... past the towers. Get inside. The old ones built them to last...'], ['Driver', 'Tell my wife I— ...'], ['', 'The radio goes silent.']]) },
+  ], reward: { coins: 50 } },
+  { id: 'ring', title: 'The Ring in the Dark', cn: '黑暗中的戒指', steps: [
+    { type: 'cutscene', text: '', play: (c) => c.ringScene() },
+    { type: 'reach', text: 'Get back to Base City 07', where: (c) => c.gate().out, radius: 40,
+      start: (c) => { c.spawnPack('ring', 'ironwolf', 3, c.between(c.bunker(0), c.gate().out, 0.45), 0); c.nix('Wolves between us and the wall. Of course there are.'); } },
+    { type: 'reach', text: 'Report to the Martial Hall', where: (c) => c.svc('hall'), radius: 6,
+      done: (c) => {
+        c.spawnNPC('kade', c.offset(c.svc('hall'), 5, 2), 0x3a1a1a, 0xff5a3a, 'Kade');
+        c.g.cutscene.say([
+          ['Instructor Hale', 'So you’re the one who walked out of Meridian Sprawl alive. The convoy crew wasn’t so lucky.'],
+          ['Instructor Hale', 'Hm. Where did you get that ring?'],
+          ['Nix', '(Don’t tell him about me. Mysterious is a good look on you.)'],
+          ['Instructor Hale', 'Keep your secrets. The Warrior’s Exam is soon. Cultivate, hunt, learn your tools. Then come back.'],
+          ['Kade', 'Ha. The convoy rookie. Try not to faint in front of the examiners.'],
+        ]);
+      } },
+  ], reward: { coins: 150, pills: { heal: 2 } } },
+  { id: 'training', title: 'Training Days', cn: '修炼', steps: [
+    { type: 'cultivate', text: 'Cultivate to gain experience', count: 60, start: (c) => c.nix('Sit down and cultivate. Press {cultivate}. Energy springs and chambers are faster; your bedroom floor is slower.') },
+    { type: 'kill', text: 'Hunt beasts beyond the walls', count: 5 },
+    { type: 'event', text: 'Pulse your radar to find star metal', on: 'ping', start: (c) => c.nix('Press {ping} to pulse the radar. It’ll mark ore nearby. Wonderful technology. I’m a little jealous.') },
+    { type: 'event', text: 'Shatter a star metal deposit', on: 'mine' },
+  ], reward: { coins: 200, point: 1 } },
+  { id: 'exam', title: 'The Warrior’s Exam', cn: '战士考核', steps: [
+    { type: 'reach', text: 'Go to the Arena for your exam', where: (c) => c.svc('arena'), radius: 8,
+      done: (c) => c.g.cutscene.say([['Instructor Hale', 'One wave. No dying. Speak to the registrar when you’re ready.'], ['Kade', 'Passed mine yesterday. Without breaking a sweat.']]) },
+    { type: 'event', text: 'Clear an arena wave', on: 'arenaWave',
+      done: (c) => c.g.cutscene.say([['Instructor Hale', 'Pass. Welcome to the ranks, Warrior.'], ['Kade', 'Lucky.'], ['Nix', 'He’s jealous. I’d be jealous too, if I were him. Which, thankfully, I’m not.']]) },
+  ], reward: { coins: 300, pills: { heal: 2, energy: 2 } } },
+  { id: 'echoes', title: 'Echoes of the Concord', cn: '遗迹回响', steps: [
+    { type: 'lore', text: () => `Search the terminal in ${RUIN_NAMES[1]}`, index: 1, where: (c) => c.bunker(1), radius: 6,
+      start: (c) => c.nix('That bunker had records. There are more out there. I want to know who Seren was, and why I can’t remember her.') },
+    { type: 'kill', text: 'Kade is in trouble: kill the Golden-horn Rhino', count: 1, tag: 'kade', where: (c) => c.ruinCenter(2), radius: 0,
+      start: (c) => c.nix('Kade went out to the Concord ruins alone. Showing off, no doubt. I have a bad feeling.'),
+      spawn: (c) => {
+        const at = c.offset(c.ruinCenter(2), -40, 10);
+        c.spawnNPC('kade', at, 0x3a1a1a, 0xff5a3a, 'Kade');
+        c.spawnPack('kade', 'goldhorn', 1, c.offset(at, 18, 0), 0.5, true, false);
+        c.g.cutscene.say([['Kade', 'Hey! Rookie! I— I’ve got this under control! ...Mostly!']]);
+      },
+      done: (c) => c.g.cutscene.say([['Kade', 'I had it handled.'], ['Kade', '...Thanks. Don’t tell anyone.'], ['Nix', 'I’m telling everyone.']]) },
+    { type: 'lore', text: () => `Search the terminal in ${RUIN_NAMES[2]}`, index: 2, where: (c) => c.bunker(2), radius: 6 },
+  ], reward: { coins: 300, point: 1 } },
+  { id: 'insight', title: 'The Bottleneck', cn: '瓶颈', steps: [
+    { type: 'check', text: 'Reach the Peak of the Warrior realm', test: (c) => c.g.state.realm > 0 || (c.g.state.stage === 3 && c.g.state.xp >= c.g.stats.xpNeed) },
+    { type: 'check', text: 'Earn a Realm Insight: win the obelisk trial outside the city', test: (c) => (c.g.state.insight || 0) >= 1 || c.g.state.realm > 0, where: (c) => c.obelisk(), radius: 0,
+      start: (c) => c.g.cutscene.say([['Instructor Hale', 'You’ve hit the wall every Warrior hits. Energy alone won’t carry you through.'], ['Instructor Hale', 'There’s an obelisk outside the walls. Beat its guardians and you’ll understand.']]) },
+  ], reward: { coins: 200 } },
+  { id: 'tide', title: 'The Beast Tide', cn: '兽潮', steps: [
+    { type: 'reach', text: 'Return to Base City 07', where: (c) => c.capital().group.position.clone(), radius: 700,
+      start: (c) => c.nix('Something\u2019s wrong. The wilds have gone quiet. Let\u2019s head back to the city.') },
+    { type: 'cutscene', text: '', play: (c) => c.tideScene() },
+    { type: 'reach', text: 'Get to the gate and hold the wall', where: (c) => c.gate().pos, radius: 45, start: (c) => c.buildTurrets() },
+    { type: 'waves', text: 'Hold the gate against the tide', waves: [['ironwolf', 7], ['bladehawk', 5, 'ironwolf', 4], ['thunderlizard', 4, 'shadowmantis', 4]] },
+    { type: 'boss', text: 'Slay Ironjaw, the Tide King' },
+    { type: 'cutscene', text: '', play: (c) => c.victoryScene() },
+  ], reward: { coins: 1000, point: 1, insight: 1 }, final: true },
+];
+
+export class Campaign {
+  constructor(game) {
+    this.g = game;
+    this.npcs = {};
+    this.turrets = [];
+    this.trucks = [];
+    this.temp = [];
+    this.el = document.getElementById('mission');
+    this.busy = false;
+    this.time = 0;
+  }
+
+  get st() {
+    return this.g.state.campaign;
+  }
+
+  get mission() {
+    return this.st ? ACT1[this.st.mi] : null;
+  }
+
+  get step() {
+    const m = this.mission;
+    return m ? m.steps[this.st.si] : null;
+  }
+
+  // ------------------------------------------------------- locations --
+  terra() { return this.g.homePlanet(); }
+  onTerra() { return this.g.frame && this.g.frame === this.terra(); }
+  capital() { const t = this.terra(); return t.ensureSettlement(t.body.sites.city); }
+  svc(kind) { const s = this.capital().services.find((x) => x.kind === kind); return s ? s.pos.clone() : this.capital().spawnLocal.clone(); }
+  ruinCenter(i) {
+    const t = this.terra();
+    const site = t.body.sites.ruins[i];
+    const d = V(site.x, site.y, site.z).normalize();
+    return d.multiplyScalar(t.floorRadius(d.x, d.y, d.z) + EYE);
+  }
+  bunker(i) {
+    const r = this.terra().ensureRuin(i);
+    const sv = r && r.services.find((x) => x.kind === 'lore');
+    return sv ? sv.pos.clone() : this.ruinCenter(i);
+  }
+  gate() {
+    const st = this.capital();
+    const ruin = this.ruinCenter(0);
+    let best = st.gates[0], bd = Infinity;
+    for (const g of st.gates) {
+      const d = g.out.distanceTo(ruin);
+      if (d < bd) { bd = d; best = g; }
+    }
+    return best;
+  }
+  obelisk() {
+    const t = this.terra();
+    t.buildDetails();
+    const c = this.capital().group.position;
+    const list = t.details.pois.filter((p) => p.poi.kind === 'obelisk').sort((a, b) => a.pos.distanceTo(c) - b.pos.distanceTo(c));
+    return list.length ? list[0].pos.clone() : c.clone();
+  }
+  ground(p, lift = EYE) {
+    const t = this.terra();
+    const d = p.clone().normalize();
+    return d.multiplyScalar(t.floorRadius(d.x, d.y, d.z) + lift);
+  }
+  between(a, b, k) { return this.ground(a.clone().lerp(b, k)); }
+  offset(p, dx, dz) {
+    const up = p.clone().normalize();
+    const e = V(1, 0, 0).projectOnPlane(up).normalize();
+    const n = V().crossVectors(e, up);
+    return this.ground(p.clone().addScaledVector(e, dx).addScaledVector(n, dz));
+  }
+
+  // --------------------------------------------------------- helpers --
+  nix(text) {
+    this.g.nix.say(this.g.nix.fill(text), 1, true);
+  }
+
+  spawnNPC(key, pos, color, accent, label) {
+    this.removeNPC(key);
+    const n = buildNPC(color, accent);
+    const up = pos.clone().normalize();
+    n.group.position.copy(pos).addScaledVector(up, -EYE);
+    n.group.quaternion.setFromUnitVectors(V(0, 1, 0), up);
+    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTexture(label, '#ffc857'), transparent: true, depthWrite: false, depthTest: false }));
+    tag.scale.set(3, 0.48, 1);
+    tag.position.y = 2.4;
+    n.group.add(tag);
+    this.g.localRoot.add(n.group);
+    this.npcs[key] = { ...n, tag };
+  }
+
+  removeNPC(key) {
+    const n = this.npcs[key];
+    if (!n) return;
+    this.g.localRoot.remove(n.group);
+    n.tag.material.map.dispose();
+    n.tag.material.dispose();
+    n.dispose();
+    delete this.npcs[key];
+  }
+
+  species(id) {
+    if (id === 'tideking') return TIDE_KING;
+    return speciesForBody(this.terra().body).find((s) => s.id === id);
+  }
+
+  spawnPack(tag, id, n, center, tierBonus = 0, elite = false, aggro = true) {
+    const g = this.g;
+    const def = this.species(id);
+    if (!def) return [];
+    g.beasts.species.set(def.id, def);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n)) * Math.PI * 2 + Math.random();
+      const pos = this.offset(center, Math.cos(a) * (6 + Math.random() * 10), Math.sin(a) * (6 + Math.random() * 10));
+      const p2 = pos.clone().addScaledVector(pos.clone().normalize(), def.radius * def.footing - EYE + 0.5);
+      const b = g.beasts.spawn(def.id, p2, Math.max(0, g.state.realm * 0.9 + tierBonus), { aggro, elite });
+      b.tag = tag;
+      out.push(b);
+    }
+    return out;
+  }
+
+  // -------------------------------------------------------- lifecycle --
+  begin() {
+    const s = this.g.state;
+    s.campaign = { mi: 0, si: 0, p: 0, wave: 0, started: true, done: [] };
+    this.startStep();
+  }
+
+  startStep() {
+    const step = this.step;
+    if (!step) return;
+    this.st.p = 0;
+    this.st.wave = 0;
+    this.spawned = false;
+    if (step.start) step.start(this);
+    if (step.type === 'cutscene') this.pendingCut = true;
+    if (step.type === 'waves') this.nextWave();
+    if (step.type === 'boss') this.spawnBoss();
+    this.render();
+    this.g.save();
+  }
+
+  advance() {
+    const step = this.step;
+    if (step && step.done) step.done(this);
+    const m = this.mission;
+    this.st.si++;
+    if (this.st.si >= m.steps.length) return this.completeMission();
+    this.startStep();
+  }
+
+  completeMission() {
+    const g = this.g, s = g.state, m = this.mission;
+    const rw = m.reward || {};
+    if (rw.coins) s.coins += Math.round(rw.coins * Math.pow(2.2, s.realm));
+    if (rw.point) s.bonusPoints = (s.bonusPoints || 0) + rw.point;
+    if (rw.pills) for (const [k, n] of Object.entries(rw.pills)) s.pills[k] += n;
+    if (rw.insight) g.gainInsight('the battle for Base City 07');
+    g.addXp(g.stats.xpNeed * 0.15);
+    this.st.done.push(m.id);
+    g.sound.reward();
+    if (m.final) {
+      g.hud.banner('ACT I COMPLETE', 'The Walled City', '<span class="cn">第一幕 · 城墙</span>The story continues in Act II', '#ffe44d', 6);
+      this.st.act1Done = true;
+      this.st.mi = ACT1.length;
+      this.cleanup();
+      this.render();
+      g.save();
+      return;
+    }
+    g.hud.banner('MISSION COMPLETE', m.title, `<span class="cn">${m.cn}</span>`, '#ffc857', 3.5);
+    this.st.mi++;
+    this.st.si = 0;
+    this.waiting = true;
+    setTimeout(() => {
+      this.waiting = false;
+      const next = this.mission;
+      if (!next) return;
+      g.hud.banner('NEW MISSION', next.title, `<span class="cn">${next.cn}</span>`, '#3ef2ff', 3);
+      this.startStep();
+    }, 4200);
+    this.render();
+    g.save();
+  }
+
+  // Resume after loading a save mid-story.
+  resume() {
+    const step = this.step;
+    if (!step) return this.render();
+    if (step.type === 'cutscene') return this.startStep();
+    if (step.type === 'waves' || step.type === 'boss') {
+      // start the fight over
+      this.st.si = this.mission.steps.findIndex((x) => x.type === 'reach' && x.start);
+      if (this.st.si < 0) this.st.si = 0;
+    }
+    this.startStep();
+  }
+
+  rebase(m, q) {
+    const objs = [...Object.values(this.npcs).map((n) => n.group), ...this.turrets.map((t) => t.group), ...this.trucks];
+    for (const o of objs) {
+      o.position.applyMatrix4(m);
+      o.quaternion.premultiply(q);
+    }
+    for (const t of this.turrets) t.up.applyQuaternion(q);
+  }
+
+  cleanup() {
+    for (const k of Object.keys(this.npcs)) this.removeNPC(k);
+    for (const t of this.turrets) this.g.localRoot.remove(t.group);
+    this.turrets = [];
+    for (const t of this.trucks) this.g.localRoot.remove(t);
+    this.trucks = [];
+  }
+
+  // ----------------------------------------------------------- events --
+  // Returns true if the event was consumed (e.g. an interaction the story owns).
+  event(kind, data) {
+    const step = this.step;
+    if (!step || this.busy || this.waiting || this.pendingCut) return false;
+    if (kind === 'kill' && step.type === 'kill') {
+      if (step.tag && data.tag !== step.tag) return false;
+      if (data.static) return false;
+      this.st.p++;
+      if (this.st.p >= step.count) this.advance();
+      else this.render();
+    } else if (kind === 'kill' && (step.type === 'waves' || step.type === 'boss')) {
+      if (step.type === 'boss' && data.tag === 'tideking') this.advance();
+      else if (step.type === 'waves' && data.tag === 'tide') {
+        this.st.p++;
+        if (!this.g.beasts.beasts.some((b) => b.alive && b.tag === 'tide')) {
+          if (this.st.wave >= step.waves.length) this.advance();
+          else setTimeout(() => this.nextWave(), 2500);
+        }
+        this.render();
+      }
+    } else if (kind === 'cultivate' && step.type === 'cultivate') {
+      this.st.p += data;
+      if (this.st.p >= step.count) this.advance();
+      else this.render();
+    } else if (kind === 'lore' && step.type === 'lore' && data === step.index) {
+      this.advance();
+    } else if (step.type === 'event' && kind === step.on) {
+      this.advance();
+    }
+    return false;
+  }
+
+  update(dt) {
+    this.time += dt;
+    for (const n of Object.values(this.npcs)) n.anim(this.time);
+    this.updateTurrets(dt);
+    this.updateBoss(dt);
+    const step = this.step;
+    if (!step || this.busy || this.waiting || this.g.mode !== 'playing') return;
+    if (!this.onTerra()) return;
+    const p = this.g.player.pos;
+    if (this.pendingCut) {
+      if (this.g.menus.overlayOpen || this.g.rt.inShip || this.g.rt.trib) return;
+      this.pendingCut = false;
+      this.busy = true;
+      Promise.resolve(step.play(this)).then(() => {
+        this.busy = false;
+        this.advance();
+      });
+      return;
+    }
+    if (step.spawn && !this.spawned && !this.g.beasts.beasts.some((b) => b.alive && b.tag === step.tag)) {
+      const w = step.where ? step.where(this) : null;
+      if (!w || p.distanceTo(w) < 900) {
+        this.spawned = true;
+        step.spawn(this);
+      }
+    }
+    if (step.type === 'reach' && step.where && p.distanceTo(step.where(this)) < step.radius) this.advance();
+    else if (step.type === 'check' && step.test(this)) this.advance();
+    else if (step.type === 'lore' && this.g.state.lore.includes(step.index)) this.advance();
+    this.renderTimer = (this.renderTimer || 0) - dt;
+    if (this.renderTimer <= 0) {
+      this.renderTimer = 0.5;
+      this.render();
+    }
+  }
+
+  // Waypoint for the HUD.
+  target() {
+    const step = this.step;
+    if (!step || this.busy || !this.onTerra()) return null;
+    if (step.where) return step.where(this);
+    if (step.type === 'kill' && step.tag) {
+      const b = this.g.beasts.beasts.find((x) => x.alive && x.tag === step.tag);
+      return b ? b.pos.clone() : null;
+    }
+    if (step.type === 'boss' && this.boss && this.boss.alive) return this.boss.pos.clone();
+    if (step.type === 'waves') return this.gate().pos;
+    return null;
+  }
+
+  render() {
+    const el = this.el;
+    const m = this.mission;
+    if (!this.st || !this.st.started || !m) {
+      el.classList.add('hidden');
+      return;
+    }
+    const step = this.step;
+    if (!step || step.type === 'cutscene') {
+      el.classList.add('hidden');
+      return;
+    }
+    let text = typeof step.text === 'function' ? step.text() : step.text;
+    let prog = '';
+    if (step.type === 'kill') prog = `${this.st.p}/${step.count}`;
+    else if (step.type === 'cultivate') prog = `${Math.floor(this.st.p)}/${step.count}`;
+    else if (step.type === 'waves') prog = `WAVE ${Math.min(this.st.wave, step.waves.length)}/${step.waves.length}`;
+    if (!this.onTerra()) text = 'Return to Terra to continue the story';
+    const t = this.target();
+    const dist = t ? Math.round(t.distanceTo(this.g.player.pos)) : null;
+    el.innerHTML = `<div class="mono dim">ACT I · ${m.title.toUpperCase()}</div><div class="m-obj">${text}</div><div class="mono m-meta">${prog}${prog && dist !== null ? ' · ' : ''}${dist !== null ? (dist >= 1000 ? `${(dist / 1000).toFixed(1)} KM` : `${dist} M`) : ''}</div>`;
+    el.classList.remove('hidden');
+  }
+
+  // --------------------------------------------------------- scenes --
+  buildTruck() {
+    const g = new THREE.Group();
+    const hull = new THREE.MeshStandardMaterial({ color: 0x7a8494, metalness: 0.6, roughness: 0.45 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x22262e, metalness: 0.5, roughness: 0.5 });
+    const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 2.2, 2.6) });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.6, 7.5), hull);
+    body.position.set(0, 1.9, -1);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 2.6), dark);
+    cab.position.set(0, 1.7, 3.6);
+    g.add(body, cab);
+    for (const [x, z] of [[-1.3, -3.5], [1.3, -3.5], [-1.3, 2.5], [1.3, 2.5]]) {
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.2, 12), glow);
+      pad.position.set(x, 0.5, z);
+      g.add(pad);
+    }
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.2, 0.1), glow);
+    lamp.position.set(0, 2.2, 4.95);
+    g.add(lamp);
+    return g;
+  }
+
+  placeOnGround(obj, pos, look, lift = 0) {
+    const up = pos.clone().normalize();
+    obj.position.copy(this.ground(pos, lift));
+    const m = new THREE.Matrix4().lookAt(obj.position, look, up);
+    obj.quaternion.setFromRotationMatrix(m);
+    obj.rotateY(Math.PI);
+  }
+
+  convoyScene() {
+    const g = this.g;
+    const gate = this.gate();
+    const ruin = this.ruinCenter(0);
+    const edge = this.between(gate.out, ruin, 0.82);
+    const path = (k) => this.between(gate.out, edge, k);
+    for (let i = 0; i < 3; i++) {
+      const t = this.buildTruck();
+      g.localRoot.add(t);
+      this.trucks.push(t);
+    }
+    const moveTrucks = (k) => {
+      this.trucks.forEach((t, i) => {
+        const kk = Math.max(0, Math.min(1, k - i * 0.05));
+        this.placeOnGround(t, path(kk), path(Math.min(1, kk + 0.02)), 1.2 - EYE);
+      });
+    };
+    moveTrucks(0);
+    let crash = false;
+    let lastBreak = 0;
+    const p = g.player;
+    this.convoyDir = V().subVectors(edge, gate.out).normalize();
+    const capital = this.capital().group.position;
+    const up = (v) => v.clone().normalize();
+    const lead = () => this.trucks[0].position.clone();
+    return g.playCutscene({
+      tick: (t) => {
+        if (crash) return;
+        moveTrucks(Math.min(1, t / 12.6));
+        if (t - lastBreak > 0.25) {
+          lastBreak = t;
+          for (const tr of this.trucks) g.breakAt(tr.position, 5, this.heading());
+        }
+      },
+      shots: [
+        { dur: 5, from: () => capital.clone().addScaledVector(up(capital), 420).addScaledVector(V().subVectors(capital, gate.out).normalize(), 300), to: () => gate.pos.clone().addScaledVector(up(gate.pos), 140).addScaledVector(V().subVectors(capital, gate.out).normalize(), 120), look: () => gate.out },
+        { dur: 7, from: () => lead().addScaledVector(up(lead()), 26).add(this.side(lead(), 22)).addScaledVector(this.heading(), -18), look: () => lead().addScaledVector(up(lead()), 2) },
+        { dur: 4, from: () => edge.clone().addScaledVector(up(edge), 25).add(this.side(edge, -30)), look: () => edge },
+        { dur: 2.5, from: () => edge.clone().addScaledVector(up(edge), 4).add(this.side(edge, 8)), to: () => edge.clone().addScaledVector(up(edge), 2).add(this.side(edge, 5)), look: () => edge },
+      ],
+      lines: [
+        { at: 0.5, who: '', text: 'Terra. Two centuries after the Night of Teeth. Humanity lives behind walls.' },
+        { at: 5.2, who: 'Driver', text: 'Salvage run to Meridian Sprawl. Easy money, they said.' },
+        { at: 8.6, who: 'Driver', text: 'Rookie, keep your eyes on those ruins. Ironhides den out here.' },
+        { at: 12.3, who: 'Driver', text: 'Contact! A whole pack — brace, brace!' },
+      ],
+      events: [
+        { at: 12.6, fn: () => {
+          crash = true;
+          moveTrucks(1);
+          this.spawnPack('prologue', 'ironwolf', 4, this.offset(edge, 14, 6), -0.2, false, false);
+          this.trucks.forEach((t, i) => {
+            g.combat.explosion(t.position, 0xff8a3a, 1.4);
+            t.rotateZ(i % 2 ? 1.2 : -0.9);
+            t.position.addScaledVector(up(t.position), -0.8);
+          });
+          g.rt.shake = 1.5;
+          g.sound.explosion(edge, true);
+        } },
+        { at: 18.4, fn: () => {
+          const at = this.offset(edge, -4, -6);
+          p.placeAt(at, edge.clone(), up(at));
+          p.mode = 'ground';
+          g.camQuat.copy(p.quat);
+          for (const b of g.beasts.beasts) if (b.tag === 'prologue') b.aggro = true;
+        } },
+      ],
+    });
+  }
+
+  heading() {
+    return this.convoyDir || V(1, 0, 0);
+  }
+
+  side(pos, d) {
+    const up = pos.clone().normalize();
+    const toCap = this.capital().group.position.clone().sub(pos).projectOnPlane(up).normalize();
+    return V().crossVectors(toCap, up).normalize().multiplyScalar(d);
+  }
+
+  ringScene() {
+    const g = this.g;
+    const b = this.bunker(0);
+    const up = b.clone().normalize();
+    const ringPos = b.clone().addScaledVector(up, 0.3).add(this.side(b, 0.6));
+    const ring = new THREE.Group();
+    ring.add(new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.035, 8, 24), new THREE.MeshStandardMaterial({ color: 0x8a7a5a, metalness: 0.9, roughness: 0.3 })));
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.05, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.0, 2.6) }));
+    gem.position.y = 0.13;
+    ring.add(gem);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(1.2, 0.7, 2.4), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    halo.scale.setScalar(0.9);
+    ring.add(halo);
+    ring.position.copy(ringPos);
+    ring.quaternion.setFromUnitVectors(V(0, 1, 0), up);
+    g.localRoot.add(ring);
+    const fade = document.getElementById('fade');
+    return g.playCutscene({
+      tick: (t, dt) => { ring.rotateY(dt * 1.8); halo.material.opacity = 0.6 + 0.4 * Math.sin(t * 3.3); },
+      shots: [
+        { dur: 3, from: () => b.clone().addScaledVector(up, 1.5).add(this.side(b, -6)), to: () => b.clone().addScaledVector(up, 1).add(this.side(b, -2)), look: () => b },
+        { dur: 9, from: () => ringPos.clone().addScaledVector(up, 0.25).add(this.side(b, -0.6)), to: () => ringPos.clone().addScaledVector(up, 0.35).add(this.side(b, -0.45)), look: () => ringPos },
+        { dur: 7, from: () => ringPos.clone().addScaledVector(up, 0.4).add(this.side(b, -0.5)), look: () => ringPos },
+      ],
+      lines: [
+        { at: 0.3, who: '', text: 'At the bunker door lie the bones of a guardian who never made it inside. On one finger, a battered ring still glows.' },
+        { at: 4.5, who: 'Nix', text: '—and furthermore, if anyone thinks I’m going back to sleep for another— oh. Oh! A pulse!' },
+        { at: 8.6, who: 'Nix', text: 'Hello! I’m Nix. Ancient intelligence, spatial ring, devastatingly charming. And you are... a teenager covered in wolf.' },
+        { at: 13.4, who: 'Nix', text: 'Where’s Seren? She was just... I don’t remember. Never mind. Put me on and let’s get you home before more teeth arrive.' },
+      ],
+      events: [
+        { at: 0, fn: () => { fade.style.transition = 'opacity 1.2s'; fade.style.background = '#000'; fade.style.opacity = 0.55; } },
+        { at: 18.6, fn: () => {
+          g.localRoot.remove(ring);
+          ring.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+          fade.style.opacity = 0;
+          setTimeout(() => { fade.style.background = ''; fade.style.transition = ''; }, 1300);
+          g.state.nixAwake = true;
+          if (!g.state.lore.includes(0)) g.state.lore.push(0);
+          g.hud.notify('Nix is bound to you. The ring is a <b>spatial ring</b>, and Nix lives inside it.', 'violet');
+        } },
+      ],
+    });
+  }
+
+  tideScene() {
+    const g = this.g;
+    const gate = this.gate();
+    const out = gate.out.clone();
+    const dir = V().subVectors(out, gate.pos).normalize();
+    const far = this.ground(out.clone().addScaledVector(dir, 240));
+    const up = (v) => v.clone().normalize();
+    // the horde gathering on the horizon
+    const show = [
+      ...this.spawnPack('tideshow', 'ironwolf', 9, far, 0, false, false),
+      ...this.spawnPack('tideshow', 'goldhorn', 2, this.offset(far, 20, 10), 0, false, false),
+      ...this.spawnPack('tideshow', 'shadowmantis', 4, this.offset(far, -25, -5), 0, false, false),
+    ];
+    return g.playCutscene({
+      shots: [
+        { dur: 5, from: () => gate.wall(0).addScaledVector(up(gate.pos), 6).addScaledVector(dir, -20), to: () => gate.wall(0).addScaledVector(up(gate.pos), 3).addScaledVector(dir, 5), look: () => far },
+        { dur: 5, from: () => far.clone().addScaledVector(up(far), 9).addScaledVector(dir, -45).add(this.side(far, 18)), to: () => far.clone().addScaledVector(up(far), 6).addScaledVector(dir, -30).add(this.side(far, 10)), look: () => far },
+        { dur: 4, from: () => gate.pos.clone().addScaledVector(up(gate.pos), 40).addScaledVector(dir, -80), look: () => out },
+      ],
+      lines: [
+        { at: 0.5, who: 'Guard', text: 'Beast tide! Hundreds of them, coming out of the old city!' },
+        { at: 4.8, who: 'Instructor Hale', text: 'Every warrior to the gate! Turrets online! Hold the wall!' },
+        { at: 9.6, who: 'Nix', text: 'I’d like to point out that “hundreds” is a lot.' },
+        { at: 12, who: 'Kade', text: 'Scared, rookie? Stay behind me.' },
+      ],
+      events: [
+        { at: 0, fn: () => g.sound.thunder() },
+        { at: 13.9, fn: () => { for (const b of show) g.beasts.removeBeast(b); } },
+      ],
+    });
+  }
+
+  victoryScene() {
+    const g = this.g;
+    const gate = this.gate();
+    for (const b of g.beasts.beasts.slice()) if (b.tag && b.tag.startsWith('tide')) g.beasts.removeBeast(b);
+    const stand = this.ground(gate.pos.clone().lerp(gate.out, 0.5));
+    g.player.placeAt(stand, this.capital().group.position.clone(), stand.clone().normalize());
+    g.player.vel.set(0, 0, 0);
+    const p = stand.clone();
+    const up = p.clone().normalize();
+    const e = this.side(p, 1).normalize();
+    const n = V().crossVectors(e, up);
+    let a = 0;
+    const orbit = () => p.clone().addScaledVector(up, 2.5).addScaledVector(e, Math.cos(a) * 7).addScaledVector(n, Math.sin(a) * 7);
+    this.spawnNPC('kade', this.offset(p, 3, 2), 0x3a1a1a, 0xff5a3a, 'Kade');
+    this.spawnNPC('hale', this.offset(p, -3, 2.5), 0x3a3020, 0xffc857, 'Instructor Hale');
+    return g.playCutscene({
+      showPlayer: true,
+      tick: (t) => { a = t * 0.25; },
+      shots: [{ dur: 15, from: orbit, look: () => p.clone().addScaledVector(up, -0.4) }],
+      lines: [
+        { at: 0.5, who: 'Instructor Hale', text: 'The tide is broken. Base City 07 stands because of you.' },
+        { at: 4.2, who: 'Kade', text: '...Not bad, convoy rookie. Not bad at all.' },
+        { at: 7.4, who: 'Nix', text: 'Feel that? Your meridians are begging to break through. Face the tribulation when you’re ready.' },
+        { at: 11.3, who: 'Nix', text: 'And then... Seren’s logs said the Devourer is at the heart of the galaxy. We’ll need wings. And a ship. And much bigger muscles.' },
+      ],
+      events: [
+        { at: 0, fn: () => g.sound.breakthrough() },
+        { at: 14.9, fn: () => { this.removeNPC('kade'); this.removeNPC('hale'); } },
+      ],
+    });
+  }
+
+  // ------------------------------------------------- the beast tide --
+  buildTurrets() {
+    const g = this.g;
+    const gate = this.gate();
+    for (const off of [-34, -14, 14, 34]) {
+      const pos = gate.wall(off);
+      const up = pos.clone().normalize();
+      const grp = new THREE.Group();
+      grp.add(new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.6, 2.6), new THREE.MeshStandardMaterial({ color: 0x3a404c, metalness: 0.7, roughness: 0.4 })));
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 3, 8).rotateX(Math.PI / 2).translate(0, 0, 1.4), new THREE.MeshStandardMaterial({ color: 0x1a1e26, metalness: 0.8 }));
+      barrel.position.y = 1.1;
+      grp.add(barrel);
+      grp.add(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.08, 4, 16).rotateX(Math.PI / 2).translate(0, 0.85, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 2.2, 2.6) })));
+      grp.position.copy(pos);
+      grp.quaternion.setFromUnitVectors(V(0, 1, 0), up);
+      g.localRoot.add(grp);
+      this.turrets.push({ group: grp, barrel, cd: Math.random(), up });
+    }
+  }
+
+  updateTurrets(dt) {
+    const g = this.g;
+    for (const t of this.turrets) {
+      t.cd -= dt;
+      if (t.cd > 0) continue;
+      let best = null, bd = 320;
+      for (const b of g.beasts.beasts) {
+        if (!b.alive || b.static) continue;
+        const d = b.pos.distanceTo(t.group.position);
+        if (d < bd) { bd = d; best = b; }
+      }
+      if (!best) { t.cd = 0.5; continue; }
+      t.cd = 1.1;
+      const from = t.group.position.clone().addScaledVector(t.up, 1.2);
+      const dir = best.pos.clone().sub(from).normalize();
+      g.combat.firePlayerBolt(from, dir, g.stats.atk * 0.45, 0x3ef2ff, 520, { size: 0.9 });
+    }
+  }
+
+  nextWave() {
+    const step = this.step;
+    if (!step || step.type !== 'waves') return;
+    const w = step.waves[this.st.wave];
+    if (!w) return;
+    this.st.wave++;
+    const gate = this.gate();
+    const dir = V().subVectors(gate.out, gate.pos).normalize();
+    for (let i = 0; i < w.length; i += 2) {
+      const center = this.ground(gate.out.clone().addScaledVector(dir, 220 + Math.random() * 120).add(this.side(gate.out, (Math.random() - 0.5) * 160)));
+      const pack = this.spawnPack('tide', w[i], w[i + 1], center, 0.1);
+      for (const b of pack) b.home.copy(gate.pos);
+    }
+    this.g.hud.banner('BEAST TIDE', `Wave ${this.st.wave} of ${step.waves.length}`, '<span class="cn">兽潮</span>Hold the gate', '#ff4466', 2);
+    this.g.sound.thunder();
+    this.render();
+  }
+
+  spawnBoss() {
+    const g = this.g;
+    const gate = this.gate();
+    const dir = V().subVectors(gate.out, gate.pos).normalize();
+    const at = this.ground(gate.out.clone().addScaledVector(dir, 180));
+    const [b] = this.spawnPack('tideking', 'tideking', 1, at, 0.7);
+    if (!b) return;
+    this.boss = b;
+    this.bossPhase = 0;
+    g.beasts.boss = b;
+    this.spawnPack('tide-escort', 'ironwolf', 4, at, 0);
+    g.hud.banner('TIDE KING', TIDE_KING.name, `<span class="cn">${TIDE_KING.cn}</span>`, '#ff3a2a', 3.5);
+    this.nix('That’s the alpha. Kill it and the tide breaks. No pressure. Some pressure.');
+    g.sound.thunder();
+  }
+
+  updateBoss() {
+    const b = this.boss;
+    if (!b || !b.alive) return;
+    const g = this.g;
+    const frac = b.hp / b.maxHp;
+    const phase = frac < 0.33 ? 2 : frac < 0.66 ? 1 : 0;
+    if (phase > this.bossPhase) {
+      this.bossPhase = phase;
+      // a roar that hurls you back, and the pack answers
+      g.combat.shockwave(b.pos, 45, 0xff3a2a, 1);
+      const pp = g.player.pos;
+      if (pp.distanceTo(b.pos) < 45) g.player.vel.add(pp.clone().sub(b.pos).normalize().multiplyScalar(40));
+      g.rt.shake = 1.2;
+      g.sound.thunder();
+      this.spawnPack('tide-escort', phase === 2 ? 'shadowmantis' : 'ironwolf', 3, this.ground(b.pos), 0.1);
+      if (phase === 2) {
+        b.def = { ...b.def, speed: b.def.speed * 1.4 };
+        this.nix('It’s angry now. Angrier. Whatever comes after angry.');
+      } else this.nix('It called for help. Rude.');
+    }
+  }
+}

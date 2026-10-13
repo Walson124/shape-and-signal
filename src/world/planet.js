@@ -462,6 +462,18 @@ export class Planet {
     return entry.obj;
   }
 
+  ensureRuin(i) {
+    this.buildDetails();
+    const e = this.details.ruins[i];
+    if (!e) return null;
+    if (!e.obj) {
+      e.obj = buildRuinField(e.site, this);
+      this.spin.add(e.obj.group);
+      this.refreshSettlements();
+    }
+    return e.obj;
+  }
+
   refreshSettlements() {
     const d = this.details;
     d.settlements = d.sites.filter((e) => e.obj).map((e) => e.obj);

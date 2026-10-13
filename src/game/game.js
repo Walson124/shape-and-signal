@@ -8,6 +8,8 @@ import { Arts } from './arts.js';
 import { Companion } from './companion.js';
 import { LORE, RUIN_NAMES } from './lore.js';
 import { VirtualWorld } from './virtual.js';
+import { Cutscene } from './cutscene.js';
+import { Campaign } from './campaign.js';
 import { speciesForBody } from './bestiary.js';
 import { codeLabel } from '../core/bindings.js';
 import { newState, loadState, saveState, clearSave, derive } from './state.js';
@@ -87,6 +89,8 @@ export class Game {
     this.arts = new Arts(this);
     this.nix = new Companion(this);
     this.vu = new VirtualWorld();
+    this.cutscene = new Cutscene(this);
+    this.campaign = new Campaign(this);
     this.pods = [];
     this.player = new Player(this.localRoot, this.particles);
     this.shipObj = null;
@@ -142,7 +146,7 @@ export class Game {
   }
 
   get inGame() {
-    return this.mode === 'playing' || this.mode === 'dead' || this.mode === 'warping' || this.mode === 'virtual';
+    return this.mode === 'playing' || this.mode === 'dead' || this.mode === 'warping' || this.mode === 'virtual' || this.mode === 'cutscene';
   }
 
   freshRuntime() {
@@ -323,6 +327,7 @@ export class Game {
       this.loot.rebase(m, q);
       this.particles.rebase(m, q);
       this.arts.rebase(m);
+      this.campaign.rebase(m, q);
       if (this.rt.trib) {
         this.rt.trib.clouds.position.applyMatrix4(m);
         this.rt.trib.clouds.quaternion.premultiply(q);
@@ -457,9 +462,15 @@ export class Game {
   async newGame() {
     const path = await this.menus.choosePath(null);
     if (!path) return;
+    const story = await this.menus.chooseMode();
+    if (!story) return;
     clearSave();
     this.state = newState();
     this.state.path = path;
+    if (story === 'story') {
+      this.state.nixAwake = false;
+      this.state.intro = true;
+    }
     this.stats = derive(this.state);
     this.rt = this.freshRuntime();
     this.player.setRealm(0);
@@ -481,7 +492,9 @@ export class Game {
     this.swords.setup(this.stats.swords, 0);
     this.save();
     this.hasSave = true;
+    this.campaign.cleanup();
     this.startPlaying();
+    if (story === 'story') this.campaign.begin();
   }
 
   async continueGame() {
@@ -496,7 +509,9 @@ export class Game {
     this.rt.inShip = inShip && !!this.shipObj;
     this.player.setRealm(this.state.realm);
     this.swords.setup(this.stats.swords, this.state.swordGrade);
+    this.campaign.cleanup();
     this.startPlaying();
+    if (this.state.campaign && this.state.campaign.started) this.campaign.resume();
   }
 
   startPlaying() {
@@ -516,7 +531,9 @@ export class Game {
     this.camera.fov = settings.get('fov');
     this.camera.updateProjectionMatrix();
     this.camQuat.copy(this.rt.inShip && this.shipObj ? this.shipObj.quat : this.player.quat);
-    if (!this.state.intro) {
+    if (this.state.nixAwake === false) {
+      // story mode: Nix has not been found yet
+    } else if (!this.state.intro) {
       setTimeout(() => this.inGame && this.nix.event('intro', {}, 2), 1500);
     } else {
       setTimeout(() => this.inGame && this.nix.event('resume', {}, 1), 1200);
@@ -555,6 +572,9 @@ export class Game {
 
   async quitToTitle() {
     this.exitVirtual();
+    if (this.cutscene.playing) this.cutscene.skip();
+    this.cutscene.talk = null;
+    this.cutscene.hideSub();
     this.save();
     this.loaded = this.state;
     this.hasSave = true;
@@ -568,6 +588,10 @@ export class Game {
   }
 
   onLockChange(locked) {
+    if (!locked && this.mode === 'cutscene') {
+      this.cutscene.skip();
+      return;
+    }
     if (locked) this.menus.showPause(false);
     else if (this.inGame && !this.menus.overlayOpen) {
       this.menus.showPause(true);
@@ -577,6 +601,10 @@ export class Game {
 
   onKey(code) {
     const m = this.menus;
+    if (this.mode === 'cutscene') {
+      if (code === 'Escape' || code === 'Enter') this.cutscene.skip();
+      return;
+    }
     if (code === 'Escape') {
       if (!m.$('modal').classList.contains('hidden')) { m.closeModal(null); return; }
       if (!m.$('settings').classList.contains('hidden')) { m.closeSettings(); return; }
@@ -637,7 +665,7 @@ export class Game {
         this.state.playtime += dt;
       } else this.input.consumeMouse();
     } else {
-      const paused = this.menus.overlayOpen || (!this.input.locked && this.mode === 'playing');
+      const paused = (this.menus.overlayOpen && this.mode !== 'cutscene') || (!this.input.locked && this.mode === 'playing');
       if (!paused) {
         this.update(dt);
         this.state.playtime += dt;
@@ -748,7 +776,8 @@ export class Game {
     this.env = env;
     if (rt.inShip && this.shipObj) this.controlShip(dt, move, look, env, alive);
     else this.controlPlayer(dt, move, look, env, alive, manual);
-    this.positionCamera(dt);
+    if (this.mode === 'cutscene') this.cutscene.update(dt);
+    else this.positionCamera(dt);
 
     // ---- world update (moves planets, refreshes terrain detail)
     this.system.update(dt, s.worldTime, this.camera, this.playerWorld());
@@ -799,6 +828,7 @@ export class Game {
         const gained = medRate * dt;
         this.addXp(gained);
         this.applyBounties(progressBounties(s, { kind: 'cultivate', amount: gained }));
+        this.campaign.event('cultivate', gained);
         st = this.stats;
         const reg = REGIONS[this.star.region];
         const c = new THREE.Color(Math.random() < 0.5 ? reg.sky[0] : reg.sky[3]).lerp(p.auraColor, 0.4).multiplyScalar(1.5);
@@ -851,7 +881,9 @@ export class Game {
     rt.pingCd = Math.max(0, (rt.pingCd || 0) - dt);
     this.updateDeliveries(dt);
     this.updateScorch(dt);
-    this.nix.update(dt, { manual });
+    if (this.mode !== 'cutscene') this.cutscene.update(dt);
+    this.campaign.update(dt);
+    if (this.mode !== 'cutscene') this.nix.update(dt, { manual });
     this.nixWatch();
     this.saveTimer += dt;
     if (this.saveTimer > 10) {
@@ -1457,6 +1489,7 @@ export class Game {
     }
     this.applyBounties(progressBounties(s, { kind: 'kill', type: b.type, elite: b.elite, region: this.star.region, bossStar: b.boss ? this.star.key : null, tier: b.tier, realm: s.realm }));
     this.nix.onKill(b);
+    this.campaign.event('kill', b);
     if (b.boss) this.gainInsight('the fallen Overlord');
     this.addXp(xp);
     if (b.boss) this.save();
@@ -1693,6 +1726,7 @@ export class Game {
               const amount = Math.round(6 + tier * 5 + Math.random() * 6);
               this.loot.spawn(poi.pos.clone().addScaledVector(poi.up, 4), amount, 0x3ef2ff, 5, 'ore');
               this.applyBounties(progressBounties(s, { kind: 'mine' }));
+              this.campaign.event('mine');
               this.hud.notify('The deposit shatters into <b>star metal</b>.', 'green');
             },
           });
@@ -1980,6 +2014,42 @@ export class Game {
     return 3 + this.state.realm * 2;
   }
 
+  // ------------------------------------------------------- story --
+  async playCutscene(script) {
+    const rt = this.rt;
+    this.mode = 'cutscene';
+    rt.meditating = false;
+    rt.medToggle = false;
+    rt.controlling = false;
+    this.menus.closePanel();
+    this.hud.show(false);
+    document.getElementById('nix').classList.add('hidden');
+    this.viewmodel.setVisible(false);
+    this.post.vmEnabled = false;
+    this.swords.setVisible(false);
+    this.player.setVisible(!!script.showPlayer);
+    const fov = this.camera.fov;
+    this.cutscene.talk = null;
+    await this.cutscene.play(script);
+    this.camera.fov = fov;
+    this.camera.updateProjectionMatrix();
+    if (this.mode !== 'cutscene') return;
+    this.mode = 'playing';
+    rt.invuln = Math.max(rt.invuln, 1.5);
+    this.hud.show(true);
+    this.swords.setVisible(!rt.inShip);
+    this.swords.reset(this.player);
+    this.applyCamMode();
+    this.camQuat.copy(this.player.quat);
+    if (!this.input.locked && !this.menus.overlayOpen) this.menus.showPause(true);
+  }
+
+  beginStory() {
+    this.closePanel();
+    this.state.nixAwake = false;
+    this.campaign.begin();
+  }
+
   rideElevator(sv) {
     const p = this.player;
     const up = sv.to.clone().normalize();
@@ -2238,6 +2308,7 @@ export class Game {
       this.sound.reward();
       this.save();
     }
+    this.campaign.event('lore', i);
     this.menus.loreFocus = i;
     this.menus.openPanel('archive');
     this.input.unlock();
@@ -2363,6 +2434,7 @@ export class Game {
     rt.pingCd = 6;
     const R = RADARS[s.radar || 0];
     this.hud.pulse();
+    this.campaign.event('ping');
     this.combat.shockwave(p.pos, Math.min(R.ping, 260), 0x3ef2ff, 1.4);
     this.sound.lock();
     if (!f || !f.details) {
@@ -2581,6 +2653,7 @@ export class Game {
     s.bonusPoints = (s.bonusPoints || 0) + 1;
     this.gainInsight('the obelisk');
     this.nix.event('trialWin', {}, 1);
+    this.campaign.event('trialWin');
     const k = this.randomUpgradableTech();
     if (k) s.mastery[k] = (s.mastery[k] || 1) + 1;
     this.addXp(this.stats.xpNeed * 0.25);
@@ -2633,6 +2706,7 @@ export class Game {
       s.arena = a.wave;
       if (a.wave % 5 === 0) this.gainInsight(`arena wave ${a.wave}`);
       this.nix.event('arenaWin');
+      this.campaign.event('arenaWave');
       s.coins += a.prize;
       this.addXp(this.stats.xpNeed * 0.08);
       this.hud.banner('VICTORY', `Wave ${a.wave} cleared`, `+${fmt(a.prize)} ◈ · the crowd roars`, '#ffe44d', 3);
@@ -2896,6 +2970,10 @@ export class Game {
   }
 
   // ------------------------------------------------------- navigation --
+  storyTarget() {
+    return this.campaign.target();
+  }
+
   markerTargets() {
     const list = [];
     for (const m of this.markerList) {
@@ -3325,6 +3403,11 @@ export class Game {
     if (this.shipObj && !rt.inShip) {
       const d = this.shipObj.pos.distanceTo(p.pos);
       list.push({ key: 'ship', kind: 'gate', label: 'YOUR SHIP', sub: fmtKm(d), pos: this.toWorld(this.shipObj.pos), dist: d, edge: true, compass: '#b98cff' });
+    }
+    const story = this.mode === 'playing' ? this.storyTarget() : null;
+    if (story) {
+      const d = story.distanceTo(origin);
+      list.push({ key: 'story', kind: 'nav', label: '<span style="color:#ffc857">◆ OBJECTIVE</span>', sub: fmtKm(d), pos: this.toWorld(story.clone().addScaledVector(story.clone().normalize(), 4)), dist: d, edge: true, nav: true, compass: '#ffc857' });
     }
     if (rt.nav && rt.nav.kind === 'star') {
       const dir = rt.nav.star.pos.clone().sub(this.star.pos).normalize();

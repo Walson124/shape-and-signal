@@ -5,6 +5,7 @@ import {
 import { PATHS, PATH_IDS, TECHS, REALM_PERKS, TREES, treeFor, canLearn, pointsFree, pointsEarned } from '../game/paths.js';
 import { MAX_BOUNTIES } from '../game/missions.js';
 import { LORE } from '../game/lore.js';
+import { ACT1 } from '../game/campaign.js';
 import { settings, PRESETS } from '../core/settings.js';
 import { ACTIONS, codeLabel } from '../core/bindings.js';
 import { fmt, esc, hex } from './hud.js';
@@ -94,6 +95,7 @@ export class Menus {
         radar: () => g.buyRadar(),
         order: () => g.orderDelivery(a.dataset.item),
         sim: () => g.startSim(),
+        story: () => g.beginStory(),
       };
       if (handlers[action]) {
         handlers[action]();
@@ -248,6 +250,18 @@ export class Menus {
     return v && v !== 'no' ? v : null;
   }
 
+  async chooseMode() {
+    const card = (id, cn, name, desc) => `<button class="path-card" data-pick="${id}" style="--pc:${id === 'story' ? '#ffc857' : '#3ef2ff'}">
+        <div class="pc-cn">${cn}</div>
+        <div class="pc-name">${name}</div>
+        <p>${desc}</p>
+      </button>`;
+    const cards = card('story', '故事', 'Story', 'Recommended. Begin as a convoy recruit on a salvage run into the ruins, and find out what waits in the dark. Act I: missions, cutscenes and a beast tide. Free roaming is always open between missions.')
+      + card('free', '自由', 'Free Play', 'Start in Base City 07 with Nix already at your side and no story. You can still begin the story later from the Story tab.');
+    const v = await this.modal({ kicker: 'HOW DO YOU WANT TO BEGIN?', title: 'Choose a Mode', body: `<div class="path-cards two">${cards}</div>`, actions: [{ label: 'Back', val: 'no', cls: 'ghost' }], wide: true });
+    return v && v !== 'no' ? v : null;
+  }
+
   async confirmRespec(path) {
     const g = this.game;
     const cost = g.respecCost() * (path && path !== g.state.path ? 3 : 1);
@@ -374,7 +388,7 @@ export class Menus {
     const k = this.panelKind;
     if (!k) return;
     const venue = this.venueTabs();
-    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['archive', 'Archive'], ['guide', 'Guide']];
+    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
     const tabs = [...venue, ...base.filter(([kk]) => !venue.some(([vk]) => vk === kk))];
     this.$('panel-tabs').innerHTML = tabs.map(([kind, label]) => `<button class="tab ${kind === k ? 'on' : ''}" data-kind="${kind}">${label}</button>`).join('');
     const r = {
@@ -382,6 +396,7 @@ export class Menus {
       shop: () => this.renderShop(), forge: () => this.renderForge(), trainer: () => this.renderTrainer(), clinic: () => this.renderClinic(),
       chamber: () => this.renderChamber(), bar: () => this.renderBar(), food: () => this.renderFood(), home: () => this.renderHome(), arena: () => this.renderArena(),
       archive: () => this.renderArchive(),
+      story: () => this.renderStory(),
       vshop: () => this.renderMall(), vsim: () => this.renderSim(), fame: () => this.renderFame(),
     }[k];
     this.$('panel-body').innerHTML = r ? r() : this.renderGuide();
@@ -675,6 +690,24 @@ export class Menus {
       ['Archive logs', `${(s.lore || []).length}/${LORE.length}`], ['Systems visited', s.visited.length], ['Places discovered', s.discovered.length], ['Time played', `${Math.floor(mins / 60)}h ${mins % 60}m`],
     ];
     return `<p class="panel-note">Your record in the Virtual Universe. One day, other cultivators will be listed here beside you.</p><div class="help-grid">${rows.map(([k, v]) => `<div><span>${esc(k)}</span><span><b>${esc(String(v))}</b></span></div>`).join('')}</div>`;
+  }
+
+  renderStory() {
+    const g = this.game;
+    const c = g.state.campaign;
+    if (!c || !c.started) {
+      return `<p class="panel-note">Act I · <b>The Walled City</b>. A salvage convoy, an ambush in the ruins of the Aurean Concord, and a ring that talks back. Your realm, skills and items are kept.</p>
+        <div class="actions-row"><button class="btn primary" data-action="story">Begin the story</button></div>`;
+    }
+    const rows = ACT1.map((m, i) => {
+      const done = c.done.includes(m.id);
+      const cur = i === c.mi;
+      const step = cur ? m.steps[c.si] : null;
+      const obj = step && step.text ? (typeof step.text === 'function' ? step.text() : step.text) : '';
+      return `<div class="item story ${done ? 'done' : cur ? 'focus' : 'locked'}"><div><h4>${done ? '✓ ' : ''}${esc(m.title)} <span class="cn">${m.cn}</span></h4><p>${done ? 'Complete.' : cur ? esc(obj || 'In progress…') : 'Locked.'}</p></div></div>`;
+    }).join('');
+    const end = c.act1Done ? '<p class="panel-note gold">Act I complete. Act II is coming.</p>' : '';
+    return `<p class="panel-note">Act I · <b>The Walled City</b> <span class="cn">第一幕 · 城墙</span></p>${end}<div class="list">${rows}</div>`;
   }
 
   renderArchive() {

@@ -114,6 +114,7 @@ export function buildSettlement(site, R, opts = {}) {
 
   const radius = site.radius;
   const guardSpots = [];
+  const gateAngles = [];
   const plaza = outpost ? 26 : capital ? 80 : 56;
   const padX = outpost ? radius * 0.55 : capital ? radius - 150 : radius - 110;
   const arena = capital ? { x: -radius * 0.45, z: radius * 0.42, r: 46 } : null;
@@ -258,6 +259,7 @@ export function buildSettlement(site, R, opts = {}) {
     for (let i = 0; i < segs; i++) {
       const a = (i / segs) * Math.PI * 2;
       if (i % gateEvery === 0) {
+        gateAngles.push(a);
         // two guards stand at every gate
         for (const s of [-1, 1]) {
           const ga = a + s * 0.012;
@@ -533,6 +535,7 @@ export function buildSettlement(site, R, opts = {}) {
     venues,
     arena,
     padLocal: toLocal(padX, 2, 0),
+    gates: gateAngles.map((a) => ({ pos: toLocal(Math.cos(a) * (radius - 6), 0.2, Math.sin(a) * (radius - 6)), out: toLocal(Math.cos(a) * (radius + 60), 0.2, Math.sin(a) * (radius + 60)), wall: (off) => toLocal(Math.cos(a + off / radius) * (radius - 6), 24.5, Math.sin(a + off / radius) * (radius - 6)) })),
     spawnLocal: toLocal(0, 2, -(capital ? 60 : 44)),
     radius,
     size,
