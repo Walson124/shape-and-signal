@@ -1197,6 +1197,22 @@ export class Game {
       ship.pos.add(tA.set((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3));
       ship.sync();
     }
+    // until the Planetary realm your body can't take the void, even in a hull
+    if (onWorld && !FLIGHT.canSpace(this.state.realm)) {
+      const pl = env.planet;
+      const cap = Math.min(pl.atmoR * 0.985, pl.R + Math.max(pl.body.amp * 1.25, (pl.atmoR - pl.R) * 0.85));
+      if (ship.pos.length() > cap) {
+        ship.pos.setLength(cap);
+        const upv = ship.pos.clone().normalize();
+        const vn = ship.vel.dot(upv);
+        if (vn > 0) ship.vel.addScaledVector(upv, -vn * 1.5);
+        ship.sync();
+        if (this.time > (this.notifyGate.void || 0)) {
+          this.notifyGate.void = this.time + 8;
+          this.hud.notify('The hull would hold, but your body would not. Reach the <b>Planetary</b> realm to fly into space.', 'red');
+        }
+      }
+    }
     this.hazards(dt, ship.pos, env);
     p.pos.copy(ship.pos);
     p.vel.copy(ship.vel);
@@ -2478,6 +2494,7 @@ export class Game {
     s.radar = (s.radar || 0) + 1;
     this.sound.confirm();
     this.hud.notify(`Installed the <b>${next.name}</b> <span class="cn">${next.cn}</span>. ${next.desc}`, 'violet');
+    this.campaign.event('radar');
     this.nix.event('shop');
     this.save();
   }
@@ -2921,6 +2938,7 @@ export class Game {
     const id = poiRec.poi.id;
     if (poiRec.poi.kind === 'obelisk') return this.startTrial(poiRec);
     if (!s.explored.includes(id)) s.explored.push(id);
+    this.campaign.event('search', poiRec.poi.kind);
     const tier = this.locTier();
     this.sound.reward();
     this.particles.converge(this.player.pos, new THREE.Color(0xffe08a).multiplyScalar(2), 60, 12, 16, 0.5);
@@ -3127,7 +3145,7 @@ export class Game {
     const s = this.state;
     const def = SHIPS[tier];
     const cur = s.ship ? s.ship.tier : -1;
-    if (!def || s.realm < 2 || tier !== cur + 1) return this.sound.deny();
+    if (!def || (tier > 0 && s.realm < 2) || tier !== cur + 1) return this.sound.deny();
     if (s.coins < def.coins || s.ore < def.ore || s.essence < def.essence) return this.sound.deny();
     s.coins -= def.coins;
     s.ore -= def.ore;
@@ -3152,6 +3170,7 @@ export class Game {
       this.shipObj.placeAt(p.pos.clone().add(p.forward().multiplyScalar(80)), p.pos, p.localUp());
     }
     s.ship = { tier, star: this.star.key, body: f ? f.body.id : null, pos: this.shipObj.pos.toArray(), quat: this.shipObj.quat.toArray(), landed: this.shipObj.landed, hull: this.shipObj.hull };
+    this.campaign.event('ship');
     this.sound.breakthrough();
     this.nix.event('ship', {}, 1);
     this.hud.banner('SHIPYARD', def.name, `<span class="cn">${def.cn}</span>Warp range ${def.range} light years · waiting on the pad`, hex(def.color), 4);

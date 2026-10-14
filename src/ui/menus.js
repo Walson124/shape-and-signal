@@ -398,14 +398,14 @@ export class Menus {
     const rows = SHIPS.map((sh, i) => {
       const owned = i <= cur;
       const next = i === cur + 1;
-      const can = next && !locked && state.coins >= sh.coins && state.ore >= sh.ore && state.essence >= sh.essence;
+      const can = next && !(locked && i > 0) && state.coins >= sh.coins && state.ore >= sh.ore && state.essence >= sh.essence;
       return `<div class="item"><div><h4>${esc(sh.name)}<span class="cn">${sh.cn}</span></h4>
         <p>Warp range ${sh.range} light years · cruise ${(sh.cruise / 1000).toFixed(0)} km/s · hull ×${sh.hull}</p></div>
         <div><span class="price">${fmt(sh.coins)} ◈</span> <span class="price" style="color:var(--cy)">${fmt(sh.ore)} ⬢</span> <span class="price ess">${fmt(sh.essence)} ✦</span></div>
         ${owned ? '<span class="tag done">OWNED</span>' : `<button class="btn small ${can ? 'primary' : ''}" data-action="build-ship" data-tier="${i}" ${can ? '' : 'disabled'}>${cur < 0 ? 'Build' : 'Upgrade'}</button>`}</div>`;
     }).join('');
     const note = locked
-      ? 'Galactic law forbids starships to anyone below the <b>Planetary</b> realm: a weaker body cannot survive the void even inside a hull. Keep cultivating.'
+      ? (state.ship ? 'Bigger hulls need the <b>Planetary</b> realm: a weaker body cannot survive the void even inside a hull.' : 'A <b>Skyjet</b> flies anywhere in the sky of a world. Starships and space flight need the <b>Planetary</b> realm: a weaker body cannot survive the void even inside a hull.')
       : state.ship
         ? `Your <b>${esc(SHIPS[state.ship.tier].name)}</b> is registered here. Upgrades are fitted on the spot.`
         : `Build a starship to cross the void between stars. Aim at any star with ${key('target')} and warp with ${key('engage')}.`;
@@ -730,12 +730,13 @@ export class Menus {
     return `<ul class="tips">
       <li><b>Your homeworld.</b> You begin in Base City 07 on Terra. Terra has several walled base cities and outposts; beasts roam between them and grow stronger far from any city.</li>
       <li><b>Cities.</b> Walk into any building with a glowing door: exchanges, forges, pill shops, gene clinics, cultivation chambers, teahouses, noodle bars and apartments. The capital has an arena.</li>
-      <li><b>Paths.</b> Mind Control commands flying swords, Blade fights up close with a saber, Mental Attack strikes the mind directly. Spend skill points in your tree (${key('panelSkills')}).</li>
+      <li><b>Weapons.</b> You start with bare fists. Buy a saber, spear, throwing knives, bow, flying swords or a psionic focus at an <b>Armory</b>; each has its own skill tree of techniques (${key('panelSkills')}). Carry several and switch with ${key('weaponNext')}.</li>
+      <li><b>Radar.</b> Press ${key('ping')} to hold up your scanner. It finds ore veins and wrecks, and better radars from the Exchange find more.</li>
       <li><b>Realms change how you play.</b> Fly at War God, leave the planet at Planetary, blink at Stellar, and at higher realms weak beasts flee or simply die in your presence.</li>
       <li><b>Every planet is a world</b> with its own beasts. Look for ancient ruins, energy springs, ore deposits, beast nests and wrecks.</li>
       <li><b>Cultivate</b> with ${key('cultivate')}. Springs, chambers, stars and nebulae are richest.</li>
       <li>At <b>Peak</b> stage, press ${key('breakthrough')} to face the <b>Heavenly Tribulation</b>. Keep moving.</li>
-      <li><b>Starships.</b> At Planetary, build a ship at a shipyard. Aim at any star with ${key('target')} and press ${key('engage')} in your ship to warp. Orbital stations can be landed on.</li>
+      <li><b>Skyjets and starships.</b> Buy a Skyjet at a shipyard to fly anywhere in the sky; at Planetary, upgrade to starships. Aim at any star with ${key('target')} and press ${key('engage')} in your ship to warp. Orbital stations can be landed on.</li>
     </ul>
     <div class="section-title">Controls · change them in Settings</div>
     <div class="help-grid">${rows}</div>`;

@@ -158,7 +158,7 @@ export const FLIGHT = {
 
 // Starships, built at a city shipyard once you reach the Planetary realm.
 export const SHIPS = [
-  { name: 'Skiff', cn: '星舟', range: 15, cruise: 120000, speed: 900, hull: 1, coins: 800, ore: 15, essence: 150, color: 0x3ef2ff },
+  { name: 'Skyjet', cn: '飞梭', range: 15, cruise: 120000, speed: 900, hull: 1, coins: 800, ore: 12, essence: 40, color: 0x3ef2ff },
   { name: 'Corvette', cn: '护卫舰', range: 35, cruise: 300000, speed: 1400, hull: 2.6, coins: 12000, ore: 60, essence: 2000, color: 0x5dffa8 },
   { name: 'Frigate', cn: '巡航舰', range: 80, cruise: 800000, speed: 2200, hull: 7, coins: 150000, ore: 200, essence: 30000, color: 0xffe066 },
   { name: 'Cruiser', cn: '战列舰', range: 170, cruise: 2000000, speed: 3500, hull: 18, coins: 2000000, ore: 600, essence: 400000, color: 0xff3c7d },

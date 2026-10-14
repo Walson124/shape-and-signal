@@ -3,11 +3,14 @@ import { buildNPC } from '../world/interiors.js';
 import { signTexture, glowTexture } from '../world/textures.js';
 import { speciesForBody } from './bestiary.js';
 import { LORE, RUIN_NAMES } from './lore.js';
+import { settings } from '../core/settings.js';
+import { codeLabel } from '../core/bindings.js';
 
-// Story mode. Act I: a convoy recruit survives an ambush in the ruins, finds a
-// ring holding Nix, passes the Warrior's Exam and holds Base City 07 against a
-// beast tide. Missions are lists of steps; the engine tracks objectives,
-// waypoints, dialogue, cutscenes and rewards.
+// Story mode. Act I: an ordinary kid in Base City 07 buys a first weapon, earns
+// a living hunting beasts, gets a radar and a Skyjet, then survives a convoy
+// ambush in the ruins, finds a ring holding Nix, passes the Warrior's Exam and
+// holds the city against a beast tide. Missions are lists of steps; the engine
+// tracks objectives, waypoints, dialogue, cutscenes and rewards.
 
 const EYE = 1.7;
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -18,12 +21,77 @@ const TIDE_KING = {
   fireRate: 2, shotSpeed: 150, minTier: 9, pack: [1, 1], horns: true, spikes: 1,
 };
 
+const key = (a) => `<kbd>${codeLabel(settings.key(a))}</kbd>`;
+const tip = (c, text, kind = 'yl') => c.g.hud.notify(text, kind);
+
 export const ACT1 = [
+  { id: 'ordinary', title: 'An Ordinary Day', cn: '平凡的一天', steps: [
+    { type: 'cutscene', text: '', play: (c) => c.introScene() },
+    { type: 'reach', text: 'Visit the Armory and choose your first weapon', where: (c) => c.svc('forge'), radius: 6,
+      start: (c) => {
+        const s = c.g.state;
+        s.coins = Math.max(s.coins, 500);
+        c.g.cutscene.say([['You', 'Five hundred coins. Two years of saving. Enough for a real weapon.'], ['', 'Follow the gold marker to the Armory.']]);
+        tip(c, `Follow the <b>gold objective marker</b>. Move with <kbd>W A S D</kbd>, sprint with ${key('sprint')}, jump with ${key('jump')}.`);
+      } },
+    { type: 'event', on: 'weapon', text: 'Buy a weapon (press E at the counter)',
+      start: (c) => {
+        c.g.cutscene.say([['Armory Keeper', 'First blade? Saber hits hard up close. Knives and spears if you like distance. Choose well, kid.']]);
+        tip(c, `Press ${key('interact')} at the counter to browse. Every weapon is its own fighting style with its own skill tree.`);
+      } },
+    { type: 'event', on: 'learn', text: 'Open your skill tree and learn your weapon\u2019s first technique',
+      start: (c) => tip(c, `Press ${key('panelSkills')} to open your skill tree. Techniques marked ◆ cost skill points; you have some to spend.`) },
+  ], reward: { coins: 100 } },
+  { id: 'bounty', title: 'Beast Bounty', cn: '赏金', steps: [
+    { type: 'reach', text: 'Go to the Martial Hall', where: (c) => c.svc('hall'), radius: 6,
+      start: (c) => tip(c, 'The <b>Martial Hall</b> pays hunters for beast cores. Its gold marker is on your compass.'),
+      done: (c) => {
+        c.spawnNPC('kade', c.offset(c.svc('hall'), 4, 2), 0x3a1a1a, 0xff5a3a, 'Kade');
+        c.g.cutscene.say([
+          ['Instructor Hale', 'Another hopeful. The beasts outside the wall don\u2019t care how much you saved.'],
+          ['Instructor Hale', 'Bring me five kills and I\u2019ll pay you like a hunter. Stay close to the walls.'],
+          ['Kade', 'Ha. Don\u2019t get eaten, civilian.'],
+        ]);
+      } },
+    { type: 'kill', text: 'Hunt beasts outside the walls', count: 5,
+      start: (c) => tip(c, `${key('fire')} attacks. Hold ${key('focus')} to guard or aim. Beasts get stronger the further you go from a city.`) },
+    { type: 'reach', text: 'Return to the Martial Hall for your pay', where: (c) => c.svc('hall'), radius: 6,
+      done: (c) => { c.removeNPC('kade'); c.g.cutscene.say([['Instructor Hale', 'Not bad. Here\u2019s your pay. Get yourself a proper radar: the wilds hide more than beasts.']]); } },
+  ], reward: { coins: 450 } },
+  { id: 'radar', title: 'Eyes in the Wilds', cn: '雷达', steps: [
+    { type: 'event', on: 'radar', text: 'Buy a Hunter Radar at the Star Exchange', where: (c) => c.svc('exchange'), radius: 0,
+      start: (c) => tip(c, `The <b>Star Exchange</b> sells radars, pills and technique manuals. Press ${key('interact')} at its counter.`) },
+    { type: 'event', on: 'ping', text: 'Take out your radar scanner',
+      start: (c) => tip(c, `Press ${key('ping')} to hold up your scanner. It pulses every few seconds and marks what it finds.`) },
+    { type: 'event', on: 'mine', text: 'Shatter a star metal deposit', where: (c) => c.nearestPoi('ore'), radius: 0,
+      start: (c) => tip(c, 'Star metal deposits glow blue. Attack one until it shatters, then walk over the pieces to collect them.') },
+  ], reward: { coins: 200 } },
+  { id: 'wreck', title: 'The Wreck', cn: '残骸', steps: [
+    { type: 'reach', text: 'Find the crashed ship your radar picked up', where: (c) => c.nearestPoi('wreck'), radius: 45,
+      start: (c) => c.g.cutscene.say([['', 'Your scanner found a crashed ship. Wrecks hold coins, pills and star metal, if the beasts haven\u2019t moved in.']]) },
+    { type: 'event', on: 'search', text: 'Search the wreck (hold E)', where: (c) => c.nearestPoi('wreck'), radius: 0,
+      start: (c) => tip(c, `Hold ${key('interact')} next to the wreck to search it.`) },
+  ], reward: { coins: 300, pills: { heal: 1 } } },
+  { id: 'wings', title: 'Wings', cn: '飞梭', steps: [
+    { type: 'check', text: () => 'Save up for a Skyjet', progress: (c) => { const s = c.g.state; return `${Math.min(s.coins, 800)}/800 ◈ · ${Math.min(s.ore, 12)}/12 ⬢ · ${Math.min(Math.floor(s.essence), 40)}/40 ✦`; },
+      test: (c) => { const s = c.g.state; return !!s.ship || (s.coins >= 800 && s.ore >= 12 && s.essence >= 40); },
+      start: (c) => {
+        c.g.cutscene.say([['You', 'Walking everywhere is slow, and the beasts are fast. A Skyjet would change everything.']]);
+        tip(c, 'A <b>Skyjet</b> costs coins, star metal (from deposits and wrecks) and essence (from beasts). Hunt and mine until you have enough.');
+      } },
+    { type: 'event', on: 'ship', text: 'Buy the Skyjet at the Star Harbor Shipyard', where: (c) => c.svc('shipyard'), radius: 0,
+      test: (c) => !!c.g.state.ship },
+    { type: 'check', text: 'Board your Skyjet and climb above 150 m', where: (c) => (c.g.shipObj && !c.g.rt.inShip ? c.g.shipObj.pos.clone() : null), radius: 0,
+      test: (c) => c.g.rt.inShip && c.g.env.alt > 150,
+      start: (c) => tip(c, `Press ${key('interact')} by your Skyjet to board. ${key('jump')} climbs, <kbd>W</kbd> flies forward, ${key('interact')} again to climb out.`) },
+  ], reward: { coins: 300 } },
   { id: 'prologue', title: 'The Salvage Run', cn: '打捞', steps: [
+    { type: 'reach', text: 'Meet the salvage convoy at the city gate', where: (c) => c.gate().pos, radius: 40,
+      start: (c) => c.g.cutscene.say([['Instructor Hale', 'A salvage convoy leaves for Meridian Sprawl today and needs a hunter riding guard. You\u2019re hired. Don\u2019t make me regret it.']]) },
     { type: 'cutscene', text: '', play: (c) => c.convoyScene() },
     { type: 'kill', text: 'Fight for your life: kill the Ironhide Wolves', count: 4, tag: 'prologue',
       spawn: (c) => c.spawnPack('prologue', 'ironwolf', 4 - c.st.p, c.offset(c.g.player.pos, 30, 0), -0.2),
-      start: (c) => c.g.cutscene.say([['Driver', 'Rookie... you alive? Use what they taught you. Fight!'], ['', c.g.pathTip().replace(/<[^>]+>/g, '')]]) },
+      start: (c) => c.g.cutscene.say([['Driver', 'Rookie... you alive? Use what you\u2019ve got. Fight!']]) },
     { type: 'reach', text: 'Take shelter in the old bunker', where: (c) => c.bunker(0), radius: 7,
       start: (c) => c.g.cutscene.say([['Driver', 'There’s a Concord bunker... past the towers. Get inside. The old ones built them to last...'], ['Driver', 'Tell my wife I— ...'], ['', 'The radio goes silent.']]) },
   ], reward: { coins: 50 } },
@@ -35,19 +103,17 @@ export const ACT1 = [
       done: (c) => {
         c.spawnNPC('kade', c.offset(c.svc('hall'), 5, 2), 0x3a1a1a, 0xff5a3a, 'Kade');
         c.g.cutscene.say([
-          ['Instructor Hale', 'So you’re the one who walked out of Meridian Sprawl alive. The convoy crew wasn’t so lucky.'],
+          ['Instructor Hale', 'You walked out of Meridian Sprawl alive. The convoy crew wasn\u2019t so lucky.'],
           ['Instructor Hale', 'Hm. Where did you get that ring?'],
           ['Nix', '(Don’t tell him about me. Mysterious is a good look on you.)'],
           ['Instructor Hale', 'Keep your secrets. The Warrior’s Exam is soon. Cultivate, hunt, learn your tools. Then come back.'],
-          ['Kade', 'Ha. The convoy rookie. Try not to faint in front of the examiners.'],
+          ['Kade', 'Ha. The civilian survived. Try not to faint in front of the examiners.'],
         ]);
       } },
   ], reward: { coins: 150, pills: { heal: 2 } } },
   { id: 'training', title: 'Training Days', cn: '修炼', steps: [
     { type: 'cultivate', text: 'Cultivate to gain experience', count: 60, start: (c) => c.nix('Sit down and cultivate. Press {cultivate}. Energy springs and chambers are faster; your bedroom floor is slower.') },
-    { type: 'kill', text: 'Hunt beasts beyond the walls', count: 5 },
-    { type: 'event', text: 'Pulse your radar to find star metal', on: 'ping', start: (c) => c.nix('Press {ping} to pulse the radar. It’ll mark ore nearby. Wonderful technology. I’m a little jealous.') },
-    { type: 'event', text: 'Shatter a star metal deposit', on: 'mine' },
+    { type: 'kill', text: 'Hunt beasts beyond the walls', count: 8, start: (c) => c.nix('Experience comes from fighting too. And from not dying, which I recommend.') },
   ], reward: { coins: 200, point: 1 } },
   { id: 'exam', title: 'The Warrior’s Exam', cn: '战士考核', steps: [
     { type: 'reach', text: 'Go to the Arena for your exam', where: (c) => c.svc('arena'), radius: 8,
@@ -143,6 +209,21 @@ export class Campaign {
     const list = t.details.pois.filter((p) => p.poi.kind === 'obelisk').sort((a, b) => a.pos.distanceTo(c) - b.pos.distanceTo(c));
     return list.length ? list[0].pos.clone() : c.clone();
   }
+  // The nearest unexplored point of interest of a kind (to the player if on Terra).
+  nearestPoi(kind) {
+    const t = this.terra();
+    t.buildDetails();
+    const s = this.g.state;
+    const from = this.onTerra() ? this.g.player.pos : this.capital().group.position;
+    let best = null, bd = Infinity;
+    for (const p of t.details.pois) {
+      if (p.poi.kind !== kind || s.explored.includes(p.poi.id)) continue;
+      const d = p.pos.distanceTo(from);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best ? best.pos.clone().addScaledVector(best.up, 2) : null;
+  }
+
   ground(p, lift = EYE) {
     const t = this.terra();
     const d = p.clone().normalize();
@@ -361,7 +442,7 @@ export class Campaign {
       }
     }
     if (step.type === 'reach' && step.where && p.distanceTo(step.where(this)) < step.radius) this.advance();
-    else if (step.type === 'check' && step.test(this)) this.advance();
+    else if ((step.type === 'check' || step.type === 'event') && step.test && step.test(this)) this.advance();
     else if (step.type === 'lore' && this.g.state.lore.includes(step.index)) this.advance();
     this.renderTimer = (this.renderTimer || 0) - dt;
     if (this.renderTimer <= 0) {
@@ -401,6 +482,7 @@ export class Campaign {
     if (step.type === 'kill') prog = `${this.st.p}/${step.count}`;
     else if (step.type === 'cultivate') prog = `${Math.floor(this.st.p)}/${step.count}`;
     else if (step.type === 'waves') prog = `WAVE ${Math.min(this.st.wave, step.waves.length)}/${step.waves.length}`;
+    else if (step.progress) prog = step.progress(this);
     if (!this.onTerra()) text = 'Return to Terra to continue the story';
     const t = this.target();
     const dist = t ? Math.round(t.distanceTo(this.g.player.pos)) : null;
@@ -436,6 +518,36 @@ export class Campaign {
     const m = new THREE.Matrix4().lookAt(obj.position, look, up);
     obj.quaternion.setFromRotationMatrix(m);
     obj.rotateY(Math.PI);
+  }
+
+  // The opening: who the Concord were, the Night of Teeth, life behind the walls.
+  introScene() {
+    const g = this.g;
+    const capital = this.capital().group.position.clone();
+    const up = capital.clone().normalize();
+    const e = V(1, 0, 0).projectOnPlane(up).normalize();
+    const n = V().crossVectors(e, up);
+    const ruin = this.ruinCenter(0);
+    let a = 0;
+    const orbit = () => capital.clone().addScaledVector(up, 520 - a * 120).addScaledVector(e, Math.cos(a) * 900).addScaledVector(n, Math.sin(a) * 900);
+    const home = this.capital().spawnLocal.clone();
+    return g.playCutscene({
+      tick: (t) => { a = Math.min(1.6, t * 0.06); },
+      shots: [
+        { dur: 9, from: () => ruin.clone().addScaledVector(ruin.clone().normalize(), 160).add(this.side(ruin, -220)), to: () => ruin.clone().addScaledVector(ruin.clone().normalize(), 90).add(this.side(ruin, -120)), look: () => ruin },
+        { dur: 10, from: orbit, look: () => capital },
+        { dur: 7, from: () => home.clone().addScaledVector(up, 30).addScaledVector(e, -40), to: () => home.clone().addScaledVector(up, 6).addScaledVector(e, -12), look: () => home },
+      ],
+      lines: [
+        { at: 0.5, who: '', text: 'Two centuries ago, Terra belonged to the Aurean Concord. Their cities touched the clouds.' },
+        { at: 4.8, who: '', text: 'Then came the Night of Teeth. In seventeen hours the beasts took the world.' },
+        { at: 9.3, who: '', text: 'The survivors built walls. Behind them, some were born with awakened genes: warriors, strong enough to fight back.' },
+        { at: 14.2, who: '', text: 'Base City 07. Two million people, one wall, and beasts that grow stronger every year.' },
+        { at: 19.4, who: '', text: 'You are seventeen. No awakened genes, no famous family. Just two years of savings and a stubborn dream.' },
+        { at: 23.6, who: 'You', text: 'Today I stop dreaming.' },
+      ],
+      events: [],
+    });
   }
 
   convoyScene() {
