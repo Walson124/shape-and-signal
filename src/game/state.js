@@ -22,6 +22,8 @@ export function newState() {
     // ground vehicles owned, and the one you ride
     vehicles: [],
     vehicle: null,
+    // where your vehicle is parked: { star, body, pos, fwd }
+    vehicleLoc: null,
     skills: {},
     home: null,
     stash: 0,
@@ -31,7 +33,7 @@ export function newState() {
     rumors: [],
     chamberUntil: 0,
     meal: null,
-    radar: 0,
+    radar: -1,
     lore: [],
     deliveries: [],
     simBest: {},

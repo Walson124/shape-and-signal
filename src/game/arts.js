@@ -476,6 +476,7 @@ export class Arts {
   startDash(ctx, opts = {}) {
     const g = this.g;
     const id = opts.id || 'dash';
+    if (g.rt.inVehicle) return g.denied('You can\u2019t do that from the saddle.');
     if (!this.pay(id)) return;
     const p = g.player;
     let dir = ctx.camFwd.clone();
@@ -921,6 +922,7 @@ export class Arts {
 
   shadowStep(ctx) {
     const g = this.g, p = g.player;
+    if (g.rt.inVehicle) return g.denied('You can\u2019t do that from the saddle.');
     const t = this.aimed(160);
     if (!this.pay('shadow')) return;
     const from = p.pos.clone();
@@ -1062,6 +1064,7 @@ export class Arts {
   // ------------------------------------------------------- realm perks --
   blink(ctx) {
     const g = this.g, rt = g.rt, p = g.player;
+    if (rt.inVehicle) return;
     if (!hasPerk(g.state.realm, 3)) return g.denied('Star Step awakens at the Stellar realm.');
     if (rt.blinkCd > 0) return;
     rt.blinkCd = 2.5;

@@ -154,6 +154,27 @@ export class Player {
    *   gravity, speed, boost, meditating, jump, time, hidden, align
    * }
    */
+  // Seated on a vehicle: legs astride, hands forward on the bars, facing the way it goes.
+  ride(dt, time, v) {
+    const up = this.pos.clone().normalize();
+    this.up.copy(up);
+    const f = v.fwd.clone().projectOnPlane(up).normalize();
+    const look = new THREE.Matrix4().lookAt(this.pos, this.pos.clone().add(f), up);
+    this.root.position.copy(this.pos);
+    this.root.quaternion.setFromRotationMatrix(look);
+    this.root.rotateZ(v.lean * 0.8);
+    this.figure.position.y = -1.62;
+    this.figure.rotation.x = 0.18;
+    this.armR.rotation.x = 1.25;
+    this.armL.rotation.x = 1.25;
+    this.legL.rotation.x = 1.35;
+    this.legR.rotation.x = 1.35;
+    this.legL.rotation.z = -0.28;
+    this.legR.rotation.z = 0.28;
+    this.aura.material.opacity = 0.12;
+    this.shield.material.opacity = 0;
+  }
+
   update(dt, move, env) {
     const up = env.up;
     if (up) {

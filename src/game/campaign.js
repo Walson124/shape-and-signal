@@ -34,12 +34,12 @@ export const ACT1 = [
         c.g.cutscene.say([['You', 'Five hundred coins. Two years of saving. Enough for a real weapon.'], ['', 'Follow the gold marker to the Armory.']]);
         tip(c, `Follow the <b>gold objective marker</b>. Move with <kbd>W A S D</kbd>, sprint with ${key('sprint')}, jump with ${key('jump')}.`);
       } },
-    { type: 'event', on: 'weapon', text: 'Buy a weapon (press E at the counter)',
+    { type: 'event', on: 'weapon', text: 'Buy a weapon (press E at the counter)', test: (c) => (c.g.state.weapons || []).length > 0,
       start: (c) => {
         c.g.cutscene.say([['Armory Keeper', 'First blade? Saber hits hard up close. Knives and spears if you like distance. Choose well, kid.']]);
         tip(c, `Press ${key('interact')} at the counter to browse. Every weapon is its own fighting style with its own skill tree.`);
       } },
-    { type: 'event', on: 'learn', text: 'Open your skill tree and learn your weapon\u2019s first technique',
+    { type: 'event', on: 'learn', text: 'Open your skill tree and learn your weapon\u2019s first technique', test: (c) => Object.keys(c.g.state.skills || {}).some((k) => k.startsWith('tech_')),
       start: (c) => tip(c, `Press ${key('panelSkills')} to open your skill tree. Techniques marked ◆ cost skill points; you have some to spend.`) },
   ], reward: { coins: 100 } },
   { id: 'bounty', title: 'Beast Bounty', cn: '赏金', steps: [
@@ -62,22 +62,22 @@ export const ACT1 = [
     { type: 'event', on: 'vehicle', text: 'Buy a Hoverbike at the Vehicle Dealer', where: (c) => c.svc('dealer'), radius: 0,
       test: (c) => (c.g.state.vehicles || []).length > 0,
       start: (c) => tip(c, 'The <b>Vehicle Dealer</b> sells hoverbikes, rovers and racers. Follow the marker.') },
-    { type: 'check', text: 'Call your bike and ride out through the city gate', where: (c) => c.gate().out, radius: 0,
+    { type: 'check', text: 'Ride your bike out through the city gate', where: (c) => (c.g.vehicleObj && !c.g.rt.inVehicle ? c.g.vehicleObj.pos.clone() : c.gate().out), radius: 0,
       test: (c) => c.g.rt.inVehicle && c.g.player.pos.distanceTo(c.gate().out) < 70,
-      start: (c) => tip(c, `Press ${key('vehicle')} outside to call your vehicle and climb on. Steer with the mouse, ${key('sprint')} to boost.`) },
+      start: (c) => tip(c, `Your bike is parked outside the dealer. Walk up to it and press ${key('interact')} to ride. Steer with the mouse, ${key('sprint')} to boost.`) },
   ], reward: { coins: 400 } },
   { id: 'radar', title: 'Eyes in the Wilds', cn: '雷达', steps: [
-    { type: 'event', on: 'radar', text: 'Buy a Hunter Radar at the Star Exchange', where: (c) => c.svc('exchange'), radius: 0,
+    { type: 'event', on: 'radar', text: 'Buy a radar at the Star Exchange', where: (c) => c.svc('exchange'), radius: 0, test: (c) => (c.g.state.radar ?? -1) >= 0,
       start: (c) => c.g.cutscene.say([['Instructor Hale', 'Next, a radar. The wilds hide more than beasts.']]) || tip(c, `The <b>Star Exchange</b> sells radars, pills and technique manuals. Press ${key('interact')} at its counter.`) },
-    { type: 'event', on: 'ping', text: 'Scroll to your radar scanner',
+    { type: 'event', on: 'ping', text: 'Scroll to your radar scanner', test: (c) => c.g.rt.scanner,
       start: (c) => tip(c, `Scroll the mouse wheel (or press ${key('weaponNext')}) until you hold the radar. It pulses every few seconds and marks what it finds; ${key('fire')} pulses it by hand.`) },
-    { type: 'event', on: 'mine', text: 'Shatter a star metal deposit', where: (c) => c.nearestPoi('ore'), radius: 0,
+    { type: 'event', on: 'mine', text: 'Shatter a star metal deposit', where: (c) => c.nearestPoi('ore'), radius: 0, test: (c) => c.g.state.explored.some((id) => /:(ore|vein)\d/.test(id)),
       start: (c) => tip(c, 'Star metal deposits glow blue. Attack one until it shatters, then walk over the pieces to collect them.') },
   ], reward: { coins: 200 } },
   { id: 'wreck', title: 'The Wreck', cn: '残骸', steps: [
-    { type: 'reach', text: 'Find the crashed ship your radar picked up', where: (c) => c.nearestPoi('wreck'), radius: 45,
+    { type: 'reach', text: 'Find the crashed ship your radar picked up', where: (c) => c.nearestPoi('wreck'), radius: 45, test: (c) => c.g.state.explored.some((id) => /:(wreck|hulk)\d/.test(id)),
       start: (c) => c.g.cutscene.say([['', 'Your scanner found a crashed ship. Wrecks hold coins, pills and star metal, if the beasts haven\u2019t moved in.']]) },
-    { type: 'event', on: 'search', text: 'Search the wreck (hold E)', where: (c) => c.nearestPoi('wreck'), radius: 0,
+    { type: 'event', on: 'search', text: 'Search the wreck (hold E)', where: (c) => c.nearestPoi('wreck'), radius: 0, test: (c) => c.g.state.explored.some((id) => /:(wreck|hulk)\d/.test(id)),
       start: (c) => tip(c, `Hold ${key('interact')} next to the wreck to search it.`) },
   ], reward: { coins: 300, pills: { heal: 1 } } },
   { id: 'wings', title: 'Wings', cn: '飞梭', steps: [
@@ -549,7 +549,8 @@ export class Campaign {
         step.spawn(this);
       }
     }
-    if (step.type === 'reach' && step.where && p.distanceTo(step.where(this)) < step.radius) this.advance();
+    if (step.type === 'reach' && step.test && step.test(this)) this.advance();
+    else if (step.type === 'reach' && step.where && p.distanceTo(step.where(this)) < step.radius) this.advance();
     else if ((step.type === 'check' || step.type === 'event') && step.test && step.test(this)) this.advance();
     else if (step.type === 'lore' && this.g.state.lore.includes(step.index)) this.advance();
     this.renderTimer = (this.renderTimer || 0) - dt;

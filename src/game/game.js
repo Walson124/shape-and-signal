@@ -328,6 +328,7 @@ export class Game {
       return;
     }
     this.dismount(true);
+    if (this.vehicleObj) { this.vehicleObj.dispose(); this.vehicleObj = null; }
     if (carry && this.localRoot.parent) {
       this.localRoot.updateWorldMatrix(true, false);
       parent.updateWorldMatrix(true, false);
@@ -356,6 +357,7 @@ export class Game {
     this.frame = planet;
     for (const st of this.system.stations) st.prevM = null;
     this.clearPods();
+    this.syncVehicleFrame();
     this.statics.forEach((b) => this.beasts.removeBeast(b));
     this.statics.clear();
     this.nestTriggered.clear();
@@ -425,6 +427,7 @@ export class Game {
       }
       this.shipObj.placeAt(pos, p.pos, up);
     }
+    this.syncVehicleFrame();
     this.camQuat.copy(p.quat);
   }
 
@@ -568,6 +571,12 @@ export class Game {
 
   applyCamMode() {
     const fp = this.camMode === 'first' && !this.rt.inShip;
+    if (this.rt.inVehicle) {
+      this.player.setVisible(!fp);
+      this.viewmodel.setVisible(fp);
+      this.post.vmEnabled = fp;
+      return;
+    }
     this.player.setVisible(!fp && !this.rt.inShip && this.mode !== 'dead');
     this.viewmodel.setVisible(fp && this.mode !== 'dead');
     this.post.vmEnabled = fp;
@@ -842,7 +851,7 @@ export class Game {
     rt.invuln = Math.max(0, rt.invuln - dt);
     rt.firingT = Math.max(0, rt.firingT - dt);
     const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg;
-    this.arts.update(dt, { alive: alive && !rt.scanner && !rt.inVehicle, camFwd, aimPoint, aimBeast, swordDamage });
+    this.arts.update(dt, { alive: alive && !rt.scanner, camFwd, aimPoint, aimBeast, swordDamage });
     if (alive && !rt.meditating) {
       if (inp.hit('pill1')) this.usePill('heal');
       if (inp.hit('pill2')) this.usePill('energy');
@@ -853,7 +862,6 @@ export class Game {
       if (inp.hit('target')) this.setTarget();
       if (rt.scanner && inp.hit('fire')) { rt.pingCd = Math.min(rt.pingCd, 0); this.radarPing(); }
       if (inp.hit('virtual')) this.enterVirtual();
-      if (inp.hit('vehicle')) this.toggleVehicle();
       if (inp.hit('engage')) this.engage();
     }
 
@@ -1425,7 +1433,12 @@ export class Game {
 
   positionCamera(dt) {
     const p = this.player, rt = this.rt;
-    if (rt.inVehicle && this.vehicleObj) {
+    if (rt.inVehicle && this.vehicleObj && this.camMode === 'first') {
+      // from the saddle
+      this.camQuat.slerp(p.quat, 1 - Math.exp(-dt * 30));
+      this.camera.position.copy(p.pos);
+      this.camera.quaternion.copy(this.camQuat);
+    } else if (rt.inVehicle && this.vehicleObj) {
       const v = this.vehicleObj;
       this.camQuat.slerp(p.quat, 1 - Math.exp(-dt * 12));
       const off = tA.set(0, v.def.cam, v.def.dist).multiplyScalar(this.zoom).applyQuaternion(this.camQuat);
@@ -1978,6 +1991,7 @@ export class Game {
     const list = [];
     for (const pod of this.pods) if (pod.landed) list.push({ kind: 'pod', pod, name: 'Delivery pod', pos: pod.pos, range: 5 });
     if (this.shipObj && !this.rt.inShip) list.push({ kind: 'ship', name: 'your ship', pos: this.shipObj.pos, range: 18 * this.shipObj.scale });
+    if (this.vehicleObj && !this.rt.inVehicle && !this.rt.inShip) list.push({ kind: 'vehicle', name: this.vehicleObj.def.name, pos: this.vehicleObj.pos, range: this.vehicleObj.def.radius + 3 });
     const f = this.frame;
     if (f && f.details) {
       for (const sv of f.details.services) list.push({ kind: 'service', service: sv, name: sv.name, pos: sv.pos, range: sv.range });
@@ -2012,6 +2026,7 @@ export class Game {
         if (d < it.range && d < bd) { bd = d; this.interact = it; }
       }
       if (rt.inShip && !this.interact) this.interact = { kind: 'leave' };
+      if (rt.inVehicle) this.interact = { kind: 'dismount' };
     }
     const it = this.interact;
     let progress = 0;
@@ -2034,6 +2049,8 @@ export class Game {
     if (!it) return null;
     if (it.kind === 'leave') return this.canExitShip() ? '<kbd>E</kbd> LEAVE SHIP' : null;
     if (it.kind === 'ship') return '<kbd>E</kbd> BOARD YOUR SHIP';
+    if (it.kind === 'vehicle') return `<kbd>E</kbd> RIDE YOUR ${esc(it.name.toUpperCase())}`;
+    if (it.kind === 'dismount') return null;
     if (it.kind === 'pod') return '<kbd>E</kbd> OPEN THE DELIVERY POD';
     if (it.kind === 'service' && it.service.kind === 'lore') return `<kbd>E</kbd> ACCESS THE OLD TERMINAL${this.state.lore.includes(it.service.lore) ? ' · READ' : ''}`;
     if (it.kind === 'service') return `<kbd>E</kbd> ${esc(it.name.toUpperCase())}`;
@@ -2062,6 +2079,10 @@ export class Game {
       else this.denied('You cannot leave the ship here. Land first.');
     } else if (it.kind === 'ship') {
       this.boardShip();
+    } else if (it.kind === 'vehicle') {
+      this.mountVehicle();
+    } else if (it.kind === 'dismount') {
+      this.dismount();
     } else if (it.kind === 'pod') {
       this.openPod(it.pod);
     } else if (it.kind === 'dock') {
@@ -2425,7 +2446,7 @@ export class Game {
       { id: 'cult1', name: 'Cultivation Pill', desc: 'A third of a stage of experience.', price: pill('cult', 1) },
       { id: 'ore10', name: 'Crate of star metal (10)', desc: 'Pricier than mining, but no smashing required.', price: Math.round(SELL.ore(Math.max(r, 1)) * 10 * 2.6) },
     ];
-    const rn = RADARS[(s.radar || 0) + 1];
+    const rn = RADARS[(s.radar ?? -1) + 1];
     if (rn) items.push({ id: 'radar', name: rn.name, desc: rn.desc, price: Math.round(rn.price * fee) });
     return items;
   }
@@ -2492,8 +2513,8 @@ export class Game {
     else if (d.item === 'energy3') s.pills.energy += 3;
     else if (d.item === 'cult1') s.pills.cult += 1;
     else if (d.item === 'ore10') s.ore += 10;
-    else if (d.item === 'radar' && RADARS[(s.radar || 0) + 1]) {
-      s.radar = (s.radar || 0) + 1;
+    else if (d.item === 'radar' && RADARS[(s.radar ?? -1) + 1]) {
+      s.radar = (s.radar ?? -1) + 1;
       this.hud.notify(`Installed the <b>${RADARS[s.radar].name}</b>.`, 'violet');
     }
     s.deliveries = s.deliveries.filter((x) => x !== d);
@@ -2639,10 +2660,10 @@ export class Game {
 
   buyRadar() {
     const s = this.state;
-    const next = RADARS[(s.radar || 0) + 1];
+    const next = RADARS[(s.radar ?? -1) + 1];
     if (!next || s.coins < next.price) return this.sound.deny();
     s.coins -= next.price;
-    s.radar = (s.radar || 0) + 1;
+    s.radar = (s.radar ?? -1) + 1;
     this.sound.confirm();
     this.hud.notify(`Installed the <b>${next.name}</b> <span class="cn">${next.cn}</span>. ${next.desc}`, 'violet');
     this.campaign.event('radar');
@@ -2663,7 +2684,7 @@ export class Game {
     rt.pingCd = 0;
     this.scanSweep = 0;
     this.radarPing();
-    const R = RADARS[this.state.radar || 0];
+    const R = RADARS[Math.max(0, this.state.radar ?? -1)];
     const wl = document.getElementById('weapon-label');
     if (wl) wl.innerHTML = `<span class="mono dim">${esc(codeLabel(settings.key('weaponNext')))} / WHEEL · ITEM</span> <b style="color:#7affd8">${esc(R.name)}</b> <span class="cn">${R.cn}</span> <span class="mono dim">· ${esc(codeLabel(settings.key('fire')))} PULSE</span>`;
     this.sound.ui();
@@ -2688,7 +2709,7 @@ export class Game {
   // The scanner's screen: sweep, range rings, blips for finds and beasts, and the nearest find.
   drawScanner() {
     const s = this.state, f = this.frame, p = this.player;
-    const R = RADARS[s.radar || 0];
+    const R = RADARS[Math.max(0, s.radar ?? -1)];
     const cv = this.viewmodel.scanCanvas, c = cv.getContext('2d');
     const W = cv.width, cx = W / 2, cy = W / 2 + 8, rad = W * 0.4;
     c.fillStyle = '#05261d';
@@ -2757,8 +2778,9 @@ export class Game {
   radarPing(quiet = false) {
     const s = this.state, rt = this.rt, p = this.player, f = this.frame;
     if (rt.pingCd > 0) return;
+    if ((s.radar ?? -1) < 0) return;
     rt.pingCd = rt.scanner ? 4 : 6;
-    const R = RADARS[s.radar || 0];
+    const R = RADARS[s.radar];
     this.hud.pulse();
     this.campaign.event('ping');
     if (!quiet) this.combat.shockwave(p.pos, Math.min(R.ping, 120), 0x3ef2ff, 1.2);
@@ -3169,49 +3191,64 @@ export class Game {
   }
 
   // ---------------------------------------------------------- vehicles --
-  toggleVehicle() {
-    const s = this.state, rt = this.rt, p = this.player, f = this.frame;
-    if (rt.inVehicle) return this.dismount();
-    if (!s.vehicle || !VEHICLES[s.vehicle]) return this.denied('You have no vehicle. Buy one at a Vehicle Dealer in any base city.');
-    if (rt.inShip) return this.denied('Leave your ship first.');
-    if (!f || !f.terrain || !this.env.inAtmo || p.mode === 'space') return this.denied('Vehicles only run on the ground of a world.');
-    if (this.inVenue) return this.denied('Step outside first.');
-    if (this.vehicleObj && this.vehicleObj.id !== s.vehicle) {
-      this.vehicleObj.dispose();
-      this.vehicleObj = null;
-    }
-    const fwd = p.forward().projectOnPlane(p.pos.clone().normalize()).normalize();
-    if (!this.vehicleObj || this.vehicleObj.pos.distanceTo(p.pos) > 30) {
-      // it pulls up beside you
-      if (!this.vehicleObj) this.vehicleObj = new Vehicle(this.localRoot, s.vehicle);
-      const at = p.pos.clone().addScaledVector(fwd, 3);
-      const n = at.clone().normalize();
-      this.vehicleObj.place(n.multiplyScalar(f.floorRadius(n.x, n.y, n.z) + this.vehicleObj.def.hover), fwd);
-      this.particles.burst(this.vehicleObj.pos, new THREE.Color(0.6, 2.2, 2.6), 40, 12, 0.8, 0.6);
-    }
+  // Climb onto your parked vehicle (from E when standing beside it).
+  mountVehicle() {
+    const rt = this.rt, v = this.vehicleObj;
+    if (!v || rt.inVehicle || rt.inShip) return;
     rt.inVehicle = true;
     rt.meditating = false;
     rt.medToggle = false;
     rt.controlling = false;
     this.putAwayScanner();
-    this.player.setVisible(false);
-    this.viewmodel.setVisible(false);
-    this.post.vmEnabled = false;
-    this.swords.setVisible(false);
+    this.applyCamMode();
     this.sound.confirm();
     this.campaign.event('ride');
     if (!this.notifyGate.rideHelp) {
       this.notifyGate.rideHelp = 1;
-      this.hud.notify(`Steer with the mouse. <kbd>W</kbd> throttle, <kbd>S</kbd> brake, ${esc(codeLabel(settings.key('sprint')))} boost, ${esc(codeLabel(settings.key('jump')))} hop, <kbd>${esc(codeLabel(settings.key('vehicle')))}</kbd> to get off.`, 'yl');
+      this.hud.notify(`Steer with the mouse. <kbd>W</kbd> throttle, <kbd>S</kbd> brake, ${esc(codeLabel(settings.key('sprint')))} boost, hold ${esc(codeLabel(settings.key('jump')))} to hop. You can fight from the saddle. ${esc(codeLabel(settings.key('interact')))} to get off.`, 'yl');
+    }
+  }
+
+  // Put your current vehicle at the kerb outside a Vehicle Dealer.
+  deliverVehicle(id) {
+    const f = this.frame, s = this.state;
+    if (!f || !f.details) return;
+    const svc = this.lastService && this.lastService.service;
+    let venue = svc && svc.venue && svc.venue.kind === 'dealer' ? svc.venue : null;
+    if (!venue) {
+      let bd = Infinity;
+      for (const st of f.details.settlements) for (const v of st.venues) {
+        if (v.kind !== 'dealer' || !v.curb) continue;
+        const d = v.curb.distanceTo(this.player.pos);
+        if (d < bd) { bd = d; venue = v; }
+      }
+    }
+    if (!venue || !venue.curb) return;
+    if (this.vehicleObj) this.vehicleObj.dispose();
+    this.vehicleObj = new Vehicle(this.localRoot, id);
+    const n = venue.curb.clone().normalize();
+    this.vehicleObj.place(n.multiplyScalar(f.floorRadius(n.x, n.y, n.z) + this.vehicleObj.def.hover), venue.curbDir);
+    s.vehicleLoc = { star: this.star.key, body: f.body.id, pos: this.vehicleObj.pos.toArray(), fwd: this.vehicleObj.fwd.toArray() };
+  }
+
+  // Keep the vehicle object only while you're on the world it's parked on.
+  syncVehicleFrame() {
+    const s = this.state, f = this.frame, loc = s.vehicleLoc;
+    const here = loc && f && loc.star === this.star.key && loc.body === f.body.id && s.vehicle && VEHICLES[s.vehicle];
+    if (!here) {
+      if (this.vehicleObj && !this.rt.inVehicle) { this.vehicleObj.dispose(); this.vehicleObj = null; }
+      return;
+    }
+    if (!this.vehicleObj || this.vehicleObj.id !== s.vehicle) {
+      if (this.vehicleObj) this.vehicleObj.dispose();
+      this.vehicleObj = new Vehicle(this.localRoot, s.vehicle);
+      this.vehicleObj.place(new THREE.Vector3().fromArray(loc.pos), new THREE.Vector3().fromArray(loc.fwd));
     }
   }
 
   dismount(silent = false) {
     const rt = this.rt, v = this.vehicleObj, p = this.player;
-    if (!rt.inVehicle) {
-      if (silent && v && !this.frame) { v.dispose(); this.vehicleObj = null; }
-      return;
-    }
+    if (!rt.inVehicle) return;
     rt.inVehicle = false;
     if (v) {
       const up = v.pos.clone().normalize();
@@ -3226,7 +3263,8 @@ export class Game {
       p.vel.set(0, 0, 0);
       p.mode = 'ground';
       v.speed = 0;
-      if (silent) { v.dispose(); this.vehicleObj = null; }
+      v.vUp = 0;
+      if (this.frame) this.state.vehicleLoc = { star: this.star.key, body: this.frame.body.id, pos: v.pos.toArray(), fwd: v.fwd.toArray() };
     }
     this.applyCamMode();
     this.swords.setVisible(true);
@@ -3274,7 +3312,7 @@ export class Game {
     p.vel.copy(v.fwd).multiplyScalar(v.speed);
     p.boosting = boost && v.speed > v.def.speed * 0.9;
     p.grounded = true;
-    p.syncRoot();
+    p.ride(dt, this.time, v);
   }
 
   buyVehicle(id) {
@@ -3285,14 +3323,11 @@ export class Game {
       s.coins -= d.price;
       s.vehicles = [...(s.vehicles || []), id];
       this.sound.reward();
-      this.hud.notify(`The <b>${esc(d.name)}</b> is yours. Press <kbd>${esc(codeLabel(settings.key('vehicle')))}</kbd> anywhere outside to call it.`, 'gold');
+      this.hud.notify(`The <b>${esc(d.name)}</b> is yours. It\u2019s parked outside the door: walk up to it and press <kbd>${esc(codeLabel(settings.key('interact')))}</kbd> to ride.`, 'gold');
       this.campaign.event('vehicle', id);
-    }
+    } else this.hud.notify(`Your <b>${esc(d.name)}</b> is brought round to the door.`, '');
     s.vehicle = id;
-    if (this.vehicleObj && this.vehicleObj.id !== id && !this.rt.inVehicle) {
-      this.vehicleObj.dispose();
-      this.vehicleObj = null;
-    }
+    if (!this.rt.inVehicle) this.deliverVehicle(id);
     this.save();
   }
 
@@ -3322,7 +3357,7 @@ export class Game {
 
   // The wheel / next-weapon key cycles through owned weapons and the radar.
   cycleWeapon(dir) {
-    const list = [...ownedPaths(this.state), 'radar'];
+    const list = [...ownedPaths(this.state), ...((this.state.radar ?? -1) >= 0 ? ['radar'] : [])];
     const i = this.rt.scanner ? list.length - 1 : list.indexOf(activePath(this.state));
     this.equipWeapon(list[(i + dir + list.length) % list.length]);
   }
@@ -3865,8 +3900,10 @@ export class Game {
     }
     for (const it of this.loot.items) add(it.g.position, it.kind === 'ore' ? '#3ef2ff' : '#ff3c7d', 2);
     this.hud.drawCompass(heading, compass);
-    document.getElementById('radar').style.visibility = this.rt.scanner && this.camMode === 'first' ? 'hidden' : '';
-    this.hud.drawRadar(dt, radar, this.frame && this.env.inAtmo ? RADARS[this.state.radar || 0].range : 4000);
+    // the radar display needs a radar
+    const hasRadar = (this.state.radar ?? -1) >= 0;
+    document.getElementById('radar').style.visibility = !hasRadar || (this.rt.scanner && this.camMode === 'first') ? 'hidden' : '';
+    if (hasRadar) this.hud.drawRadar(dt, radar, this.frame && this.env.inAtmo ? RADARS[this.state.radar].range : 4000);
   }
 
   updateMarkers(camWorld) {
@@ -3913,12 +3950,16 @@ export class Game {
         const d = poi.pos.distanceTo(origin);
         const known = s.discovered.includes(poi.poi.id);
         const rumored = s.rumors && s.rumors.includes(poi.poi.id) && !known;
-        if (d > (known ? 4000 : rumored ? 1e9 : RADARS[s.radar || 0].reveal)) continue;
+        if (d > (known ? 4000 : rumored ? 1e9 : (s.radar ?? -1) >= 0 ? RADARS[s.radar].reveal : 350)) continue;
         if (poi.poi.kind === 'ore' && s.explored.includes(poi.poi.id)) continue;
         const done = (poi.poi.kind === 'ruin' || poi.poi.kind === 'wreck' || poi.poi.kind === 'obelisk') && s.explored.includes(poi.poi.id);
         const color = POI_COLOR[poi.poi.kind];
         list.push({ key: poi.poi.id, kind: 'hotspot', label: `<span style="color:${color}">${POI_LABEL[poi.poi.kind].toUpperCase()}${done ? ' ✓' : ''}</span>`, sub: fmtKm(d), pos: this.toWorld(poi.pos.clone().addScaledVector(poi.up, 10)), dist: d, edge: false, compass: d < 1500 ? color : null });
       }
+    }
+    if (this.vehicleObj && !rt.inVehicle) {
+      const d = this.vehicleObj.pos.distanceTo(p.pos);
+      if (d > 8) list.push({ key: 'vehicle', kind: 'gate', label: `YOUR ${esc(this.vehicleObj.def.name.toUpperCase())}`, sub: fmtKm(d), pos: this.toWorld(this.vehicleObj.pos.clone().addScaledVector(this.vehicleObj.pos.clone().normalize(), 2)), dist: d, edge: d < 3000, compass: d < 3000 ? '#ff8a4a' : null });
     }
     if (this.shipObj && !rt.inShip) {
       const d = this.shipObj.pos.distanceTo(p.pos);
@@ -3969,6 +4010,7 @@ export class Game {
       inShip: this.rt.inShip,
       label: this.locationLabel(),
     };
+    if (this.vehicleObj && this.frame) s.vehicleLoc = { star: this.star.key, body: this.frame.body.id, pos: this.vehicleObj.pos.toArray(), fwd: this.vehicleObj.fwd.toArray() };
     if (this.shipObj) {
       s.ship = {
         tier: this.shipObj.tier, star: this.star.key, body: this.frame ? this.frame.body.id : null,

@@ -470,7 +470,7 @@ export class Menus {
           <div class="stat"><div class="k">CRIT</div><div class="v">${Math.round(st.crit * 100)}%</div></div>
           <div class="stat"><div class="k">DEFENCE</div><div class="v">${Math.round(st.armor * 100)}%</div></div>
         </div>
-        <div class="misc-line">${owns(state, 'mind') ? `Flying swords: <b>${grade.name} ${grade.cn}</b>, ×${grade.mult} damage · ` : ''}Gene enhancement level <b>${state.gene || 0}</b> · Realm Insight <b style="color:#c08cff">${state.insight || 0}</b> · Radar <b>${RADARS[state.radar || 0].name}</b></div>
+        <div class="misc-line">${owns(state, 'mind') ? `Flying swords: <b>${grade.name} ${grade.cn}</b>, ×${grade.mult} damage · ` : ''}Gene enhancement level <b>${state.gene || 0}</b> · Realm Insight <b style="color:#c08cff">${state.insight || 0}</b> · Radar <b>${(state.radar ?? -1) >= 0 ? RADARS[state.radar].name : 'none'}</b></div>
         <p class="panel-note">Each breakthrough needs a <b>Realm Insight</b>. Earn one by winning an obelisk trial, slaying an Overlord, clearing every fifth arena wave, or completing a Martial Hall breakthrough trial.</p>
         <div class="section-title">Techniques</div>
         <div class="tech-list">${techs}</div>
@@ -576,7 +576,7 @@ export class Menus {
       <div class="item"><div><h4>Star metal<span class="cn">星金</span></h4><p>${fmt(orePrice)} ◈ each. You hold ${fmt(state.ore)}. Keep some for starships.</p></div><button class="btn small" data-action="sell" data-what="ore" data-frac="0.5" ${state.ore > 1 ? '' : 'disabled'}>Sell half</button><button class="btn small" data-action="sell" data-what="ore" data-frac="1" ${state.ore > 0 ? '' : 'disabled'}>Sell all</button></div>
       <div class="item"><div><h4>Beast essence<span class="cn">精华</span></h4><p>${SELL.essence} ◈ each. Refining it into experience at a forge is usually better.</p></div><button class="btn small" data-action="sell" data-what="essence" data-frac="0.5" ${state.essence > 1 ? '' : 'disabled'}>Sell half</button><button class="btn small" data-action="sell" data-what="essence" data-frac="1" ${state.essence > 0 ? '' : 'disabled'}>Sell all</button></div>
     </div>`;
-    const rn = RADARS[(state.radar || 0) + 1];
+    const rn = RADARS[(state.radar ?? -1) + 1];
     const radar = vk === 'pills' ? '' : `<div class="section-title">Scanners</div><div class="list">${rn
       ? `<div class="item"><div><h4>${esc(rn.name)}<span class="cn">${rn.cn}</span></h4><p>${esc(rn.desc)} Radar ${rn.range} m · pulse ${rn.ping >= 1000 ? `${rn.ping / 1000} km` : `${rn.ping} m`}.</p></div><span class="price">${fmt(rn.price)} ◈</span><button class="btn small" data-action="radar" ${state.coins >= rn.price ? '' : 'disabled'}>Install</button></div>`
       : '<p class="panel-note">You already carry the finest scanner in the galaxy.</p>'}</div>`;
@@ -595,7 +595,7 @@ export class Menus {
         : `<span class="price">${fmt(v.price)} ◈</span><button class="btn small ${state.coins >= v.price ? 'primary' : ''}" data-action="buy-vehicle" data-id="${id}" ${state.coins >= v.price ? '' : 'disabled'}>Buy</button>`;
       return `<div class="item"><div><h4 style="color:${hex(v.color)}">${esc(v.name)}<span class="cn">${v.cn}</span></h4><p>${esc(v.desc)}</p><p class="mono dim" style="font-size:11px">TOP SPEED ${v.speed} M/S · BOOST ×${v.boost} · ARMOUR ×${v.hull} · RAM ×${v.ram}</p></div>${btn}</div>`;
     }).join('');
-    return `<p class="panel-note">Ground vehicles hover over land and water. Call yours anywhere outside with <kbd>${esc(codeLabel(settings.key('vehicle')))}</kbd>. For the sky, buy a Skyjet at a shipyard. You hold ${this.wallet()}.</p><div class="list">${rows}</div>`;
+    return `<p class="panel-note">Ground vehicles hover over land and water, and you can fight from the saddle. What you buy is left at the kerb outside; it stays wherever you park it. For the sky, buy a Skyjet at a shipyard. You hold ${this.wallet()}.</p><div class="list">${rows}</div>`;
   }
 
   renderArmory() {

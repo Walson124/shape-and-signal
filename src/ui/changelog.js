@@ -1,10 +1,20 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-14', version: '0.7.1',
+    title: 'Riding fixes',
+    items: [
+      'Vehicles are no longer summoned: a new one is left outside the dealer, and it stays wherever you park it. Walk up and press E to ride.',
+      'You sit on your vehicle where everyone can see you, and you can fight from the saddle.',
+      'You start without a radar; the basic one costs 150 coins at the Exchange.',
+      'Story steps you have already done (like buying a radar early) now complete straight away.',
+    ],
+  },
+  {
     date: '2026-10-14', version: '0.7',
     title: 'Vehicles, diving and a new opening',
     items: [
-      'Buy a Hoverbike, Rover or Racer at the Vehicle Dealer and ride it anywhere. Call it with M.',
+      'Buy a Hoverbike, Rover or Racer at the Vehicle Dealer and ride it anywhere.',
       'Dive into Terra’s seas and rivers. Water beasts hunt in the deep; watch your breath.',
       'The radar is now an item you scroll to, held in both hands in the middle of the screen.',
       'The opening cutscene shows the old Aurean Concord at its height, and the Night of Teeth.',

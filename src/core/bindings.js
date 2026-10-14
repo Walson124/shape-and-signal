@@ -24,7 +24,6 @@ export const ACTIONS = [
   { id: 'pill2', label: 'Primal Elixir', group: 'Cultivation', def: 'Digit2' },
   { id: 'pill3', label: 'Cultivation Pill', group: 'Cultivation', def: 'Digit3' },
   { id: 'interact', label: 'Interact · board ship · hold to search', group: 'World', def: 'KeyE' },
-  { id: 'vehicle', label: 'Call / ride your vehicle', group: 'World', def: 'KeyM' },
   { id: 'target', label: 'Target a marker or star', group: 'World', def: 'KeyT' },
   { id: 'virtual', label: 'Enter / leave the Virtual Universe', group: 'World', def: 'KeyO' },
   { id: 'engage', label: 'Cruise · warp', group: 'World', def: 'KeyG' },

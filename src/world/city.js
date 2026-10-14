@@ -218,6 +218,13 @@ export function buildSettlement(site, R, opts = {}) {
       kind, name: v.name, cn: v.cn, x: sh.x, z: sh.z, w: sh.w, d: sh.d, bw, bd, ry, h: sh.h, G,
       door: toLocal(fx, 0.5, fz), seed: Math.floor(r() * 1e9), interior: null, frame: toWorldXZ,
     };
+    // a spot at the kerb outside the door (where bought vehicles are left)
+    {
+      const [cx, cz] = toWorldXZ(0, -bd / 2 - 7);
+      const [ax, az] = toWorldXZ(3, -bd / 2 - 7);
+      venue.curb = toLocal(cx, 0.5, cz);
+      venue.curbDir = toLocal(ax, 0.5, az).sub(venue.curb).normalize();
+    }
     if (v.sign) {
       const tex = signTexture(v.sign, `#${v.color.toString(16).padStart(6, '0')}`);
       const smat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, color: new THREE.Color(1.8, 1.8, 1.8) });
