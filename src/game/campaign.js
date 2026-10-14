@@ -159,6 +159,106 @@ export const ACT1 = [
   ], reward: { coins: 1000, point: 1, insight: 1 }, final: true },
 ];
 
+// The Aurean Concord at its height, raised for the opening cutscene over a
+// ruin field: gleaming towers, skybridges, a spire and flying traffic. Towers
+// can topple (for the Night of Teeth).
+function buildMemoryCity(at, up, e, n) {
+  const group = new THREE.Group();
+  const mats = [];
+  const geos = [];
+  const mat = (m) => { mats.push(m); return m; };
+  const geo = (gm) => { geos.push(gm); return gm; };
+  const hull = mat(new THREE.MeshStandardMaterial({ color: 0xe6dfd0, metalness: 0.55, roughness: 0.28, emissive: 0x2a1d0a }));
+  const glass = mat(new THREE.MeshStandardMaterial({ color: 0x8fb6d8, metalness: 0.9, roughness: 0.1, emissive: 0x0a1a2a }));
+  const gold = mat(new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.9, 0.9) }));
+  const cyan = mat(new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 2.2, 2.6) }));
+  const basis = new THREE.Matrix4().makeBasis(e, up, n);
+  const q = new THREE.Quaternion().setFromRotationMatrix(basis);
+  const towers = [];
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const place = (obj, x, y, z) => { obj.position.copy(at(x, y, z)); obj.quaternion.copy(q); group.add(obj); return obj; };
+  for (let i = 0; i < 46; i++) {
+    const ang = rnd() * Math.PI * 2, r = 40 + Math.sqrt(rnd()) * 420;
+    const x = Math.cos(ang) * r, z = Math.sin(ang) * r;
+    const h = 70 + rnd() * 190 * (1 - r / 600);
+    const w = 14 + rnd() * 16;
+    const pivot = place(new THREE.Group(), x, -2, z);
+    const round = rnd() < 0.35;
+    const body = new THREE.Mesh(geo(round ? new THREE.CylinderGeometry(w * 0.45, w * 0.55, h, 16) : new THREE.BoxGeometry(w, h, w * (0.7 + rnd() * 0.5))), rnd() < 0.3 ? glass : hull);
+    body.position.y = h / 2;
+    pivot.add(body);
+    // glowing window bands and a crown
+    const bands = Math.floor(3 + rnd() * 6);
+    for (let k = 1; k <= bands; k++) {
+      const band = new THREE.Mesh(geo(round ? new THREE.CylinderGeometry(w * 0.47, w * 0.47, 0.8, 16) : new THREE.BoxGeometry(w + 0.6, 0.8, w * 0.9)), rnd() < 0.8 ? gold : cyan);
+      band.position.y = (h * k) / (bands + 1);
+      pivot.add(band);
+    }
+    const crown = new THREE.Mesh(geo(new THREE.ConeGeometry(w * 0.3, w * 1.2, 6)), gold);
+    crown.position.y = h + w * 0.6;
+    pivot.add(crown);
+    towers.push({ pivot, h, axis: new THREE.Vector3(Math.cos(rnd() * 6.28), 0, Math.sin(rnd() * 6.28)).normalize(), fall: 9.6 + rnd() * 6.5 - Math.max(0, 300 - r) * 0.004, x, z, boomed: false });
+  }
+  // the great spire at the centre
+  const spire = place(new THREE.Group(), 0, -2, 0);
+  const s1 = new THREE.Mesh(geo(new THREE.CylinderGeometry(6, 22, 320, 12)), hull);
+  s1.position.y = 160;
+  const s2 = new THREE.Mesh(geo(new THREE.CylinderGeometry(1.5, 6, 120, 8)), gold);
+  s2.position.y = 380;
+  const halo = new THREE.Mesh(geo(new THREE.TorusGeometry(34, 1.2, 6, 40).rotateX(Math.PI / 2)), cyan);
+  halo.position.y = 250;
+  spire.add(s1, s2, halo);
+  towers.push({ pivot: spire, h: 440, axis: new THREE.Vector3(1, 0, 0.3).normalize(), fall: 14.5, x: 0, z: 0, boomed: false });
+  // skybridges between neighbours
+  for (let i = 0; i < 20; i++) {
+    const A = towers[Math.floor(rnd() * 40)], B = towers[Math.floor(rnd() * 40)];
+    const d = Math.hypot(A.x - B.x, A.z - B.z);
+    if (A === B || d > 140 || d < 30) continue;
+    const y = Math.min(A.h, B.h) * (0.4 + rnd() * 0.4);
+    const bridge = new THREE.Mesh(geo(new THREE.BoxGeometry(d, 2, 4)), glass);
+    const mid = place(new THREE.Group(), (A.x + B.x) / 2, y, (A.z + B.z) / 2);
+    bridge.rotation.y = -Math.atan2(B.z - A.z, B.x - A.x);
+    mid.add(bridge);
+  }
+  // flying traffic on looping lanes
+  const cars = [];
+  for (let i = 0; i < 40; i++) {
+    const car = new THREE.Mesh(geo(new THREE.CapsuleGeometry(0.9, 3, 2, 6).rotateZ(Math.PI / 2)), rnd() < 0.5 ? gold : cyan);
+    group.add(car);
+    cars.push({ car, r: 80 + rnd() * 380, y: 40 + rnd() * 180, w: (rnd() < 0.5 ? -1 : 1) * (0.05 + rnd() * 0.08), p: rnd() * 6.28 });
+  }
+  const tmp = new THREE.Vector3();
+  return {
+    group,
+    update(t, dt, nightT) {
+      for (const c of cars) {
+        const ang = c.p + t * c.w;
+        tmp.copy(at(Math.cos(ang) * c.r, c.y - (nightT > 0 ? nightT * nightT * 4 : 0), Math.sin(ang) * c.r));
+        c.car.position.copy(tmp);
+        c.car.quaternion.copy(q);
+        c.car.rotateY(-ang + (c.w > 0 ? -Math.PI / 2 : Math.PI / 2));
+      }
+      if (nightT < 0) return;
+      for (const tw of towers) {
+        const k = Math.max(0, Math.min(1, (t - tw.fall) / 3.2));
+        if (k <= 0) continue;
+        if (!tw.boomed) {
+          tw.boomed = true;
+          tw.boomAt = tw.pivot.position.clone();
+          this.onBoom && this.onBoom(tw.boomAt, tw.h);
+        }
+        tw.pivot.quaternion.copy(q).multiply(new THREE.Quaternion().setFromAxisAngle(tw.axis, k * k * 1.35));
+        tw.pivot.position.copy(at(tw.x, -2 - k * tw.h * 0.08, tw.z));
+      }
+    },
+    dispose() {
+      for (const g of geos) g.dispose();
+      for (const m of mats) m.dispose();
+    },
+  };
+}
+
 export class Campaign {
   constructor(game) {
     this.g = game;
@@ -528,34 +628,108 @@ export class Campaign {
     obj.rotateY(Math.PI);
   }
 
-  // The opening: who the Concord were, the Night of Teeth, life behind the walls.
+  // The opening: the Concord at its height, the Night of Teeth, the ruins
+  // today, life behind the walls, and you.
   introScene() {
     const g = this.g;
     const capital = this.capital().group.position.clone();
-    const up = capital.clone().normalize();
-    const e = V(1, 0, 0).projectOnPlane(up).normalize();
+    const cup = capital.clone().normalize();
+    const ce = V(1, 0, 0).projectOnPlane(cup).normalize();
+    const cn = V().crossVectors(ce, cup);
+    const ruinObj = this.terra().ensureRuin(0);
+    const site = this.ruinCenter(0);
+    const up = site.clone().normalize();
+    const e = V().subVectors(capital, site).projectOnPlane(up).normalize();
     const n = V().crossVectors(e, up);
-    const ruin = this.ruinCenter(0);
+    const at = (x, y, z) => site.clone().addScaledVector(e, x).addScaledVector(up, y).addScaledVector(n, z);
+    const tint = document.getElementById('tint');
+    const fade = document.getElementById('fade');
+    let memory = null;
+    let beasts = [];
+    let night = -1;
     let a = 0;
-    const orbit = () => capital.clone().addScaledVector(up, 520 - a * 120).addScaledVector(e, Math.cos(a) * 900).addScaledVector(n, Math.sin(a) * 900);
+    const orbit = () => capital.clone().addScaledVector(cup, 520 - a * 120).addScaledVector(ce, Math.cos(a) * 900).addScaledVector(cn, Math.sin(a) * 900);
     const home = this.capital().spawnLocal.clone();
+    const setTint = (color, opacity, blend) => {
+      tint.style.background = color;
+      tint.style.mixBlendMode = blend;
+      tint.style.opacity = opacity;
+    };
+    const cleanup = () => {
+      if (memory) {
+        g.localRoot.remove(memory.group);
+        memory.dispose();
+        memory = null;
+      }
+      for (const b of beasts) g.beasts.removeBeast(b);
+      beasts = [];
+      if (ruinObj) ruinObj.group.visible = true;
+      setTint('transparent', 0, 'normal');
+    };
     return g.playCutscene({
-      tick: (t) => { a = Math.min(1.6, t * 0.06); },
+      tick: (t, dt) => {
+        a = Math.max(0, Math.min(1.6, (t - 21) * 0.08));
+        if (!memory) return;
+        memory.update(t, dt, night >= 0 ? t - night : -1);
+        if (night >= 0) for (const b of beasts) if (b.alive) b.pos.addScaledVector(e, 14 * dt);
+      },
       shots: [
-        { dur: 9, from: () => ruin.clone().addScaledVector(ruin.clone().normalize(), 160).add(this.side(ruin, -220)), to: () => ruin.clone().addScaledVector(ruin.clone().normalize(), 90).add(this.side(ruin, -120)), look: () => ruin },
+        { dur: 9, from: () => at(-650, 240, 120), to: () => at(-260, 130, 40), look: () => at(0, 110, 0) },
+        { dur: 3.5, from: () => at(-560, 70, 210), to: () => at(-520, 60, 190), look: () => at(0, 110, 0) },
+        { dur: 4.5, from: () => at(-300, 18, 40), to: () => at(-260, 24, 20), look: () => at(-120, 6, 20) },
+        { dur: 4.5, from: () => at(-300, 120, 60), to: () => at(-200, 80, 30), look: () => at(0, 10, 0) },
         { dur: 10, from: orbit, look: () => capital },
-        { dur: 7, from: () => home.clone().addScaledVector(up, 30).addScaledVector(e, -40), to: () => home.clone().addScaledVector(up, 6).addScaledVector(e, -12), look: () => home },
+        { dur: 8.5, from: () => home.clone().addScaledVector(cup, 30).addScaledVector(ce, -40), to: () => home.clone().addScaledVector(cup, 6).addScaledVector(ce, -12), look: () => home },
       ],
       lines: [
-        { at: 0.5, who: '', text: 'Two centuries ago, Terra belonged to the Aurean Concord. Their cities touched the clouds.' },
-        { at: 4.8, who: '', text: 'Then came the Night of Teeth. In seventeen hours the beasts took the world.' },
-        { at: 9.3, who: '', text: 'The survivors built walls. Behind them, some were born with awakened genes: warriors, strong enough to fight back.' },
-        { at: 14.2, who: '', text: 'Base City 07. Two million people, one wall, and beasts that grow stronger every year.' },
-        { at: 19.4, who: '', text: 'You are seventeen. No awakened genes, no famous family. Just two years of savings and a stubborn dream.' },
-        { at: 23.6, who: 'You', text: 'Today I stop dreaming.' },
+        { at: 0.5, who: '', text: 'Two centuries ago, Terra belonged to the Aurean Concord.' },
+        { at: 4.6, who: '', text: 'Their towers touched the clouds, and their skies never slept.' },
+        { at: 9.5, who: '', text: 'Then came the Night of Teeth.' },
+        { at: 12.6, who: '', text: 'In seventeen hours, the beasts took the world.' },
+        { at: 17.3, who: '', text: 'Two hundred years later, the Concord is rubble and bones.' },
+        { at: 21.8, who: '', text: 'The survivors built walls. Some were born with awakened genes: warriors, strong enough to fight back.' },
+        { at: 27, who: '', text: 'Base City 07. Two million people, one wall, and beasts that grow stronger every year.' },
+        { at: 31.8, who: '', text: 'You are seventeen. No awakened genes, no famous family. Just two years of savings and a stubborn dream.' },
+        { at: 37, who: 'You', text: 'Today I stop dreaming.' },
       ],
-      events: [],
+      events: [
+        { at: 0, fn: () => {
+          memory = buildMemoryCity(at, up, e, n);
+          memory.onBoom = (pos, h) => { g.combat.explosion(pos.clone().addScaledVector(up, 8), 0xff7a3a, 2 + h / 60); g.sound.explosion(pos, true); g.rt.shake = Math.max(g.rt.shake, 0.4); };
+          g.localRoot.add(memory.group);
+          if (ruinObj) ruinObj.group.visible = false;
+          tint.style.transition = 'opacity 1.2s';
+          setTint('#d9a85a', 0.28, 'soft-light');
+        } },
+        { at: 9.2, fn: () => {
+          night = 9.2;
+          tint.style.transition = 'opacity 0.6s, background 0.6s';
+          setTint('#ff1a08', 0.42, 'multiply');
+          g.post.fx.flash = 0.6;
+          g.sound.thunder();
+          beasts = [
+            ...this.spawnPack('intro', 'ironwolf', 10, at(-250, 0, 30), 0, false, false),
+            ...this.spawnPack('intro', 'goldhorn', 3, at(-280, 0, 0), 0, false, false),
+            ...this.spawnPack('intro', 'shadowmantis', 5, at(-240, 0, 50), 0, false, false),
+          ];
+          for (const k of [0.6, 2.1, 3.4, 5.2, 6.6]) this.pending(k, () => { if (memory) g.combat.lightning(at((Math.random() - 0.5) * 300, 0, (Math.random() - 0.5) * 300), 0xff8a6a, 600, up); g.sound.thunder(); });
+        } },
+        { at: 16.9, fn: () => {
+          fade.style.transition = 'none';
+          fade.style.background = '#fff';
+          fade.style.opacity = 1;
+          cleanup();
+          setTimeout(() => { fade.style.transition = 'opacity 1.4s'; fade.style.opacity = 0; }, 60);
+          setTimeout(() => { fade.style.transition = ''; fade.style.background = ''; }, 1600);
+        } },
+        { at: 39.9, fn: cleanup },
+      ],
     });
+  }
+
+  // Run fn after a delay (in real time; used for cutscene flourishes).
+  pending(sec, fn) {
+    setTimeout(fn, sec * 1000);
   }
 
   convoyScene() {

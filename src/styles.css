@@ -520,3 +520,4 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .item.story.done h4 { color: #9affc8; }
 .item.story.focus { border-color: #ffc857; }
 .item.story.locked { opacity: 0.5; }
+#tint { position: fixed; inset: 0; opacity: 0; pointer-events: none; z-index: 39; }
