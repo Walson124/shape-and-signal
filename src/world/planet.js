@@ -4,6 +4,7 @@ import { texPool } from './texpool.js';
 import { chunkIndex } from './chunkgen.js';
 import { craterOffset } from './terrain.js';
 import { Digs } from './digs.js';
+import { FEATURES } from '../game/features.js';
 import { addCompiled, cancelAdd } from '../core/precompile.js';
 import { terrainMaterial, propMaterial, propGeometries } from './props.js';
 import { makeAtmosphere, makeOcean, makeClouds, makeRings } from './planetfx.js';
@@ -111,8 +112,8 @@ export class Planet {
     this.material = terrainMaterial(0.35);
     // holes and caves: built volume replaces the heightfield where dug
     this.voxMaterial = terrainMaterial(0.35);
-    this.digsSys = new Digs(this);
-    this.digsSys.attach(this.material);
+    this.digsSys = FEATURES.digging ? new Digs(this) : null;
+    if (this.digsSys) this.digsSys.attach(this.material);
     this.propMat = propMaterial();
     this.propGeos = propGeometries();
     this.index = new THREE.BufferAttribute(chunkIndex(RES), 1);

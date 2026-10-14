@@ -1,6 +1,13 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-14', version: '0.9.1',
+    title: 'Digging paused',
+    items: [
+      'Digging and craters are switched off for now: blasts scorch the ground and break trees, but leave it whole.',
+    ],
+  },
+  {
     date: '2026-10-14', version: '0.9',
     title: 'Dig into the world',
     items: [

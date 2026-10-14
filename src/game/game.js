@@ -37,6 +37,7 @@ import { Vehicle, VEHICLES } from './vehicle.js';
 import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing, ringOf, capacity, slotsUsed, addItem, removeItem, count, partFor, pay, affordable } from './ring.js';
 import { Structures, buildStructure } from './structures.js';
 import { Pets, petDef } from './pets.js';
+import { FEATURES } from './features.js';
 import { SwordArray } from './swords.js';
 import { ViewModel } from './viewmodel.js';
 import { Loot } from './loot.js';
@@ -3725,6 +3726,7 @@ export class Game {
 
   // Hand the current world its saved holes.
   syncDigs() {
+    if (!FEATURES.digging) return;
     const f = this.frame, s = this.state;
     if (!f || !f.digsSys) return;
     s.digs = s.digs || {};
@@ -3736,6 +3738,7 @@ export class Game {
 
   // Blast a hole of radius r at a local point.
   dig(pos, r) {
+    if (!FEATURES.digging) return;
     const f = this.frame;
     if (!f || !f.terrain || !f.digsSys || !this.env.inAtmo || this.localRoot.parent !== f.spin) return;
     // the cities are built to last
@@ -3751,6 +3754,7 @@ export class Game {
   }
 
   updateDigs(dt) {
+    if (!FEATURES.digging) return;
     const f = this.frame, s = this.state;
     if (!f || !f.digsSys || this.localRoot.parent !== f.spin) return;
     const p = this.player;
@@ -3861,7 +3865,7 @@ export class Game {
   impact(pos, radius, crater = false) {
     this.breakAt(pos, radius, null);
     this.scorch(pos, Math.max(1.5, radius * 0.7));
-    if (crater) this.dig(pos.clone().addScaledVector(pos.clone().normalize(), -radius * 0.3), Math.min(18, radius * 1.1));
+    if (crater && FEATURES.digging) this.dig(pos.clone().addScaledVector(pos.clone().normalize(), -radius * 0.3), Math.min(18, radius * 1.1));
   }
 
   respecCost() {
