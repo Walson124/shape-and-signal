@@ -10,7 +10,7 @@ import { LORE, RUIN_NAMES } from './lore.js';
 import { VirtualWorld } from './virtual.js';
 import { Cutscene } from './cutscene.js';
 import { Campaign } from './campaign.js';
-import { speciesForBody } from './bestiary.js';
+import { speciesForBody, AQUATIC } from './bestiary.js';
 import { codeLabel } from '../core/bindings.js';
 import { newState, loadState, saveState, clearSave, derive } from './state.js';
 import { generateOffers, progressBounties, insightTrial, MAX_BOUNTIES } from './missions.js';
@@ -923,6 +923,7 @@ export class Game {
     if (rt.scanner) this.updateScanner(dt);
     if (rt.scanner && rt.inShip) this.putAwayScanner();
     this.updateDeliveries(dt);
+    this.updateWater(dt, alive);
     this.updateScorch(dt);
     if (this.mode !== 'cutscene') this.cutscene.update(dt);
     this.campaign.update(dt);
@@ -949,9 +950,109 @@ export class Game {
     const up = pos.clone().divideScalar(Math.max(D, 1e-6));
     if (!planet.body.landable) return { planet, up, floorR: null, inAtmo: D < planet.atmoR, alt: D - planet.R, D, gas: true };
     let floorR = planet.floorRadius(up.x, up.y, up.z);
+    const water = this.waterAt(pos);
+    if (water && !this.rt.inShip && !this.rt.inVehicle) floorR = water.bedR;
     const roof = planet.collide(pos, this.rt.inShip ? 10 : this.player.radius, this.rt.inShip ? 0 : EYE);
     if (roof && roof > floorR && D > roof - 4) floorR = roof;
-    return { planet, up, floorR, inAtmo: D < planet.atmoR, alt: D - floorR - (this.rt.inShip ? 0 : EYE), D };
+    return { planet, up, floorR, inAtmo: D < planet.atmoR, alt: D - floorR - (this.rt.inShip ? 0 : EYE), D, water };
+  }
+
+  maxBreath() {
+    return 40 + this.state.realm * 25;
+  }
+
+  updateWater(dt, alive) {
+    const rt = this.rt, p = this.player;
+    const w = this.waterAt(p.pos);
+    const under = !!w && !rt.inShip && !rt.inVehicle && p.pos.length() < w.seaR - 0.1;
+    if (rt.breath === undefined) rt.breath = this.maxBreath();
+    if (under && alive) {
+      rt.breath = Math.max(0, rt.breath - dt);
+      if (rt.breath <= 0) {
+        rt.drownT = (rt.drownT || 0) - dt;
+        if (rt.drownT <= 0) {
+          rt.drownT = 1;
+          this.hurtPlayer(this.stats.maxHp * 0.08, null, null, true);
+          if (this.time > (this.notifyGate.drown || 0)) {
+            this.notifyGate.drown = this.time + 6;
+            this.hud.notify('You are <b>drowning</b>. Swim up!', 'red');
+          }
+        }
+      }
+    } else rt.breath = Math.min(this.maxBreath(), rt.breath + dt * 10);
+    rt.underwater = under;
+    // beasts of the deep
+    this.seaSpawnT = (this.seaSpawnT || 0) - dt;
+    if (w && rt.swimming && this.seaSpawnT <= 0) {
+      this.seaSpawnT = 5;
+      const near = this.beasts.beasts.filter((b) => b.def.aquatic && b.pos.distanceTo(p.pos) < 400).length;
+      if (near < 6) this.spawnSeaBeasts(w);
+    }
+  }
+
+  spawnSeaBeasts(w) {
+    const p = this.player, f = this.frame;
+    const up = p.pos.clone().normalize();
+    const e = new THREE.Vector3(1, 0, 0).projectOnPlane(up).normalize();
+    const n = new THREE.Vector3().crossVectors(e, up);
+    for (let tries = 0; tries < 6; tries++) {
+      const a = Math.random() * Math.PI * 2, r = 50 + Math.random() * 70;
+      const at = p.pos.clone().addScaledVector(e, Math.cos(a) * r).addScaledVector(n, Math.sin(a) * r);
+      const ww = this.waterAt(at);
+      if (!ww || ww.seaR - ww.bedR < 7) continue;
+      const tier = Math.max(0, this.locTier() - 0.2);
+      const list = AQUATIC.filter((s) => s.minTier <= tier + 0.3);
+      const def = list[Math.floor(Math.random() * list.length)] || AQUATIC[0];
+      this.beasts.species.set(def.id, def);
+      const count = def.pack[0] + Math.floor(Math.random() * (def.pack[1] - def.pack[0] + 1));
+      for (let i = 0; i < count; i++) {
+        const pos = at.clone().add(new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12));
+        pos.setLength(ww.bedR + 2 + Math.random() * Math.max(1, ww.seaR - ww.bedR - 5));
+        this.beasts.spawn(def.id, pos, tier, { aggro: false, elite: Math.random() < 0.06 });
+      }
+      if (!this.notifyGate.seaBeasts) {
+        this.notifyGate.seaBeasts = 1;
+        this.nix.say('Something big just moved down there. I\u2019d swim faster.', 1);
+      }
+      return;
+    }
+  }
+
+  // Underwater: thick blue fog and a tint; the surface glimmers overhead.
+  applyUnderwater() {
+    const f = this.frame;
+    const tint = document.getElementById('water-tint');
+    let under = false;
+    if (f && f.terrain && f.terrain.sea !== null && f.body.ocean && !f.body.ocean.lava && this.localRoot.parent === f.spin) {
+      const c = this.camera.position;
+      const w = this.waterAt(c);
+      under = !!w && c.length() < w.seaR - 0.05;
+    }
+    if (under) {
+      const fog = this.scene.fog;
+      const deep = this.waterAt(this.camera.position);
+      const depth = deep ? deep.seaR - this.camera.position.length() : 0;
+      fog.color.set(f.body.ocean.color).multiplyScalar(0.35 * Math.max(0.25, 1 - depth / 120));
+      fog.density = 0.018 + Math.min(0.02, depth * 0.0004);
+    }
+    if (tint) tint.style.opacity = '0';
+    const fx = this.post.fx;
+    if (under) {
+      const w = this.waterAt(this.camera.position);
+      const depth = w ? w.seaR - this.camera.position.length() : 0;
+      fx.waterCol.set(f.body.ocean.color).lerp(new THREE.Color(0.05, 0.32, 0.45), 0.6).multiplyScalar(Math.max(0.3, 1 - depth / 90));
+    }
+    fx.water = under ? 0.6 + Math.min(0.4, (this.waterAt(this.camera.position) ? this.waterAt(this.camera.position).seaR - this.camera.position.length() : 0) / 40) : 0;
+  }
+
+  // Sea level and seabed under a local point, if it is over water.
+  waterAt(pos) {
+    const f = this.frame;
+    if (!f || !f.terrain || f.terrain.sea === null || !f.body.ocean || f.body.ocean.lava) return null;
+    const n = pos.clone().normalize();
+    const bedR = f.groundRadius(n.x, n.y, n.z);
+    const seaR = f.R + f.terrain.sea;
+    return bedR < seaR - 0.3 ? { seaR, bedR } : null;
   }
 
   locTier() {
@@ -1009,6 +1110,7 @@ export class Game {
           return { up, floorR: f.floorRadius(up.x, up.y, up.z) };
         },
         resolve: (pos, r) => f.collide(pos, r),
+        water: (pos) => this.waterAt(pos),
         spawn: (pp) => {
           const up = pp.clone().normalize();
           const ref = Math.abs(up.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : Y;
@@ -1069,6 +1171,21 @@ export class Game {
     } else if (canSpace || !env.planet) {
       p.mode = 'space';
     }
+    // in deep water you swim: free movement in three dimensions at swimming pace
+    const water = onWorld && env.inAtmo ? env.water : null;
+    const D0 = p.pos.length();
+    const swimming = !!water && D0 < water.seaR + EYE * 0.6 && water.bedR + EYE * 1.2 < water.seaR && !(canFly && p.mode === 'fly' && D0 > water.seaR + 0.5);
+    if (swimming && !rt.swimming) {
+      p.vel.multiplyScalar(0.3);
+      this.particles.burst(p.pos.clone().setLength(water.seaR), new THREE.Color(1.6, 2.2, 2.6), 30, 10, 0.8, 0.6);
+      if (!this.notifyGate.swimHelp) {
+        this.notifyGate.swimHelp = 1;
+        this.hud.notify(`You are swimming. Look and move to dive; ${esc(codeLabel(settings.key('jump')))} rises, ${esc(codeLabel(settings.key('down')))} sinks. Watch your breath.`, 'cy');
+      }
+    }
+    rt.swimming = swimming;
+    if (swimming) p.mode = 'fly';
+    else if (onWorld && p.mode === 'fly' && !canFly) p.mode = 'ground';
     // a double tap on Space toggles flight on a world
     let jump = false;
     if (alive && this.input.hit('jump')) {
@@ -1091,6 +1208,7 @@ export class Game {
     const sprintKey = this.input.act('sprint') || this.input.down('ShiftRight');
     let boost = alive && (settings.get('autoSprint') ? !sprintKey : sprintKey) && manual && (p.mode === 'ground' || rt.energy > 1);
     if (p.mode === 'ground') speed = st.walk;
+    else if (swimming) speed = st.walk * 0.8;
     else if (p.mode === 'fly') speed = onWorld ? Math.min(st.flySpeed, 160 + s.realm * 60) : st.flySpeed;
     else speed = st.spaceSpeed;
     if (rt.cruise) {
@@ -1119,6 +1237,17 @@ export class Game {
       hidden: !alive || this.camMode === 'first',
       align: 4,
     });
+    // near the surface you bob up unless you swim down on purpose
+    if (swimming && move.y <= 0 && move.z === 0) {
+      const D = p.pos.length();
+      if (D > water.seaR - 2.5 && D < water.seaR + EYE * 0.35) p.pos.setLength(D + (water.seaR + EYE * 0.35 - D) * Math.min(1, dt * 2.5));
+    }
+    // a swimmer who can't fly floats with their head just above the surface
+    if (swimming && !canFly && p.pos.length() > water.seaR + EYE * 0.35) {
+      p.pos.setLength(water.seaR + EYE * 0.35);
+      const vn = p.vel.dot(env.up);
+      if (vn > 0) p.vel.addScaledVector(env.up, -vn);
+    }
     if (onWorld && !canSpace) {
       const pl = env.planet;
       const cap = Math.min(pl.atmoR * 0.985, pl.R + Math.max(pl.body.amp * 1.25, (pl.atmoR - pl.R) * 0.85));
@@ -3630,6 +3759,7 @@ export class Game {
     const speed = vel.length();
     fx.speed = settings.get('speedBlur') ? (rt.cruise ? Math.min(0.8, speed / 60000) : p.boosting && p.mode !== 'ground' ? 0.35 : 0) : 0;
     this.updateAtmosphereLighting();
+    this.applyUnderwater();
 
     const camWorld = this.camera.getWorldPosition(new THREE.Vector3());
     const sunDirView = this.system.root.position.clone().sub(camWorld).normalize().transformDirection(this.camera.matrixWorldInverse);

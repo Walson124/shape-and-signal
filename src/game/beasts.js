@@ -808,7 +808,18 @@ export class BeastManager {
       b.vel.lerp(desired, 1 - Math.exp(-dt * accel));
       b.pos.addScaledVector(b.vel, dt);
       if (env && env.resolve) env.resolve(b.pos, b.radius);
-      if (ground) {
+      if (ground && def.aquatic && env.water) {
+        // swim between the seabed and the surface; never leave the water
+        const D = b.pos.length();
+        const w = env.water(b.pos);
+        if (w) {
+          const lo = w.bedR + b.radius * 0.8, hi = Math.max(lo, w.seaR - b.radius * 0.7);
+          b.pos.multiplyScalar(Math.min(Math.max(D, lo), hi) / D);
+        } else {
+          b.pos.addScaledVector(b.vel, -dt * 1.2);
+          b.vel.multiplyScalar(-0.5);
+        }
+      } else if (ground) {
         const D = b.pos.length();
         const g2 = env.ground(b.pos);
         const floor = g2.floorR + b.radius * (walker ? (def.footing ?? 0.75) : 1);

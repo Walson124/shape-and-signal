@@ -136,7 +136,7 @@ export function makeOcean(body) {
       );
     };
   } else {
-    mat = new THREE.MeshStandardMaterial({ color: body.ocean.color, roughness: 0.08, metalness: 0.05, transparent: true, opacity: 0.86, envMapIntensity: 0.7 });
+    mat = new THREE.MeshStandardMaterial({ color: body.ocean.color, roughness: 0.08, metalness: 0.05, transparent: true, opacity: 0.86, envMapIntensity: 0.7, side: THREE.DoubleSide });
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = time;
       shader.vertexShader = `varying vec3 vObj;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');

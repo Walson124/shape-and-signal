@@ -269,6 +269,7 @@ export class HUD {
     if (rt.shieldT > 0) status.push(`<span class="status gold">GOLDEN BODY ${rt.shieldT.toFixed(1)}</span>`);
     if (state.devour) status.push('<span class="status mg">DEVOUR</span>');
     if (rt.invuln > 0.6) status.push('<span class="status cy">PROTECTED</span>');
+    if (rt.underwater || (rt.breath !== undefined && rt.breath < 40 + info.state.realm * 25 - 0.5)) status.push(`<span class="status ${rt.breath < 10 ? 'red' : 'cy'}">BREATH ${Math.ceil(rt.breath)}s</span>`);
     e['status-row'].innerHTML = status.join('');
     const bkey = JSON.stringify(state.bounties.map((b) => [b.id, b.progress]));
     if (bkey !== this.lastBounties) {

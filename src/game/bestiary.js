@@ -60,6 +60,14 @@ const KINDS = [
 
 const cache = new Map();
 
+// Beasts of the seas and rivers. They swim between the seabed and the surface.
+const sea = (o) => ({ ...sp(o), walker: false, aquatic: true, footing: 1, aggro: 70 });
+export const AQUATIC = [
+  sea({ id: 'razoreel', name: 'Razor Eel', cn: '刃鳗', arch: 'serpent', color: 0x2a5a6a, accent: 0x7affff, radius: 2.2, hp: 0.5, dmg: 0.32, xp: 0.7, coins: 0.7, speed: 36, behavior: 'swarm', pack: [2, 3], minTier: 0, desc: 'Packs of eels with edges like knives. They circle, then strike together.' }),
+  sea({ id: 'abysscrab', name: 'Abyss Crab', cn: '深渊蟹', arch: 'insect', color: 0x7a3a2a, accent: 0xffa040, radius: 3.2, hp: 1.6, dmg: 1, xp: 1.4, coins: 1.5, cores: 2, speed: 24, behavior: 'tank', pack: [1, 2], minTier: 0.2, desc: 'Armoured crawlers of the deep. Slow, stubborn and hard to crack.' }),
+  sea({ id: 'tideserpent', name: 'Tide Serpent', cn: '潮汐海蛇', arch: 'serpent', color: 0x1a3a5a, accent: 0x3ef2ff, radius: 6, hp: 3.5, dmg: 1.5, xp: 2.6, coins: 2.6, cores: 3, speed: 34, behavior: 'ranged', fireRate: 2.6, shotSpeed: 110, pack: [1, 1], minTier: 0.5, desc: 'A sea serpent that spits bolts of pressurised water from the dark.' }),
+];
+
 export function speciesForBody(body) {
   if (cache.has(body.id + body.seed)) return cache.get(body.id + body.seed);
   let list;

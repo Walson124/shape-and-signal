@@ -1,7 +1,7 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
-    date: '2026-10-13', version: '0.7',
+    date: '2026-10-14', version: '0.7',
     title: 'Vehicles, diving and a new opening',
     items: [
       'Buy a Hoverbike, Rover or Racer at the Vehicle Dealer and ride it anywhere. Call it with M.',

@@ -22,6 +22,8 @@ const FinalShader = {
     tintAmt: { value: 0 },
     flash: { value: 0 },
     glitch: { value: 0 },
+    water: { value: 0 },
+    waterCol: { value: new THREE.Color(0.05, 0.3, 0.42) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -39,6 +41,8 @@ const FinalShader = {
     uniform float tintAmt;
     uniform float flash;
     uniform float glitch;
+    uniform float water;
+    uniform vec3 waterCol;
     varying vec2 vUv;
     float hash(vec2 p) {
       vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -47,6 +51,10 @@ const FinalShader = {
     }
     void main() {
       vec2 uv = vUv;
+      if (water > 0.0) {
+        // light bends under water
+        uv += vec2(sin(uv.y * 24.0 + time * 1.7), cos(uv.x * 19.0 + time * 1.3)) * 0.0025 * water;
+      }
       if (glitch > 0.0) {
         float band = floor(uv.y * 28.0 + floor(time * 13.0) * 5.0);
         float r = hash(vec2(band, floor(time * 17.0)));
@@ -76,6 +84,14 @@ const FinalShader = {
       col = mix(col, col * vec3(0.9, 1.0, 1.12), (1.0 - smoothstep(0.0, 0.45, lum)) * 0.55);
       col = mix(col, col * vec3(1.06, 1.0, 0.93), smoothstep(0.45, 1.0, lum) * 0.4);
       col = (col - 0.5) * 1.07 + 0.5;
+      if (water > 0.0) {
+        // murky blue-green: distant things fade into the water colour, light falls from above
+        float lw = dot(col, vec3(0.299, 0.587, 0.114));
+        vec3 under = waterCol * (0.55 + 0.9 * lw) + vec3(0.03, 0.09, 0.1) * smoothstep(0.45, 0.0, uv.y - 0.55) * 0.0;
+        under += waterCol * 0.35 * smoothstep(0.35, 1.0, uv.y);
+        col = mix(col, under, clamp(water, 0.0, 1.0) * 0.72);
+        col *= 1.0 - 0.35 * water * smoothstep(0.05, 0.6, r2 * 2.0);
+      }
       float edge = smoothstep(0.05, 0.6, r2 * 2.0);
       col = mix(col, tint, tintAmt * edge);
       col = mix(col, vec3(1.0, 0.06, 0.16), damage * edge * 0.75);
@@ -111,7 +127,7 @@ export class PostFX {
     this.vmScene = vmScene;
     this.vmCamera = vmCamera;
     this.overlays = [];
-    this.fx = { speed: 0, damage: 0, tintAmt: 0, flash: 0, glitch: 0, tint: new THREE.Color(0.35, 0.15, 0.85) };
+    this.fx = { speed: 0, damage: 0, tintAmt: 0, flash: 0, glitch: 0, water: 0, waterCol: new THREE.Color(0.05, 0.3, 0.42), tint: new THREE.Color(0.35, 0.15, 0.85) };
     this.composer = null;
   }
 
@@ -177,6 +193,8 @@ export class PostFX {
     u.tintAmt.value = fx.tintAmt;
     u.flash.value = fx.flash;
     u.glitch.value = fx.glitch;
+    u.water.value = fx.water;
+    u.waterCol.value.copy(fx.waterCol);
     this.composer.render();
     if (this.overlays.length) {
       const r = this.renderer;

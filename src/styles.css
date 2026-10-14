@@ -521,3 +521,4 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .item.story.focus { border-color: #ffc857; }
 .item.story.locked { opacity: 0.5; }
 #tint { position: fixed; inset: 0; opacity: 0; pointer-events: none; z-index: 39; }
+#water-tint { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s; background: radial-gradient(ellipse at 50% 0%, rgba(80, 200, 255, 0.18), rgba(0, 40, 80, 0.45) 70%); mix-blend-mode: normal; }
