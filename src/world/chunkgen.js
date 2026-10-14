@@ -1,4 +1,4 @@
-import { makeTerrain, cubeToSphere } from './terrain.js';
+import { makeTerrain, cubeToSphere, craterOffset } from './terrain.js';
 
 // Builds one terrain chunk of a cube-sphere quadtree. Pure (runs in workers).
 const terrains = new Map();
@@ -61,7 +61,9 @@ function rng(seed) {
   };
 }
 
-export function buildChunk({ params, face, level, x, y, res, props }) {
+export function buildChunk({ params, face, level, x, y, res, props, craters }) {
+  const burnOut = [0];
+  const B = craters && craters.length ? new Float64Array((res + 3) * (res + 3)) : null;
   const T = getTerrain(params);
   const R = params.radius;
   const n = res + 1, N = n + 2;
@@ -76,8 +78,12 @@ export function buildChunk({ params, face, level, x, y, res, props }) {
       const s = -1 + 2 * (x + i / res) * scale;
       const t = -1 + 2 * (y + j / res) * scale;
       cubeToSphere(face, s, t, d3);
-      const h = T.height(d3[0], d3[1], d3[2]);
+      let h = T.height(d3[0], d3[1], d3[2]);
       const k = (j + 1) * N + (i + 1);
+      if (B) {
+        h += craterOffset(d3[0], d3[1], d3[2], craters, burnOut);
+        B[k] = burnOut[0];
+      }
       D[k * 3] = d3[0]; D[k * 3 + 1] = d3[1]; D[k * 3 + 2] = d3[2];
       H[k] = h;
       const rr = R + h;
@@ -107,6 +113,13 @@ export function buildChunk({ params, face, level, x, y, res, props }) {
       if (nx * dx + ny * dy + nz * dz < 0) { nx = -nx; ny = -ny; nz = -nz; }
       const slope = Math.max(0, 1 - (nx * dx + ny * dy + nz * dz));
       T.color(dx, dy, dz, H[k], Math.min(1, slope * 4), col);
+      if (B && B[k] > 0) {
+        // scorched, churned earth in and around a crater
+        const b = B[k];
+        col[0] = col[0] * (1 - 0.7 * b) + 0.05 * b;
+        col[1] = col[1] * (1 - 0.75 * b) + 0.035 * b;
+        col[2] = col[2] * (1 - 0.8 * b) + 0.025 * b;
+      }
       const o = j * n + i;
       const px = P[k * 3] - cx, py = P[k * 3 + 1] - cy, pz = P[k * 3 + 2] - cz;
       positions[o * 3] = px; positions[o * 3 + 1] = py; positions[o * 3 + 2] = pz;
@@ -149,6 +162,10 @@ export function buildChunk({ params, face, level, x, y, res, props }) {
         const u = (ci + r()) / G, w = (cj + r()) / G;
         const s = -1 + 2 * (x + u) * scale, t = -1 + 2 * (y + w) * scale;
         cubeToSphere(face, s, t, d3);
+        if (craters && craters.length) {
+          craterOffset(d3[0], d3[1], d3[2], craters, burnOut);
+          if (burnOut[0] > 0) continue;
+        }
         const h = T.height(d3[0], d3[1], d3[2]);
         const e = 0.6 / R;
         const hx = T.height(d3[0] + e, d3[1], d3[2]) - h, hz = T.height(d3[0], d3[1], d3[2] + e) - h;

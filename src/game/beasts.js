@@ -641,6 +641,7 @@ export class BeastManager {
     cancelAdd(b.mesh);
     this.scene.remove(b.mesh);
     b.mesh.traverse((o) => {
+      if (o.userData.shared) return;
       if (o.geometry) o.geometry.dispose();
       if (o.material && !o.isSprite) o.material.dispose();
     });

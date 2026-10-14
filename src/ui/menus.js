@@ -2,7 +2,7 @@ import {
   REALMS, STAGES, PILLS, REGIONS, BOSSES, SWORD_GRADES, SHIPS, TIPS, DEVOUR, SELL, RADARS,
   priceFor, MANUAL_PRICE, masteryMult,
 } from '../game/data.js';
-import { PATHS, PATH_IDS, TECHS, REALM_PERKS, TREES, treeFor, canLearn, pointsFree, pointsEarned } from '../game/paths.js';
+import { PATHS, PATH_IDS, TECHS, REALM_PERKS, TREES, treeFor, canLearn, pointsFree, pointsEarned, activePath, ownedPaths, owns, knows } from '../game/paths.js';
 import { MAX_BOUNTIES } from '../game/missions.js';
 import { LORE } from '../game/lore.js';
 import { ACT1 } from '../game/campaign.js';
@@ -48,7 +48,8 @@ export class Menus {
       snd().confirm();
       const act = b.dataset.act;
       if (act === 'continue') g.continueGame();
-      else if (act === 'new') g.requestNewGame();
+      else if (act === 'campaign') g.requestNewGame('story');
+      else if (act === 'free') g.requestNewGame('free');
       else if (act === 'settings') this.openSettings('title');
       else if (act === 'controls') { this.settingsTab = 'controls'; this.openSettings('title'); }
       else if (act === 'credits') this.showCredits();
@@ -82,8 +83,10 @@ export class Menus {
         accept: () => g.acceptBounty(Number(a.dataset.id)),
         abandon: () => g.abandonBounty(Number(a.dataset.id)),
         learn: () => g.learnSkill(a.dataset.id),
-        respec: () => this.confirmRespec(null),
-        'change-path': () => this.confirmRespec(a.dataset.path),
+        respec: () => this.confirmRespec(),
+        'buy-weapon': () => g.buyWeapon(a.dataset.id),
+        equip: () => g.equipWeapon(a.dataset.id),
+        tree: () => { this.treeTab = a.dataset.tree; },
         sell: () => g.sell(a.dataset.what, Number(a.dataset.frac)),
         gene: () => g.buyGene(),
         chamber: () => g.rentChamber(),
@@ -192,7 +195,7 @@ export class Menus {
     cont.classList.toggle('hidden', !save);
     if (save) {
       const r = REALMS[save.realm];
-      const path = PATHS[save.path];
+      const path = PATHS[activePath(save)];
       this.$('continue-sub').textContent = `${r.name.toUpperCase()} · ${STAGES[save.stage].name.toUpperCase()}${path ? ` · ${path.name.toUpperCase()}` : ''}${save.loc && save.loc.label ? ` · ${save.loc.label.toUpperCase()}` : ''}`;
     }
   }
@@ -234,23 +237,6 @@ export class Menus {
   }
 
   // Path selection: resolves to a path id, or null if cancelled.
-  async choosePath(state) {
-    const cards = PATH_IDS.map((id) => {
-      const p = PATHS[id];
-      const t = (k) => `<li><b>${esc(TECHS[k].name)}</b> <span class="cn">${TECHS[k].cn}</span></li>`;
-      return `<button class="path-card" data-pick="${id}" style="--pc:${hex(p.color)}">
-        <div class="pc-cn">${p.cn}</div>
-        <div class="pc-name">${esc(p.name)}</div>
-        <div class="pc-style mono">${esc(p.style.toUpperCase())}</div>
-        <p>${esc(p.desc)}</p>
-        <ul>${t(p.primary)}${t(p.secondary)}${p.skills.map(t).join('')}</ul>
-      </button>`;
-    }).join('');
-    const note = state ? '<p class="panel-note">The paths have opened. Your realm and progress are kept. Choose how you fight; you can change later at any Martial Hall.</p>' : '<p class="panel-note">Choose how you fight. Every path cultivates the same realms, but fights very differently. You can change later at any Martial Hall.</p>';
-    const v = await this.modal({ kicker: 'CHOOSE YOUR PATH', title: 'Path of Cultivation', body: `${note}<div class="path-cards">${cards}</div>`, actions: [{ label: 'Back', val: 'no', cls: 'ghost' }], wide: true });
-    return v && v !== 'no' ? v : null;
-  }
-
   async chooseMode() {
     const card = (id, cn, name, desc) => `<button class="path-card" data-pick="${id}" style="--pc:${id === 'story' ? '#ffc857' : '#3ef2ff'}">
         <div class="pc-cn">${cn}</div>
@@ -263,15 +249,11 @@ export class Menus {
     return v && v !== 'no' ? v : null;
   }
 
-  async confirmRespec(path) {
+  async confirmRespec() {
     const g = this.game;
-    const cost = g.respecCost() * (path && path !== g.state.path ? 3 : 1);
-    const title = path ? `Walk the path of ${PATHS[path].name}?` : 'Reset your skill points?';
-    const body = path
-      ? `Your skill points are refunded and your techniques change to those of the <b>${esc(PATHS[path].name)}</b> path. Cost: <b class="gold">${fmt(cost)} ◈</b>.`
-      : `Every skill point you have spent is refunded. Cost: <b class="gold">${fmt(cost)} ◈</b>.`;
-    const ok = await this.confirm(title, body, path ? 'Change path' : 'Reset');
-    if (ok) g.respec(path);
+    const cost = g.respecCost();
+    const ok = await this.confirm('Reset your skill points?', `Every skill point you have spent, in every tree, is refunded. Cost: <b class="gold">${fmt(cost)} ◈</b>.`, 'Reset');
+    if (ok) g.respec();
     if (this.panelKind) this.render();
   }
 
@@ -376,9 +358,9 @@ export class Menus {
   venueTabs() {
     const vk = this.game.atStation ? this.game.venueKind : null;
     const map = {
-      station: [['shop', 'Exchange'], ['forge', 'Sword forge'], ['shipyard', 'Shipyard']],
-      exchange: [['shop', 'Exchange']], pills: [['shop', 'Pill pavilion']], forge: [['forge', 'Sword forge']], shipyard: [['shipyard', 'Shipyard']],
-      hall: [['bounties', 'Bounties'], ['trainer', 'Path trainer']], clinic: [['clinic', 'Gene clinic']], chamber: [['chamber', 'Chamber']],
+      station: [['shop', 'Exchange'], ['armory', 'Armory'], ['forge', 'Sword forge'], ['shipyard', 'Shipyard']],
+      exchange: [['shop', 'Exchange']], pills: [['shop', 'Pill pavilion']], forge: [['armory', 'Armory'], ['forge', 'Sword forge']], shipyard: [['shipyard', 'Shipyard']],
+      hall: [['bounties', 'Bounties'], ['trainer', 'Skill reset']], clinic: [['clinic', 'Gene clinic']], chamber: [['chamber', 'Chamber']],
       bar: [['bar', 'Teahouse']], food: [['food', 'Noodle bar']], home: [['home', 'Apartment']], arena: [['arena', 'Arena']],
       camp: [['shop', 'Trader'], ['bar', 'Campfire']],
       virtual: [['vshop', 'Star Mall'], ['bounties', 'Bounty board'], ['vsim', 'Simulator'], ['fame', 'Hall of Fame']],
@@ -395,7 +377,7 @@ export class Menus {
     this.$('panel-tabs').innerHTML = tabs.map(([kind, label]) => `<button class="tab ${kind === k ? 'on' : ''}" data-kind="${kind}">${label}</button>`).join('');
     const r = {
       shipyard: () => this.renderShipyard(), cultivation: () => this.renderCultivation(), skills: () => this.renderSkills(), bounties: () => this.renderBounties(),
-      shop: () => this.renderShop(), forge: () => this.renderForge(), trainer: () => this.renderTrainer(), clinic: () => this.renderClinic(),
+      shop: () => this.renderShop(), forge: () => this.renderForge(), armory: () => this.renderArmory(), trainer: () => this.renderTrainer(), clinic: () => this.renderClinic(),
       chamber: () => this.renderChamber(), bar: () => this.renderBar(), food: () => this.renderFood(), home: () => this.renderHome(), arena: () => this.renderArena(),
       archive: () => this.renderArchive(),
       story: () => this.renderStory(),
@@ -432,16 +414,17 @@ export class Menus {
 
   techCard(id, slotKey, state) {
     const t = TECHS[id];
-    const unlocked = state.realm >= t.unlockRealm;
+    const known = knows(state, id);
+    const unlocked = state.realm >= t.unlockRealm && known;
     const m = state.mastery[id] || 1;
     const pips = `<div class="pips-row">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= m ? 'on' : ''}"></i>`).join('')}</div>`;
-    return `<div class="tech ${unlocked ? '' : 'locked'}"><h4><span>${esc(t.name)} <span class="cn">${t.cn}</span></span><span>${slotKey}</span></h4><p>${esc(t.desc)} ${unlocked ? '' : `<b>Unlocks at ${REALMS[t.unlockRealm].name}.</b>`}</p>${pips}</div>`;
+    return `<div class="tech ${unlocked ? '' : 'locked'}"><h4><span>${esc(t.name)} <span class="cn">${t.cn}</span></span><span>${slotKey}</span></h4><p>${esc(t.desc)} ${unlocked ? '' : state.realm < t.unlockRealm ? `<b>Unlocks at ${REALMS[t.unlockRealm].name}.</b>` : '<b>Learn it in your skill tree.</b>'}</p>${pips}</div>`;
   }
 
   renderCultivation() {
     const { state } = this.game;
     const st = this.game.stats;
-    const P = PATHS[state.path] || PATHS.mind;
+    const P = PATHS[activePath(state)];
     const ladder = REALMS.map((r, i) => `<div class="rung ${i < state.realm ? 'done' : i === state.realm ? 'current' : ''}"><span>${i < state.realm ? '✓ ' : ''}${esc(r.name)}</span><span class="cn">${r.cn}</span></div>`).join('');
     const techs = [
       this.techCard(P.primary, key('fire'), state),
@@ -468,7 +451,7 @@ export class Menus {
           <div class="stat"><div class="k">CRIT</div><div class="v">${Math.round(st.crit * 100)}%</div></div>
           <div class="stat"><div class="k">DEFENCE</div><div class="v">${Math.round(st.armor * 100)}%</div></div>
         </div>
-        <div class="misc-line">${state.path === 'mind' || !state.path ? `Flying swords: <b>${grade.name} ${grade.cn}</b>, ×${grade.mult} damage · ` : ''}Gene enhancement level <b>${state.gene || 0}</b> · Realm Insight <b style="color:#c08cff">${state.insight || 0}</b> · Radar <b>${RADARS[state.radar || 0].name}</b></div>
+        <div class="misc-line">${owns(state, 'mind') ? `Flying swords: <b>${grade.name} ${grade.cn}</b>, ×${grade.mult} damage · ` : ''}Gene enhancement level <b>${state.gene || 0}</b> · Realm Insight <b style="color:#c08cff">${state.insight || 0}</b> · Radar <b>${RADARS[state.radar || 0].name}</b></div>
         <p class="panel-note">Each breakthrough needs a <b>Realm Insight</b>. Earn one by winning an obelisk trial, slaying an Overlord, clearing every fifth arena wave, or completing a Martial Hall breakthrough trial.</p>
         <div class="section-title">Techniques</div>
         <div class="tech-list">${techs}</div>
@@ -482,12 +465,20 @@ export class Menus {
 
   renderSkills() {
     const { state } = this.game;
-    const P = PATHS[state.path] || PATHS.mind;
+    const owned = ownedPaths(state);
+    if (!this.treeTab || (this.treeTab !== 'general' && !PATHS[this.treeTab])) this.treeTab = activePath(state);
+    const tab = this.treeTab;
+    const P = PATHS[tab];
     const free = pointsFree(state);
-    const nodes = treeFor(state.path);
+    const nodes = treeFor(tab);
+    const tabs = ['general', ...PATH_IDS].map((id) => {
+      const label = id === 'general' ? 'General' : PATHS[id].name;
+      const have = id === 'general' || owned.includes(id);
+      return `<button class="btn small ${id === tab ? 'on' : ''}" data-action="tree" data-tree="${id}" style="${have ? '' : 'opacity:0.5'}">${esc(label)}${have ? '' : ' 🔒'}</button>`;
+    }).join('');
     const branches = [];
     for (const n of nodes) {
-      const key2 = `${TREES.general.includes(n) ? 'General' : P.name}: ${n.branch}`;
+      const key2 = `${P ? P.name : 'General'}: ${n.branch}`;
       let b = branches.find((x) => x.k === key2);
       if (!b) branches.push((b = { k: key2, list: [] }));
       b.list.push(n);
@@ -497,27 +488,23 @@ export class Menus {
       const chk = canLearn(state, n);
       const req = n.req ? nodes.find((x) => x.id === n.req[0]) : null;
       const why = chk.ok ? '' : chk.why === 'Locked' && req ? `Needs ${req.name} ${n.req[1]}` : chk.why.startsWith('Needs realm') ? `Needs ${REALMS[n.realm].name}` : chk.why;
-      return `<button class="node ${r ? 'has' : ''} ${r >= n.max ? 'max' : ''} ${chk.ok ? 'can' : ''}" data-action="learn" data-id="${n.id}" ${chk.ok ? '' : 'disabled'}>
+      return `<button class="node ${n.tech ? 'tech' : ''} ${r ? 'has' : ''} ${r >= n.max ? 'max' : ''} ${chk.ok ? 'can' : ''}" data-action="learn" data-id="${n.id}" ${chk.ok ? '' : 'disabled'}>
         <div class="n-top"><b>${esc(n.name)}</b><span class="cn">${n.cn}</span></div>
         <div class="n-desc">${esc(n.desc)}</div>
         <div class="n-foot mono"><span>${r}/${n.max}</span><span>${n.cost} PT${n.cost > 1 ? 'S' : ''}</span>${why ? `<span class="n-why">${esc(why)}</span>` : ''}</div>
       </button>`;
     }).join('')}</div>`).join('');
-    return `<p class="panel-note">Path of <b style="color:${hex(P.color)}">${esc(P.name)} ${P.cn}</b>. You earn one skill point per stage and two per breakthrough. <b class="gold">${free}</b> point${free === 1 ? '' : 's'} free of ${pointsEarned(state)} earned. Reset or change path at any Martial Hall.</p><div class="tree">${cols}</div>`;
+    const intro = !P ? 'Training that helps every discipline.'
+      : owned.includes(tab) ? `${esc(P.desc)} Techniques marked ◆ are learned here, then used with the ${esc(P.weapon.name)} in hand.`
+      : `Buy the <b>${esc(P.weapon.name)}</b> at an Armory to open this tree. ${esc(P.desc)}`;
+    return `<div class="tree-tabs">${tabs}</div><p class="panel-note">${intro} <b class="gold">${free}</b> skill point${free === 1 ? '' : 's'} free of ${pointsEarned(state)} earned (one per stage, five per breakthrough), shared by every tree. Reset them at any Martial Hall.</p><div class="tree">${cols}</div>`;
   }
 
   renderTrainer() {
     const g = this.game, s = g.state;
     const cost = g.respecCost();
-    const cards = PATH_IDS.map((id) => {
-      const p = PATHS[id];
-      const cur = id === s.path;
-      return `<div class="item"><div><h4 style="color:${hex(p.color)}">${esc(p.name)}<span class="cn">${p.cn}</span></h4><p>${esc(p.desc)}</p></div>
-        ${cur ? '<span class="tag done">YOUR PATH</span>' : `<span class="price">${fmt(cost * 3)} ◈</span><button class="btn small" data-action="change-path" data-path="${id}" ${s.coins >= cost * 3 ? '' : 'disabled'}>Change</button>`}</div>`;
-    }).join('');
-    return `<p class="panel-note">The masters of the hall can unbind your skill points, or retrain you in another path entirely. You hold ${this.wallet()}.</p>
-      <div class="list"><div class="item"><div><h4>Reset skill points<span class="cn">洗点</span></h4><p>Refund every point you have spent in your current path.</p></div><span class="price">${fmt(cost)} ◈</span><button class="btn small" data-action="respec" ${s.coins >= cost ? '' : 'disabled'}>Reset</button></div></div>
-      <div class="section-title">Paths</div><div class="list">${cards}</div>`;
+    return `<p class="panel-note">The masters of the hall can unbind your skill points so you can spend them again. You hold ${this.wallet()}.</p>
+      <div class="list"><div class="item"><div><h4>Reset skill points<span class="cn">洗点</span></h4><p>Refund every point you have spent, in every tree.</p></div><span class="price">${fmt(cost)} ◈</span><button class="btn small" data-action="respec" ${s.coins >= cost ? '' : 'disabled'}>Reset</button></div></div>`;
   }
 
   rewardText(r) {
@@ -558,8 +545,7 @@ export class Menus {
       const price = priceFor(p.price, state.realm);
       return `<div class="item"><div><h4>${esc(p.name)}<span class="cn">${p.cn}</span></h4><p>${esc(p.desc)} Owned ${state.pills[k]}. Hotkey ${key(`pill${i + 1}`)}.</p></div><span class="price">${fmt(price)} ◈</span><button class="btn small" data-action="buy" data-item="${k}" ${state.coins >= price ? '' : 'disabled'}>Buy</button></div>`;
     }).join('');
-    const P = PATHS[state.path] || PATHS.mind;
-    const manuals = [P.primary, ...P.skills].filter((k) => state.realm >= TECHS[k].unlockRealm).map((k) => {
+    const manuals = ownedPaths(state).flatMap((id) => [PATHS[id].primary, ...PATHS[id].skills]).filter((k) => state.realm >= TECHS[k].unlockRealm && knows(state, k)).map((k) => {
       const t = TECHS[k];
       const m = state.mastery[k] || 1;
       const price = priceFor(MANUAL_PRICE * m, state.realm);
@@ -578,6 +564,21 @@ export class Menus {
     return `<p class="panel-note">Life, energy and spirit restored. You hold ${this.wallet()}.</p>${radar}
       <div class="section-title" style="margin-top:0">Pills and elixirs</div><div class="list">${pills}</div>
       ${vk === 'pills' ? '' : `<div class="section-title">Technique manuals</div><div class="list">${manuals}</div>`}${sell}`;
+  }
+
+  renderArmory() {
+    const { state } = this.game;
+    const cur = activePath(state);
+    const rows = PATH_IDS.map((id) => {
+      const p = PATHS[id];
+      const have = owns(state, id);
+      const btn = id === cur ? '<span class="tag done">IN HAND</span>'
+        : have ? `<button class="btn small" data-action="equip" data-id="${id}">Equip</button>`
+        : `<span class="price">${fmt(p.weapon.price)} ◈</span><button class="btn small ${state.coins >= p.weapon.price ? 'primary' : ''}" data-action="buy-weapon" data-id="${id}" ${state.coins >= p.weapon.price ? '' : 'disabled'}>Buy</button>`;
+      const techs = [p.primary, p.secondary, ...p.skills].map((t) => TECHS[t].name).join(' · ');
+      return `<div class="item"><div><h4 style="color:${hex(p.color)}">${esc(p.weapon.name)}<span class="cn">${p.weapon.cn}</span> <span class="mono dim" style="font-size:11px">${esc(p.name.toUpperCase())} · ${esc(p.style.toUpperCase())}</span></h4><p>${esc(p.weapon.desc)} ${esc(p.desc)}</p><p class="mono dim" style="font-size:11px">${esc(techs)}</p></div>${btn}</div>`;
+    }).join('');
+    return `<p class="panel-note">Every weapon brings its own discipline: its attacks, and a skill tree of techniques to learn. Carry as many as you like and switch with <kbd>${esc(codeLabel(settings.key('weaponNext')))}</kbd> or the mouse wheel. You hold ${this.wallet()}.</p><div class="list">${rows}</div>`;
   }
 
   renderForge() {
@@ -687,7 +688,7 @@ export class Menus {
     const st = this.game.stats;
     const mins = Math.floor(s.playtime / 60);
     const rows = [
-      ['Realm', `${REALMS[s.realm].name} · ${STAGES[s.stage].name}`], ['Path', (PATHS[s.path] || PATHS.mind).name], ['Life · attack', `${fmt(st.maxHp)} · ${fmt(st.atk)}`],
+      ['Realm', `${REALMS[s.realm].name} · ${STAGES[s.stage].name}`], ['Weapon', PATHS[activePath(s)].weapon.name], ['Life · attack', `${fmt(st.maxHp)} · ${fmt(st.atk)}`],
       ['Beasts slain', fmt(s.kills)], ['Overlords slain', s.bosses.length], ['Bounties completed', s.completedBounties], ['Arena best', `wave ${s.arena || 0}`],
       ['Archive logs', `${(s.lore || []).length}/${LORE.length}`], ['Systems visited', s.visited.length], ['Places discovered', s.discovered.length], ['Time played', `${Math.floor(mins / 60)}h ${mins % 60}m`],
     ];

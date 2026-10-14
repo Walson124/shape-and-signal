@@ -337,6 +337,26 @@ export function makeTerrain(params) {
   return { height, floorHeight, color, prop, sea, amp: A, radius: R, type, inSite, inRuin };
 }
 
+// Height change from craters at a unit direction: a bowl with a raised rim.
+// craters: [{ x, y, z (unit dir), r (angular radius), d (depth in metres) }].
+// Writes the scorch amount (0..1) into out[0] if given.
+export function craterOffset(x, y, z, craters, out) {
+  let h = 0, burn = 0;
+  if (craters) {
+    for (const c of craters) {
+      const dot = x * c.x + y * c.y + z * c.z;
+      if (dot < c.cos) continue;
+      const t = Math.acos(Math.min(1, dot)) / c.r;
+      if (t < 1) h -= c.d * (1 - t * t);
+      const rim = (t - 1) / 0.25;
+      h += c.d * 0.22 * Math.exp(-rim * rim);
+      burn = Math.max(burn, 1 - t / 1.25);
+    }
+  }
+  if (out) out[0] = Math.max(0, burn);
+  return h;
+}
+
 // Map cube-face coordinates (s, t in [-1, 1]) to a unit sphere direction.
 export function cubeToSphere(face, s, t, out) {
   let x, y, z;

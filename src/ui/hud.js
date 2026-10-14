@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { REALMS, STAGES, MAX_REALM, PILLS, realmOf } from '../game/data.js';
-import { PATHS, TECHS } from '../game/paths.js';
+import { PATHS, TECHS, knows, ownedPaths } from '../game/paths.js';
 import { settings } from '../core/settings.js';
 import { codeLabel } from '../core/bindings.js';
 
@@ -48,9 +48,9 @@ export class HUD {
     this.pipCount = -1;
     this.lastBounties = '';
     this.radarSweep = 0;
-    this.buildSkills('mind');
+    this.buildSkills('fist');
     settings.onChange((k) => {
-      if (k === 'bindings') this.buildSkills(this.path || 'mind');
+      if (k === 'bindings') this.buildSkills(this.path || 'fist');
       if (k === 'hudScale') this.applyScale();
     });
     this.applyScale();
@@ -81,8 +81,10 @@ export class HUD {
 
   buildSkills(pathId) {
     this.path = pathId;
-    const P = PATHS[pathId] || PATHS.mind;
+    const P = PATHS[pathId] || PATHS.fist;
     const key = (a) => codeLabel(settings.key(a));
+    const wl = document.getElementById('weapon-label');
+    if (wl) wl.innerHTML = `<span class="mono dim">${esc(key('weaponNext'))} · WEAPON</span> <b style="color:#${P.color.toString(16).padStart(6, '0')}">${esc(P.weapon.name)}</b> <span class="cn">${P.cn}</span>`;
     const short = (id) => TECHS[id].name.split(' ').slice(-1)[0];
     this.techSlots = [
       { id: P.primary, key: key('fire') },
@@ -127,11 +129,11 @@ export class HUD {
       const k = slot.id;
       const s = this.skillEls[k];
       const t = TECHS[k];
-      const unlocked = state.realm >= t.unlockRealm;
+      const unlocked = state.realm >= t.unlockRealm && knows(state, k);
       const pool = t.res === 'spirit' ? rt.spirit : rt.energy;
       s.el.classList.toggle('locked', !unlocked);
       s.el.classList.toggle('low', unlocked && pool < t.cost);
-      s.el.classList.toggle('active', ((k === 'barrier') && rt.shieldT > 0) || (k === 'will' && rt.willT > 0) || (k === 'steer' && info.controlling) || (k === 'guard' && rt.guarding));
+      s.el.classList.toggle('active', ((k === 'barrier') && rt.shieldT > 0) || (k === 'will' && rt.willT > 0) || (k === 'iron' && rt.ironT > 0) || (k === 'venom' && rt.venomT > 0) || (k === 'steer' && info.controlling) || (k === 'guard' && rt.guarding) || (k === 'aim' && rt.aiming));
       const cd = rt.cooldowns[k] || 0;
       s.cd.style.setProperty('--p', `${unlocked ? Math.min(100, (cd / t.cd) * 100) : 0}%`);
       if (s.wasCd && cd <= 0 && unlocked && t.cd > 1) {

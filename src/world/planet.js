@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeTerrain, cubeToSphere } from './terrain.js';
 import { texPool } from './texpool.js';
 import { chunkIndex } from './chunkgen.js';
+import { craterOffset } from './terrain.js';
 import { addCompiled, cancelAdd } from '../core/precompile.js';
 import { terrainMaterial, propMaterial, propGeometries } from './props.js';
 import { makeAtmosphere, makeOcean, makeClouds, makeRings } from './planetfx.js';
@@ -131,7 +132,7 @@ export class Planet {
   request(node) {
     if (node.requested) return;
     node.requested = true;
-    const job = { params: this.params, face: node.face, level: node.level, x: node.x, y: node.y, res: RES, props: node.level >= this.maxLevel - (this.ctx.preset.split >= 2.4 ? 1 : 0) };
+    const job = { params: this.params, face: node.face, level: node.level, x: node.x, y: node.y, res: RES, props: node.level >= this.maxLevel - (this.ctx.preset.split >= 2.4 ? 1 : 0), craters: this.cratersNear(node) };
     texPool.run('chunk', job, { priority: () => node.dist * (1 + node.level * 0.02), cancelled: () => !node.alive }).then((out) => {
       if (!out || !node.alive) return;
       this.buildMesh(node, out);
@@ -290,12 +291,104 @@ export class Planet {
   // Radius of the walkable surface (terrain or liquid) under a local direction.
   floorRadius(dirX, dirY, dirZ) {
     if (!this.terrain) return this.R;
+    if (this.craters && this.craters.length) {
+      const off = craterOffset(dirX, dirY, dirZ, this.craters);
+      if (off) {
+        const h = this.terrain.height(dirX, dirY, dirZ) + off;
+        const sea = this.terrain.sea;
+        return this.R + (sea !== null && h < sea ? sea : h);
+      }
+    }
     return this.R + this.terrain.floorHeight(dirX, dirY, dirZ);
   }
 
   groundRadius(dirX, dirY, dirZ) {
     if (!this.terrain) return this.R;
-    return this.R + this.terrain.height(dirX, dirY, dirZ);
+    return this.R + this.terrain.height(dirX, dirY, dirZ) + (this.craters && this.craters.length ? craterOffset(dirX, dirY, dirZ, this.craters) : 0);
+  }
+
+  // ------------------------------------------------------------ craters --
+  // Blast a crater into the ground at a local position (planet frame).
+  addCrater(local, radius) {
+    if (!this.terrain || !this.roots || radius < 2) return;
+    const dir = local.clone().normalize();
+    // no craters inside city walls
+    if (this.details) for (const s of this.details.settlements) if (local.distanceTo(s.group.position) < s.radius + radius) return;
+    this.craters = this.craters || [];
+    const r = Math.min(80, radius) / this.R;
+    const d = Math.min(18, radius * 0.35);
+    const near = this.craters.find((c) => dir.x * c.x + dir.y * c.y + dir.z * c.z > Math.cos(c.r * 0.4));
+    if (near) {
+      near.d = Math.min(near.d + d * 0.4, Math.max(near.d, 22));
+      near.r = Math.max(near.r, r);
+      near.cos = Math.cos(near.r * 1.6);
+    } else {
+      this.craters.push({ x: dir.x, y: dir.y, z: dir.z, r, d, cos: Math.cos(r * 1.6) });
+      if (this.craters.length > 60) this.craters.shift();
+    }
+    const reach = radius * 1.6 + 2;
+    const visit = (n) => {
+      if (!n) return;
+      if (n.center.distanceTo(local) > n.radius + reach + n.size * 0.2) return;
+      if (n.mesh) this.remesh(n);
+      if (n.children) n.children.forEach(visit);
+    };
+    this.roots.forEach(visit);
+  }
+
+  cratersNear(node) {
+    if (!this.craters || !this.craters.length) return null;
+    const out = [];
+    const cdir = node.center.clone().normalize();
+    const nodeAng = (node.radius + node.size * 0.2) / this.R;
+    for (const c of this.craters) {
+      const ang = Math.acos(Math.max(-1, Math.min(1, cdir.x * c.x + cdir.y * c.y + cdir.z * c.z)));
+      if (ang < nodeAng + c.r * 1.6) out.push(c);
+    }
+    return out.length ? out : null;
+  }
+
+  // Regenerate a chunk in place (after the ground changed under it).
+  remesh(node) {
+    if (node.remeshing) {
+      node.dirty = true;
+      return;
+    }
+    node.remeshing = true;
+    const job = { params: this.params, face: node.face, level: node.level, x: node.x, y: node.y, res: RES, props: node.level >= this.maxLevel - (this.ctx.preset.split >= 2.4 ? 1 : 0), craters: this.cratersNear(node) };
+    texPool.run('chunk', job, { priority: () => -1, cancelled: () => !node.alive }).then((out) => {
+      node.remeshing = false;
+      if (!out || !node.alive || !node.mesh) return;
+      const old = node.mesh, oldKeys = node.propKeys;
+      node.mesh = null;
+      node.propKeys = null;
+      this.buildMesh(node, out);
+      node.mesh.visible = old.visible;
+      this.dropProps(oldKeys);
+      this.terrainGroup.remove(old);
+      for (const c of old.children) if (c.isInstancedMesh) c.dispose();
+      old.geometry.dispose();
+      this.chunkCount--;
+      if (node.dirty) {
+        node.dirty = false;
+        this.remesh(node);
+      }
+    }).catch((e) => {
+      node.remeshing = false;
+      console.error(e);
+    });
+  }
+
+  dropProps(keys) {
+    if (!keys) return;
+    for (const [k, e] of keys) {
+      e.dead = true;
+      const list = this.propHash.get(k);
+      if (!list) continue;
+      const i = list.indexOf(e);
+      if (i >= 0) list.splice(i, 1);
+      if (!list.length) this.propHash.delete(k);
+    }
   }
 
   // Push a point out of buildings, walls, furniture, trees and rocks.

@@ -117,6 +117,13 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .pip.away { opacity: 0.35; height: 10px; }
 .pip.control { background: var(--yl); }
 #skills { display: flex; gap: 6px; }
+#weapon-label { font-size: 13px; letter-spacing: 0.04em; text-shadow: 0 1px 4px #000; }
+#weapon-label .dim { font-size: 10px; margin-right: 4px; }
+#weapon-label .cn { color: var(--gd); font-family: var(--cn); }
+.tree-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.tree-tabs .btn.on { border-color: var(--gd); color: var(--gd); }
+.node.tech { border-color: rgba(255, 200, 87, 0.5); }
+.node.tech .n-top b::before { content: '◆ '; color: var(--gd); }
 .skill { position: relative; width: 52px; height: 52px; background: rgba(6, 12, 24, 0.82); border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
 .skill .s-cn { font-family: var(--cn); font-size: 13px; color: var(--gd); white-space: nowrap; letter-spacing: -0.04em; }
 .skill .s-name { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1; text-align: center; padding: 0 3px; }

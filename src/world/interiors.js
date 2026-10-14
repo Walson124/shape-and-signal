@@ -5,14 +5,14 @@ import { signTexture } from './textures.js';
 // Venue kinds: what each walk-in building offers and how it looks inside.
 export const VENUES = {
   exchange: { name: 'Star Exchange', cn: '兑换所', color: 0xffe44d, sign: '兑换所 EXCHANGE', desc: 'Sell star metal and essence. Buy pills and technique manuals.' },
-  forge: { name: 'Sword Forge', cn: '剑阁', color: 0x3ef2ff, sign: '剑阁 FORGE', desc: 'Reforge your flying swords and refine essence.' },
+  forge: { name: 'Armory', cn: '兵器铺', color: 0x3ef2ff, sign: '兵器铺 ARMORY', desc: 'Weapons for every discipline, the sword forge, and essence refining.' },
   pills: { name: 'Pill Pavilion', cn: '丹药阁', color: 0x5dffa8, sign: '丹药 PILLS', desc: 'Pills and elixirs at fair prices.' },
   clinic: { name: 'Gene Clinic', cn: '基因诊所', color: 0xff3c7d, sign: '基因 GENE LAB', desc: 'Permanent genetic enhancement of body and mind.' },
   chamber: { name: 'Cultivation Chamber', cn: '修炼室', color: 0xb98cff, sign: '修炼室 CHAMBER', desc: 'Rent a gravity chamber. Cultivation inside is far faster.' },
   bar: { name: 'Teahouse', cn: '茶馆', color: 0xffa040, sign: '茶馆 TEAHOUSE', desc: 'Odd jobs, gossip and rumours of treasure in the wilds.' },
   food: { name: 'Noodle Bar', cn: '面馆', color: 0xff6a4a, sign: '面馆 NOODLES', desc: 'Hot meals that keep you going in a fight.' },
   home: { name: 'Apartments', cn: '公寓', color: 0x7ad8ff, sign: '公寓 HOME', desc: 'Rent a room: a bed, a respawn point and a safe night’s sleep.' },
-  hall: { name: 'Martial Hall', cn: '武馆', color: 0xffe44d, sign: '武馆', desc: 'Bounties, path training and skill resets.' },
+  hall: { name: 'Martial Hall', cn: '武馆', color: 0xffe44d, sign: '武馆', desc: 'Bounties, trials and skill resets.' },
   arena: { name: 'Arena', cn: '竞技场', color: 0xff3c7d, sign: '竞技场 ARENA', desc: 'Fight waves of beasts for prize money.' },
   lobby: { name: 'Residential Block', cn: '住宅', color: 0x8fb8ff, sign: null, desc: '' },
 };

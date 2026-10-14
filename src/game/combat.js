@@ -62,7 +62,7 @@ export class Combat {
     mesh.quaternion.setFromUnitVectors(Z, dir);
     const glow = new THREE.Sprite(this.spriteMat(color, 1.1));
     glow.scale.setScalar(4.5 * size);
-    this.addShot({ kind: 'bolt', owner: 'player', pos: origin.clone(), vel: dir.clone().multiplyScalar(speed), life: 2.2, damage, radius: 1.3 * size, color: new THREE.Color(color).multiplyScalar(1.4), mesh, glow, pierce: opts.pierce || 0, hitSet: new Set() });
+    this.addShot({ kind: opts.kind || 'bolt', owner: 'player', pos: origin.clone(), vel: dir.clone().multiplyScalar(speed), life: opts.life || 2.2, damage, radius: 1.3 * size, color: new THREE.Color(color).multiplyScalar(1.4), mesh, glow, pierce: opts.pierce || 0, hitSet: new Set(), onImpact: opts.onImpact || null });
   }
 
   // A crescent of light that cuts through everything along its path.
@@ -318,6 +318,7 @@ export class Combat {
       const s = this.shots[i];
       s.life -= dt;
       if (s.life <= 0) {
+        if (s.onImpact) s.onImpact(s.pos.clone());
         this.removeShot(i);
         continue;
       }
@@ -339,7 +340,11 @@ export class Combat {
             ctx.hitBeast(b, s.damage, s.pos.clone(), s.kind, s.vel.clone().normalize().multiplyScalar(15));
             this.particles.burst(s.pos, s.color, 12, 50, 0.8, 0.35, 3);
             if (s.hitSet) s.hitSet.add(b);
-            if (!s.pierce || s.hitSet.size > s.pierce) { dead = true; break; }
+            if (!s.pierce || s.hitSet.size > s.pierce) {
+              dead = true;
+              if (s.onImpact) { s.onImpact(s.pos.clone()); s.onImpact = null; }
+              break;
+            }
           }
         }
       } else if (ctx.playerAlive && segPointDist(prevPos, s.pos, player.pos) < player.radius + s.radius) {
@@ -361,6 +366,7 @@ export class Combat {
       }
       if (!dead && s.kind !== 'wave' && s.kind !== 'heaven' && ctx.solid && ctx.solid(s.pos)) {
         dead = true;
+        if (s.onImpact) { s.onImpact(s.pos.clone()); s.onImpact = null; }
         if (s.owner === 'player' && ctx.breakAt) {
           ctx.breakAt(s.pos, 2.5 * (s.radius || 1), s.vel.clone().normalize());
           if (ctx.scorch) ctx.scorch(s.pos, 1.6 + s.radius);

@@ -3,7 +3,7 @@ import {
   REALMS, STAGES, MAX_REALM, PILLS, REGIONS, BOSSES, FINAL_BOSS, SWORD_GRADES, SHIPS, FLIGHT, SELL, RADARS,
   xpScale, masteryMult, priceFor, MANUAL_PRICE, realmOf, essenceFor,
 } from './data.js';
-import { PATHS, TECHS, REALM_PERKS, canLearn, nodeById } from './paths.js';
+import { PATHS, TECHS, REALM_PERKS, canLearn, nodeById, activePath, ownedPaths, owns, knows } from './paths.js';
 import { Arts } from './arts.js';
 import { Companion } from './companion.js';
 import { LORE, RUIN_NAMES } from './lore.js';
@@ -463,22 +463,19 @@ export class Game {
     this.menus.showPause(false);
   }
 
-  async requestNewGame() {
+  async requestNewGame(mode) {
     if (this.hasSave) {
-      const ok = await this.menus.confirm('Begin a new journey?', 'This erases your current cultivation progress for good.', 'Start over', true);
+      const ok = await this.menus.confirm('Begin a new journey?', 'This erases your current save for good. (Choose Continue to keep playing it.)', 'Start over', true);
       if (!ok) return;
     }
-    this.newGame();
+    this.newGame(mode);
   }
 
-  async newGame() {
-    const path = await this.menus.choosePath(null);
-    if (!path) return;
-    const story = await this.menus.chooseMode();
+  async newGame(mode = null) {
+    const story = mode || (await this.menus.chooseMode());
     if (!story) return;
     clearSave();
     this.state = newState();
-    this.state.path = path;
     if (story === 'story') {
       this.state.nixAwake = false;
       this.state.intro = true;
@@ -510,11 +507,6 @@ export class Game {
   }
 
   async continueGame() {
-    if (!this.state.path) {
-      const path = await this.menus.choosePath(this.state);
-      if (!path) return;
-      this.state.path = path;
-    }
     this.stats = derive(this.state);
     const inShip = this.rt.inShip;
     this.rt = this.freshRuntime();
@@ -535,8 +527,7 @@ export class Game {
     this.swords.setVisible(!this.rt.inShip);
     this.swords.reset(this.player);
     this.viewmodel.setColor(REALMS[this.state.realm].color);
-    this.viewmodel.setPath(this.state.path || 'mind', (PATHS[this.state.path] || PATHS.mind).color);
-    this.hud.buildSkills(this.state.path || 'mind');
+    this.applyWeapon();
     this.arts.reset();
     this.sound.init();
     this.input.lock();
@@ -795,7 +786,7 @@ export class Game {
 
     // ---- sword control
     if (!inp.right) rt.spiritLock = false;
-    rt.controlling = alive && !rt.inShip && (s.path || 'mind') === 'mind' && inp.right && !rt.spiritLock && !rt.meditating && rt.spirit > 0;
+    rt.controlling = alive && !rt.inShip && activePath(s) === 'mind' && inp.right && !rt.spiritLock && !rt.meditating && rt.spirit > 0;
     if (rt.controlling) {
       rt.spirit -= (8 + st.swords * 0.6) * dt;
       if (rt.spirit <= 0) {
@@ -807,6 +798,8 @@ export class Game {
     }
     this.swords.controlling = rt.controlling;
     if (alive && !rt.controlling && inp.wheel && (this.camMode === 'third' || rt.inShip)) this.zoom = clamp(this.zoom + inp.wheel * 0.12, 0.5, 3);
+    else if (alive && !rt.controlling && !rt.inShip && inp.wheel && this.camMode === 'first') this.cycleWeapon(Math.sign(inp.wheel));
+    if (alive && !rt.inShip && inp.hit('weaponNext')) this.cycleWeapon(1);
 
     // ---- movement
     const env = this.computeEnv(rt.inShip && this.shipObj ? this.shipObj.pos : p.pos);
@@ -837,7 +830,7 @@ export class Game {
     rt.shieldT = Math.max(0, rt.shieldT - dt);
     rt.invuln = Math.max(0, rt.invuln - dt);
     rt.firingT = Math.max(0, rt.firingT - dt);
-    const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg * ((s.path || 'mind') === 'mind' ? 1 : 0.7);
+    const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg;
     this.arts.update(dt, { alive, camFwd, aimPoint, aimBeast, swordDamage });
     if (alive && !rt.meditating) {
       if (inp.hit('pill1')) this.usePill('heal');
@@ -881,7 +874,7 @@ export class Game {
     this.beasts.setEnv(this.beastEnv(tier));
     const ctx = { player: p, playerAlive: alive && rt.invuln <= 0, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
     this.beasts.update(dt, ctx);
-    this.swords.setup(st.swords, s.swordGrade);
+    this.swords.setup(activePath(s) === 'mind' ? st.swords : 0, s.swordGrade);
     this.swords.update(dt, {
       player: p, camera: this.camera, aimDir: camFwd, aimTarget: aimBeast, beasts: this.beasts.beasts, realm: s.realm,
       enemyShots: this.combat.enemyShots, wheel: rt.controlling ? inp.wheel : 0, swordDamage, up: env.up || p.localUp(),
@@ -1311,9 +1304,9 @@ export class Game {
     }
     if (this.mode !== 'warping') {
       const base = settings.get('fov');
-      const targetFov = base + (p.boosting ? 9 : 0) + (rt.cruise ? 10 : 0);
+      const targetFov = rt.aiming ? base * 0.55 : base + (p.boosting ? 9 : 0) + (rt.cruise ? 10 : 0);
       if (Math.abs(this.camera.fov - targetFov) > 0.05) {
-        this.camera.fov += (targetFov - this.camera.fov) * (1 - Math.exp(-dt * 3));
+        this.camera.fov += (targetFov - this.camera.fov) * (1 - Math.exp(-dt * (rt.aiming ? 12 : 3)));
         this.camera.updateProjectionMatrix();
         this.particles.setScale(this.height * this.pixelRatio(), this.camera.fov);
       }
@@ -1375,15 +1368,40 @@ export class Game {
 
   hitBeast(b, dmg, pos, kind, knock) {
     if (!b.alive) return;
-    const crit = kind !== 'pressure' && Math.random() < this.stats.crit;
-    const amount = dmg * (crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(b);
+    const backstab = kind !== 'poison' && kind !== 'pressure' && this.arts.consumeBackstab();
+    const crit = backstab || (kind !== 'pressure' && kind !== 'poison' && Math.random() < this.stats.crit + this.arts.critBonus(kind));
+    const amount = dmg * (backstab ? 3 : crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(b, kind);
     const steal = this.arts.lifesteal();
     if (steal > 0 && !b.static) this.rt.hp = Math.min(this.stats.maxHp, this.rt.hp + amount * steal);
-    this.dmgNum(pos, fmt(amount), crit ? 'crit' : kind === 'sword' || kind === 'storm' ? 'sword' : '');
+    this.dmgNum(pos, fmt(amount), crit ? 'crit' : kind === 'sword' || kind === 'storm' ? 'sword' : kind === 'poison' ? 'xp' : '');
     if (kind === 'bolt') this.sound.hit(pos);
     if (b.static && b.def.color) this.particles.burst(pos, new THREE.Color(b.def.color).multiplyScalar(2), 8, 20, 0.5, 0.4);
     const killed = this.beasts.damage(b, amount, this.time, knock);
-    this.hud.hitmarker(killed);
+    this.arts.onHit(b, kind, killed);
+    if (!killed && !b.static && kind !== 'poison' && kind !== 'pressure') this.wound(b, pos, amount);
+    if (kind !== 'poison') this.hud.hitmarker(killed);
+  }
+
+  // A visible wound where a beast was hit, and bits of it flying off.
+  wound(b, pos, amount) {
+    const heavy = amount > b.maxHp * 0.12;
+    const col = b.def.color || 0x884444;
+    this.combat.debris(pos, heavy ? 0x7a1a14 : col, heavy ? 5 : 2, Math.max(0.25, b.radius * (heavy ? 0.14 : 0.08)));
+    this.particles.burst(pos, new THREE.Color(1.4, 0.15, 0.1), heavy ? 18 : 8, 18 + b.radius * 3, 0.5, 0.45, 2);
+    if (!b.mesh || (b.wounds || 0) >= 7 || amount < b.maxHp * 0.04) return;
+    b.wounds = (b.wounds || 0) + 1;
+    if (!this.woundMat) this.woundMat = new THREE.MeshStandardMaterial({ color: 0x2a0806, roughness: 0.9, emissive: 0x3a0400, emissiveIntensity: 0.6 });
+    if (!this.woundGeo) this.woundGeo = new THREE.IcosahedronGeometry(1, 0);
+    const m = new THREE.Mesh(this.woundGeo, this.woundMat);
+    b.mesh.updateMatrixWorld();
+    const local = b.mesh.worldToLocal(this.toWorld(pos).clone());
+    // wounds sit on the surface: pull the point in toward the centre a little
+    m.position.copy(local).multiplyScalar(0.92);
+    const s = (0.18 + Math.min(0.5, amount / b.maxHp)) * b.radius * 0.45 / Math.max(0.001, b.mesh.scale.x);
+    m.scale.set(s, s * 0.45, s);
+    m.lookAt(local.clone().multiplyScalar(2));
+    m.userData.shared = true;
+    b.mesh.add(m);
   }
 
   hurtPlayer(amount, pos, knock, silent = false, shot = null) {
@@ -1717,11 +1735,8 @@ export class Game {
     if (s.realm === 1) this.nix.once('fly', 'firstFly', {}, 1);
     this.hud.banner('BREAKTHROUGH', realm.name, `<span class="cn">${realm.cn}</span>${esc(realm.blurb)}`, hex(realm.color), 5);
     if (this.stats.swords > derive({ ...s, realm: s.realm - 1 }).swords) setTimeout(() => this.hud.notify(`A new flying sword answers your call. You now command <b>${this.stats.swords}</b>.`, 'violet'), 2000);
-    const P = PATHS[s.path] || PATHS.mind;
-    P.skills.forEach((id, i) => {
-      const t = TECHS[id];
-      if (t.unlockRealm === s.realm) setTimeout(() => this.hud.notify(`New technique: <b>${t.name}</b> <span class="cn">${t.cn}</span>. Press <kbd>${codeLabel(settings.key(`skill${i + 1}`))}</kbd>.`, 'violet'), 3000);
-    });
+    const fresh = ownedPaths(s).flatMap((id) => PATHS[id].skills).filter((id) => TECHS[id].unlockRealm === s.realm && !knows(s, id));
+    if (fresh.length) setTimeout(() => this.hud.notify(`New techniques can be learned: <b>${fresh.map((id) => TECHS[id].name).join(', ')}</b>. Open your skill tree.`, 'violet'), 3000);
     const perk = REALM_PERKS.find((pk) => pk.realm === s.realm);
     if (perk && s.realm > 2) setTimeout(() => this.hud.notify(`Realm power: <b>${perk.name}</b>. ${perk.desc}`, 'gold'), 4500);
     setTimeout(() => this.hud.notify(`You earned skill points. Press <kbd>${codeLabel(settings.key('panelSkills'))}</kbd> to open your skill tree.`, 'yl'), 6000);
@@ -2397,6 +2412,8 @@ export class Game {
   scorch(local, size) {
     const f = this.frame;
     if (!f || !f.terrain || !this.env.inAtmo) return;
+    // clods of earth thrown up by the blow
+    this.combat.debris(local, 0x4a3c2e, Math.min(10, Math.round(2 + size)), 0.25 + Math.min(1.2, size * 0.08));
     if (!this.scorchPool) {
       const c = document.createElement('canvas');
       c.width = c.height = 64;
@@ -2502,7 +2519,7 @@ export class Game {
   nixWatch() {
     const s = this.state, p = this.player, f = this.frame;
     if (s.playtime > 200) this.nix.once('radar', 'radarHint', {}, 0);
-    if (s.playtime > 30) this.nix.once(`path_${s.path}`, `path.${s.path || 'mind'}`, {}, 0);
+    if (s.playtime > 30 && activePath(s) !== 'fist') this.nix.once(`path_${activePath(s)}`, `path.${activePath(s)}`, {}, 0);
     if (p.mode === 'space') this.nix.once('space', 'firstSpace', {}, 1);
     if (f && f.body.landable && this.env.up && f.body.sites.city && f.body.sites.city.main) {
       const tier = this.locTier();
@@ -2844,7 +2861,11 @@ export class Game {
   // -------------------------------------------------------- paths --
   pathTip() {
     const key = (a) => `<kbd>${codeLabel(settings.key(a))}</kbd>`;
-    const p = this.state.path || 'mind';
+    const p = activePath(this.state);
+    if (p === 'fist') return `${key('fire')} throws punches; every fourth in a row knocks beasts back. Hold ${key('focus')} to guard. Buy weapons at an <b>Armory</b>.`;
+    if (p === 'spear') return `${key('fire')} thrusts your spear through everything in a line. Hold ${key('focus')} to guard.`;
+    if (p === 'knives') return `${key('fire')} throws knives. Hold ${key('focus')} to aim: zoomed shots hit harder and crit more.`;
+    if (p === 'bow') return `${key('fire')} looses heavy arrows. Hold ${key('focus')} to aim: zoomed shots hit harder and crit more.`;
     if (p === 'blade') return `${key('fire')} swings your saber. Hold ${key('focus')} to guard, and tap it just before a hit to parry. ${key('skill1')} is Flash Cut.`;
     if (p === 'psychic') return `${key('fire')} fires Mind Spikes that never miss. Hold ${key('focus')} to seize a beast with your mind. ${key('skill1')} throws a Soul Lance.`;
     return `Hold ${key('focus')} to steer your flying swords. ${key('fire')} fires Star Bolts. ${key('skill1')} looses your swords.`;
@@ -2852,10 +2873,17 @@ export class Game {
 
   learnSkill(id) {
     const s = this.state;
-    const nd = nodeById(s.path, id);
+    const nd = nodeById(id);
     if (!nd) return;
     if (!canLearn(s, nd).ok) return this.sound.deny();
     s.skills[id] = (s.skills[id] || 0) + 1;
+    if (nd.tech) {
+      const P = PATHS[nd.disc];
+      const i = P.skills.indexOf(nd.tech);
+      this.hud.notify(`Learned <b>${TECHS[nd.tech].name}</b> <span class="cn">${TECHS[nd.tech].cn}</span>. With the ${esc(P.weapon.name)} in hand, press <kbd>${codeLabel(settings.key(`skill${i + 1}`))}</kbd>.`, 'violet');
+      this.hud.buildSkills(activePath(s));
+      if (this.campaign) this.campaign.event('learn', nd.tech);
+    }
     const ratio = this.rt.hp / this.stats.maxHp;
     this.stats = derive(s);
     this.rt.hp = ratio * this.stats.maxHp;
@@ -2864,27 +2892,75 @@ export class Game {
     this.save();
   }
 
+  // ----------------------------------------------------------- weapons --
+  applyWeapon() {
+    const s = this.state;
+    const id = activePath(s);
+    this.viewmodel.setPath(id, PATHS[id].color);
+    this.hud.buildSkills(id);
+    this.arts.reset();
+    this.rt.guarding = false;
+    this.rt.aiming = false;
+  }
+
+  equipWeapon(id) {
+    const s = this.state;
+    if (!owns(s, id) || activePath(s) === id) return;
+    s.weapon = id;
+    this.applyWeapon();
+    if (this.rt.controlling) this.rt.controlling = false;
+    this.swords.reset(this.player);
+    this.hud.notify(`<b>${esc(PATHS[id].weapon.name)}</b> <span class="cn">${PATHS[id].cn}</span> in hand.`, '');
+    this.sound.ui();
+  }
+
+  cycleWeapon(dir) {
+    const list = ownedPaths(this.state);
+    if (list.length < 2) return;
+    const i = list.indexOf(activePath(this.state));
+    this.equipWeapon(list[(i + dir + list.length) % list.length]);
+  }
+
+  buyWeapon(id) {
+    const s = this.state, P = PATHS[id];
+    if (!P || owns(s, id)) return;
+    if (s.coins < P.weapon.price) return this.sound.deny();
+    s.coins -= P.weapon.price;
+    s.weapons = [...(s.weapons || []), id];
+    this.stats = derive(s);
+    this.sound.reward();
+    this.hud.notify(`Bought the <b>${esc(P.weapon.name)}</b>. Its <b>${esc(P.name)}</b> skill tree is open: learn its techniques with skill points.`, 'gold');
+    this.equipWeapon(id);
+    this.campaign.event('weapon', id);
+    this.save();
+  }
+
+  // A heavy blow on the land: broken props, scorch, and (when asked) a crater.
+  impact(pos, radius, crater = false) {
+    this.breakAt(pos, radius, null);
+    this.scorch(pos, Math.max(1.5, radius * 0.7));
+    if (crater && this.frame && this.frame.addCrater) this.frame.addCrater(pos, radius);
+  }
+
   respecCost() {
     return priceFor(60, this.state.realm);
   }
 
-  // Refund every skill point, optionally switching path.
-  respec(newPath) {
+  // Refund every skill point.
+  respec() {
     const s = this.state;
-    const cost = this.respecCost() * (newPath && newPath !== s.path ? 3 : 1);
+    const cost = this.respecCost();
     if (s.coins < cost) return this.sound.deny();
     s.coins -= cost;
     s.skills = {};
-    if (newPath) s.path = newPath;
     this.stats = derive(s);
     this.rt.hp = Math.min(this.rt.hp, this.stats.maxHp);
     this.arts.reset();
     this.swords.setup(this.stats.swords, s.swordGrade);
     this.swords.reset(this.player);
-    this.viewmodel.setPath(s.path, PATHS[s.path].color);
-    this.hud.buildSkills(s.path);
+    this.applyWeapon();
     this.sound.confirm();
-    this.hud.notify(newPath ? `You now walk the path of <b>${PATHS[s.path].name}</b> <span class="cn">${PATHS[s.path].cn}</span>.` : 'Your skill points have been refunded.', 'violet');
+    this.hud.notify('Your skill points have been refunded.', 'violet');
     this.save();
   }
 
@@ -2900,8 +2976,7 @@ export class Game {
 
   randomUpgradableTech() {
     const s = this.state;
-    const P = PATHS[s.path] || PATHS.mind;
-    const list = [P.primary, ...P.skills].filter((k) => s.realm >= TECHS[k].unlockRealm && (s.mastery[k] || 1) < 5);
+    const list = ownedPaths(s).flatMap((id) => [PATHS[id].primary, ...PATHS[id].skills]).filter((k) => knows(s, k) && s.realm >= TECHS[k].unlockRealm && (s.mastery[k] || 1) < 5);
     return list.length ? list[Math.floor(Math.random() * list.length)] : null;
   }
 
@@ -3288,7 +3363,7 @@ export class Game {
     this.viewmodel.update(dt, {
       mouseX: this.lastMouse.x, mouseY: this.lastMouse.y, speed: p.mode === 'ground' ? speed * 8 : speed, boost: p.boosting && !rt.controlling && p.mode !== 'ground',
       meditating: rt.meditating, controlling: rt.controlling, energyFrac: rt.energy / this.stats.maxEnergy, sunDirView, sunColor: this.system.sunColor,
-      guarding: rt.guarding, gripping: !!this.arts.grip,
+      guarding: rt.guarding, gripping: !!this.arts.grip, aiming: rt.aiming,
     });
     this.viewmodel.updateThread(dt, this.camera, this.toWorld(this.swords.controlPoint), rt.controlling && this.camMode === 'first', this.time);
     this.flare.update(this.camera, this.system.root.position, this.system.starRadius, this.flareOccluders(), dt);
@@ -3326,7 +3401,7 @@ export class Game {
     }
     const nav = rt.nav && rt.nav.kind !== 'star' ? rt.nav : null;
     this.hud.update(dt, {
-      state: s, stats: this.stats, rt, loc, density, medRate, bt: this.breakthroughStatus(), path: s.path || 'mind',
+      state: s, stats: this.stats, rt, loc, density, medRate, bt: this.breakthroughStatus(), path: activePath(s),
       boss: this.beasts.liveBoss, target, locked: !!rt.lock && target === rt.lock, targetDist: target ? target.pos.distanceTo(p.pos) : 0,
       nav, navDist: nav ? Math.max(0, nav.world().distanceTo(camWorld) - nav.arrive * 0.5) : 0, cruise: rt.cruise,
       swordStates: this.swords.states(), formation: this.swords.formation, controlRange: 260 + 50 * s.realm, speed,

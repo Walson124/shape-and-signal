@@ -15,6 +15,12 @@ const POSES = {
   slashA: { pos: [-0.05, -0.08, -0.5], rot: [0.9, -0.9, -1.4], curl: [1.4, 1.45, 1.5, 1.5], thumb: 1.0 },
   slashB: { pos: [0.26, -0.24, -0.42], rot: [-0.2, 0.9, -1.6], curl: [1.4, 1.45, 1.5, 1.5], thumb: 1.0 },
   guard: { pos: [0.06, -0.1, -0.42], rot: [0.9, 0.4, -0.1], curl: [1.4, 1.45, 1.5, 1.5], thumb: 1.0 },
+  punch: { pos: [0.06, -0.11, -0.62], rot: [0.12, 0.05, -1.5], curl: [1.5, 1.55, 1.55, 1.55], thumb: 1.15 },
+  ready: { pos: [0.14, -0.15, -0.36], rot: [0.75, 0.25, -1.45], curl: [1.45, 1.5, 1.5, 1.5], thumb: 1.1 },
+  spear: { pos: [0.2, -0.2, -0.32], rot: [0.08, 0.04, -1.45], curl: [1.35, 1.4, 1.45, 1.45], thumb: 1.0 },
+  stab: { pos: [0.12, -0.15, -0.62], rot: [0.02, 0.02, -1.45], curl: [1.35, 1.4, 1.45, 1.45], thumb: 1.0 },
+  bowhold: { pos: [0.1, -0.12, -0.5], rot: [0.05, 0.12, -0.05], curl: [1.3, 1.35, 1.4, 1.4], thumb: 0.9 },
+  draw: { pos: [0.05, -0.1, -0.24], rot: [0.05, -0.2, -1.5], curl: [0.9, 0.95, 1.2, 1.3], thumb: 0.6 },
 };
 
 function beamTexture() {
@@ -216,6 +222,39 @@ export class ViewModel {
     this.saber.rotation.set(-1.45, 0, 0);
     this.right.arm.add(this.saber);
     this.saber.visible = false;
+    // war spear: a long shaft held low in the right hand, pointing forward
+    this.spear = new THREE.Group();
+    this.weaponMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 2.2, 2.6) });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.7, 8).rotateX(Math.PI / 2).translate(0, 0, -0.45), this.mats.joint);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.2, 6).rotateX(-Math.PI / 2).translate(0, 0, -1.4), this.weaponMat);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.005, 6, 12).translate(0, 0, -1.29), this.mats.plate);
+    this.spear.add(shaft, head, ring);
+    this.spear.position.set(0, -0.015, -0.06);
+    this.spear.rotation.set(0, 0, 0);
+    this.right.arm.add(this.spear);
+    this.spear.visible = false;
+    // throwing knife, held point-forward between the fingers
+    this.knife = new THREE.Group();
+    const kb = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.02, 0.14).translate(0, 0, -0.07), new THREE.MeshStandardMaterial({ color: 0xd8e2f0, metalness: 1, roughness: 0.15 }));
+    const kh = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.016, 0.06).translate(0, 0, 0.03), this.mats.joint);
+    this.knife.add(kb, kh);
+    this.knife.position.set(0.0, 0.01, -0.12);
+    this.right.arm.add(this.knife);
+    this.knife.visible = false;
+    // energy bow in the left hand, string of light
+    this.bow = new THREE.Group();
+    const limb = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.012, 6, 32, Math.PI * 0.8).rotateZ(Math.PI * 0.6), this.mats.plate);
+    limb.position.set(0.32, 0, 0);
+    this.bowString = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.76, 4), this.weaponMat);
+    this.bowString.position.set(0.0, 0, 0);
+    this.bow.add(limb, this.bowString);
+    this.bow.rotation.set(0, Math.PI / 2, 0);
+    this.bow.position.set(0, 0.02, -0.1);
+    this.bow.scale.setScalar(0.8);
+    this.left.arm.add(this.bow);
+    this.bow.visible = false;
+    this.attackT = 0;
+    this.attackKind = null;
     this.style = 'mind';
     this.swingT = 0;
     this.swingFlip = false;
@@ -277,13 +316,27 @@ export class ViewModel {
   hit() { this.hurt = 1; }
   swing(flip) { this.swingT = 0.22; this.swingFlip = flip; this.right.kick = 0.4; }
 
+  // One attack animation for whatever is in hand.
+  attack(kind, flip = false) {
+    if (kind === 'swing') return this.swing(flip);
+    this.attackKind = kind;
+    this.attackFlip = flip;
+    this.attackT = kind === 'shoot' ? 0.3 : kind === 'thrust' ? 0.2 : 0.16;
+    const hand = kind === 'punch' && flip ? this.left : this.right;
+    hand.kick = kind === 'shoot' ? 0.3 : 1;
+  }
+
   setPath(id, color) {
     this.style = id;
     this.saber.visible = id === 'blade';
+    this.spear.visible = id === 'spear';
+    this.knife.visible = id === 'knives';
+    this.bow.visible = id === 'bow';
     if (color !== undefined) {
       const c = new THREE.Color(color);
       this.saberMat.color.copy(c).multiplyScalar(2.6);
       this.saberEdge.material.color.copy(c).multiplyScalar(1.4);
+      this.weaponMat.color.copy(c).multiplyScalar(2.2);
     }
   }
 
@@ -320,12 +373,32 @@ export class ViewModel {
       if (s.guarding) { rp = 'guard'; }
       if (this.swingT > 0) rp = (this.swingT > 0.11) !== this.swingFlip ? 'slashA' : 'slashB';
     }
+    this.attackT = Math.max(0, this.attackT - dt);
+    const atk = this.attackT > 0 ? this.attackKind : null;
+    if (!s.meditating) {
+      if (this.style === 'fist') {
+        rp = 'ready';
+        lp = 'ready';
+        if (s.guarding) { rp = 'guard'; lp = 'guard'; }
+        if (atk === 'punch') { if (this.attackFlip) lp = 'punch'; else rp = 'punch'; }
+      } else if (this.style === 'spear') {
+        rp = atk === 'thrust' ? 'stab' : s.guarding ? 'guard' : 'spear';
+        if (atk === 'throw') rp = 'throw';
+      } else if (this.style === 'knives') {
+        rp = atk === 'throw' ? 'throw' : 'grip';
+      } else if (this.style === 'bow') {
+        lp = 'bowhold';
+        rp = s.aiming || atk === 'shoot' ? (atk === 'shoot' && this.attackT < 0.22 ? 'idle' : 'draw') : 'idle';
+      }
+    }
     if (this.style === 'psychic' && s.gripping) lp = 'cast';
     if (l.holdT > 0) lp = 'cast';
     if (s.controlling) lp = 'sword';
     if (l.throwT > 0) lp = 'throw';
-    r.update(dt, rp, rp === 'cast' ? 26 : rp.startsWith('slash') ? 34 : 9, extra(1));
-    l.update(dt, lp, lp === 'cast' || lp === 'throw' ? 26 : 9, extra(-1));
+    const fast = (p) => p === 'cast' || p === 'throw' || p === 'punch' || p === 'stab';
+    r.update(dt, rp, fast(rp) ? 30 : rp.startsWith('slash') ? 34 : 9, extra(1));
+    l.update(dt, lp, fast(lp) ? 30 : 9, extra(-1));
+    if (this.style === 'bow') this.bowString.position.x = rp === 'draw' ? 0.16 : 0;
 
     const glowBase = 0.5 + 0.5 * Math.min(1, s.energyFrac * 1.2);
     r.palmGlow.material.opacity = (rp === 'cast' ? 1 : rp === 'mudra' ? 0.9 : 0.25) * glowBase;
