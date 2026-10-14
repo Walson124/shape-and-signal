@@ -6,6 +6,7 @@ import { PATHS, PATH_IDS, TECHS, REALM_PERKS, TREES, treeFor, canLearn, pointsFr
 import { MAX_BOUNTIES } from '../game/missions.js';
 import { LORE } from '../game/lore.js';
 import { ACT1 } from '../game/campaign.js';
+import { CHANGELOG } from './changelog.js';
 import { settings, PRESETS } from '../core/settings.js';
 import { ACTIONS, codeLabel } from '../core/bindings.js';
 import { fmt, esc, hex } from './hud.js';
@@ -191,6 +192,7 @@ export class Menus {
   // ----------------------------------------------------------- title --
   showTitle(v, save) {
     this.$('title').classList.toggle('hidden', !v);
+    if (v) this.renderChangelog();
     const cont = this.$('title-menu').querySelector('[data-act="continue"]');
     cont.classList.toggle('hidden', !save);
     if (save) {
@@ -255,6 +257,20 @@ export class Menus {
     const ok = await this.confirm('Reset your skill points?', `Every skill point you have spent, in every tree, is refunded. Cost: <b class="gold">${fmt(cost)} ◈</b>.`, 'Reset');
     if (ok) g.respec();
     if (this.panelKind) this.render();
+  }
+
+  // Latest changes on the title screen; the full list opens in a modal.
+  renderChangelog() {
+    const el = this.$('changelog');
+    if (!el) return;
+    const entry = (c, full) => `<div class="cl-entry"><div class="cl-head"><b>v${c.version} · ${esc(c.title)}</b><span>${c.date}</span></div><ul>${(full ? c.items : c.items.slice(0, 3)).map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>`;
+    el.innerHTML = `<h3>WHAT\u2019S NEW</h3>${CHANGELOG.slice(0, 2).map((c) => entry(c, false)).join('')}<button class="cl-more" data-cl="all">All changes</button>`;
+    const tag = this.$('build-tag');
+    if (tag) tag.textContent = `V${CHANGELOG[0].version} · ${CHANGELOG[0].date}`;
+    el.onclick = (e) => {
+      if (!e.target.closest('[data-cl]')) return;
+      this.modal({ kicker: 'CHANGELOG', title: 'What changed', body: `<div id="changelog-full">${CHANGELOG.map((c) => entry(c, true)).join('')}</div>`, actions: [{ label: 'Close', val: 'ok', cls: 'primary' }], wide: true });
+    };
   }
 
   showCredits() {
@@ -731,7 +747,7 @@ export class Menus {
       <li><b>Your homeworld.</b> You begin in Base City 07 on Terra. Terra has several walled base cities and outposts; beasts roam between them and grow stronger far from any city.</li>
       <li><b>Cities.</b> Walk into any building with a glowing door: exchanges, forges, pill shops, gene clinics, cultivation chambers, teahouses, noodle bars and apartments. The capital has an arena.</li>
       <li><b>Weapons.</b> You start with bare fists. Buy a saber, spear, throwing knives, bow, flying swords or a psionic focus at an <b>Armory</b>; each has its own skill tree of techniques (${key('panelSkills')}). Carry several and switch with ${key('weaponNext')}.</li>
-      <li><b>Radar.</b> Press ${key('ping')} to hold up your scanner. It finds ore veins and wrecks, and better radars from the Exchange find more.</li>
+      <li><b>Radar.</b> Scroll the mouse wheel (or ${key('weaponNext')}) to your radar scanner. It finds ore veins and wrecks, and better radars from the Exchange find more.</li>
       <li><b>Realms change how you play.</b> Fly at War God, leave the planet at Planetary, blink at Stellar, and at higher realms weak beasts flee or simply die in your presence.</li>
       <li><b>Every planet is a world</b> with its own beasts. Look for ancient ruins, energy springs, ore deposits, beast nests and wrecks.</li>
       <li><b>Cultivate</b> with ${key('cultivate')}. Springs, chambers, stars and nebulae are richest.</li>

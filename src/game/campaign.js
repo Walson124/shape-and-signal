@@ -61,8 +61,8 @@ export const ACT1 = [
   { id: 'radar', title: 'Eyes in the Wilds', cn: '雷达', steps: [
     { type: 'event', on: 'radar', text: 'Buy a Hunter Radar at the Star Exchange', where: (c) => c.svc('exchange'), radius: 0,
       start: (c) => tip(c, `The <b>Star Exchange</b> sells radars, pills and technique manuals. Press ${key('interact')} at its counter.`) },
-    { type: 'event', on: 'ping', text: 'Take out your radar scanner',
-      start: (c) => tip(c, `Press ${key('ping')} to hold up your scanner. It pulses every few seconds and marks what it finds.`) },
+    { type: 'event', on: 'ping', text: 'Scroll to your radar scanner',
+      start: (c) => tip(c, `Scroll the mouse wheel (or press ${key('weaponNext')}) until you hold the radar. It pulses every few seconds and marks what it finds; ${key('fire')} pulses it by hand.`) },
     { type: 'event', on: 'mine', text: 'Shatter a star metal deposit', where: (c) => c.nearestPoi('ore'), radius: 0,
       start: (c) => tip(c, 'Star metal deposits glow blue. Attack one until it shatters, then walk over the pieces to collect them.') },
   ], reward: { coins: 200 } },

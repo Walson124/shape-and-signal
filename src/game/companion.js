@@ -112,7 +112,7 @@ const L = {
     none: ['Nothing. Either this area is empty or my scanner is insulted by your budget.'],
     some: ['Got it. {n} signal{s}: {what}. They\'re on your compass now.'],
   },
-  radarHint: ['Wrecks and treasure are hard to spot by eye. Press {ping} to pulse the radar. Better radars at the Exchange find more.'],
+  radarHint: ['Wrecks and treasure are hard to spot by eye. Scroll to your radar and let it sweep. Better radars at the Exchange find more.'],
   shop: ['Lovely purchase. Very sensible. I only screamed a little.', 'Money well spent. Probably.'],
   ship: ['A ship! Finally, a body almost as impressive as mine used to be.'],
   warp: ['Warp drive engaged. Hold onto your organs.'],

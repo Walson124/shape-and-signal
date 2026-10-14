@@ -797,8 +797,13 @@ export class Game {
       }
     }
     this.swords.controlling = rt.controlling;
-    if (alive && !rt.controlling && inp.wheel && (this.camMode === 'third' || rt.inShip)) this.zoom = clamp(this.zoom + inp.wheel * 0.12, 0.5, 3);
-    else if (alive && !rt.controlling && !rt.inShip && inp.wheel && this.camMode === 'first') this.cycleWeapon(Math.sign(inp.wheel));
+    // the wheel cycles weapons and the radar on foot; it zooms in a ship, or with sprint held in third person
+    const zoomWheel = rt.inShip || (this.camMode === 'third' && inp.act('sprint'));
+    if (alive && !rt.controlling && inp.wheel && zoomWheel) this.zoom = clamp(this.zoom + inp.wheel * 0.12, 0.5, 3);
+    else if (alive && !rt.controlling && !rt.inShip && inp.wheel && this.time > (this.wheelCd || 0)) {
+      this.wheelCd = this.time + 0.15;
+      this.cycleWeapon(Math.sign(inp.wheel));
+    }
     if (alive && !rt.inShip && inp.hit('weaponNext')) this.cycleWeapon(1);
 
     // ---- movement
@@ -831,7 +836,7 @@ export class Game {
     rt.invuln = Math.max(0, rt.invuln - dt);
     rt.firingT = Math.max(0, rt.firingT - dt);
     const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg;
-    this.arts.update(dt, { alive, camFwd, aimPoint, aimBeast, swordDamage });
+    this.arts.update(dt, { alive: alive && !rt.scanner, camFwd, aimPoint, aimBeast, swordDamage });
     if (alive && !rt.meditating) {
       if (inp.hit('pill1')) this.usePill('heal');
       if (inp.hit('pill2')) this.usePill('energy');
@@ -840,8 +845,7 @@ export class Game {
     if (alive) {
       if (inp.hit('breakthrough')) this.tryBreakthrough();
       if (inp.hit('target')) this.setTarget();
-      if (inp.hit('ping')) this.toggleScanner();
-      if (rt.scanner && (inp.act('fire') || inp.act('focus') || ['skill1', 'skill2', 'skill3', 'skill4'].some((k) => inp.hit(k)))) rt.scanner = false;
+      if (rt.scanner && inp.hit('fire')) { rt.pingCd = Math.min(rt.pingCd, 0); this.radarPing(); }
       if (inp.hit('virtual')) this.enterVirtual();
       if (inp.hit('engage')) this.engage();
     }
@@ -912,7 +916,7 @@ export class Game {
     this.updatePresentation(dt, camFwd, density, medRate);
     rt.pingCd = Math.max(0, (rt.pingCd || 0) - dt);
     if (rt.scanner) this.updateScanner(dt);
-    if (rt.scanner && (!alive || rt.inShip || rt.meditating)) rt.scanner = false;
+    if (rt.scanner && rt.inShip) this.putAwayScanner();
     this.updateDeliveries(dt);
     this.updateScorch(dt);
     if (this.mode !== 'cutscene') this.cutscene.update(dt);
@@ -2501,17 +2505,27 @@ export class Game {
 
   // Pulse the radar: undiscovered sites in range show on the compass.
   // Take the radar out (it pulses every few seconds while held) or put it away.
-  toggleScanner() {
+  takeOutScanner() {
     const rt = this.rt;
     if (rt.inShip) return this.radarPing();
-    rt.scanner = !rt.scanner;
-    if (rt.scanner) {
-      rt.pingCd = 0;
-      this.scanSweep = 0;
-      this.radarPing();
-      this.nix.once('scanner', 'radarHint', {}, 0);
-    }
+    if (rt.scanner) return;
+    rt.scanner = true;
+    rt.guarding = false;
+    rt.aiming = false;
+    rt.controlling = false;
+    rt.pingCd = 0;
+    this.scanSweep = 0;
+    this.radarPing();
+    const R = RADARS[this.state.radar || 0];
+    const wl = document.getElementById('weapon-label');
+    if (wl) wl.innerHTML = `<span class="mono dim">${esc(codeLabel(settings.key('weaponNext')))} / WHEEL · ITEM</span> <b style="color:#7affd8">${esc(R.name)}</b> <span class="cn">${R.cn}</span> <span class="mono dim">· ${esc(codeLabel(settings.key('fire')))} PULSE</span>`;
     this.sound.ui();
+  }
+
+  putAwayScanner() {
+    if (!this.rt.scanner) return;
+    this.rt.scanner = false;
+    this.hud.buildSkills(activePath(this.state));
   }
 
   updateScanner(dt) {
@@ -3020,7 +3034,9 @@ export class Game {
 
   equipWeapon(id) {
     const s = this.state;
-    if (!owns(s, id) || activePath(s) === id) return;
+    if (id === 'radar') return this.takeOutScanner();
+    if (!owns(s, id) || (activePath(s) === id && !this.rt.scanner)) return;
+    this.putAwayScanner();
     s.weapon = id;
     this.applyWeapon();
     if (this.rt.controlling) this.rt.controlling = false;
@@ -3029,10 +3045,10 @@ export class Game {
     this.sound.ui();
   }
 
+  // The wheel / next-weapon key cycles through owned weapons and the radar.
   cycleWeapon(dir) {
-    const list = ownedPaths(this.state);
-    if (list.length < 2) return;
-    const i = list.indexOf(activePath(this.state));
+    const list = [...ownedPaths(this.state), 'radar'];
+    const i = this.rt.scanner ? list.length - 1 : list.indexOf(activePath(this.state));
     this.equipWeapon(list[(i + dir + list.length) % list.length]);
   }
 
@@ -3572,6 +3588,7 @@ export class Game {
     }
     for (const it of this.loot.items) add(it.g.position, it.kind === 'ore' ? '#3ef2ff' : '#ff3c7d', 2);
     this.hud.drawCompass(heading, compass);
+    document.getElementById('radar').style.visibility = this.rt.scanner && this.camMode === 'first' ? 'hidden' : '';
     this.hud.drawRadar(dt, radar, this.frame && this.env.inAtmo ? RADARS[this.state.radar || 0].range : 4000);
   }
 
