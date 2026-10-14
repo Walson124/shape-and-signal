@@ -21,6 +21,7 @@ const POSES = {
   stab: { pos: [0.12, -0.15, -0.62], rot: [0.02, 0.02, -1.45], curl: [1.35, 1.4, 1.45, 1.45], thumb: 1.0 },
   bowhold: { pos: [0.1, -0.12, -0.5], rot: [0.05, 0.12, -0.05], curl: [1.3, 1.35, 1.4, 1.4], thumb: 0.9 },
   draw: { pos: [0.05, -0.1, -0.24], rot: [0.05, -0.2, -1.5], curl: [0.9, 0.95, 1.2, 1.3], thumb: 0.6 },
+  scan: { pos: [0.075, -0.1, -0.26], rot: [1.15, 0.1, -0.1], curl: [0.35, 0.4, 0.5, 0.6], thumb: 0.3 },
 };
 
 function beamTexture() {
@@ -255,6 +256,26 @@ export class ViewModel {
     this.bow.visible = false;
     this.attackT = 0;
     this.attackKind = null;
+    // handheld radar scanner, held in the left palm; its screen is a canvas the game draws on
+    this.scanCanvas = document.createElement('canvas');
+    this.scanCanvas.width = this.scanCanvas.height = 256;
+    this.scanTex = new THREE.CanvasTexture(this.scanCanvas);
+    this.scanTex.colorSpace = THREE.SRGBColorSpace;
+    this.scanner = new THREE.Group();
+    const caseM = new THREE.Mesh(new RoundedBoxGeometry(0.12, 0.018, 0.14, 2, 0.006), this.mats.armor);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.scanTex, toneMapped: false }));
+    screen.position.y = 0.0095;
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.06, 4).rotateX(Math.PI / 2).translate(0.045, 0.006, -0.09), this.mats.joint);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.006, 6, 4).translate(0.045, 0.006, -0.12), this.mats.neon);
+    this.scanner.add(caseM, screen, antenna, tip);
+    // held in view space (the left hand model is mirrored), tilted toward the eye
+    this.scanBase = new THREE.Vector3(-0.07, -0.05, -0.28);
+    this.scanner.scale.setScalar(0.72);
+    this.scanner.position.copy(this.scanBase);
+    this.scanner.rotation.set(1.18, 0.08, 0);
+    this.scene.add(this.scanner);
+    this.scanner.visible = false;
+    this.scanning = false;
     this.style = 'mind';
     this.swingT = 0;
     this.swingFlip = false;
@@ -392,6 +413,10 @@ export class ViewModel {
       }
     }
     if (this.style === 'psychic' && s.gripping) lp = 'cast';
+    this.scanner.visible = !!s.scanning;
+    if (s.scanning) this.scanner.position.set(this.scanBase.x + this.sway.x, this.scanBase.y + this.sway.y + Math.sin(this.time * 1.4) * 0.002, this.scanBase.z);
+    if (this.style === 'bow') this.bow.visible = !s.scanning;
+    if (s.scanning) lp = 'scan';
     if (l.holdT > 0) lp = 'cast';
     if (s.controlling) lp = 'sword';
     if (l.throwT > 0) lp = 'throw';

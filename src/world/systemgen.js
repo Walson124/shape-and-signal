@@ -225,6 +225,16 @@ export function generateSystem(star) {
     terra.pois.find((p) => p.kind === 'ruin').dir = near(15, 14);
     terra.pois.find((p) => p.kind === 'wreck').dir = near(-16, 13);
     terra.pois.find((p) => p.kind === 'obelisk').dir = near(-13, -19);
+    // more ore veins and wrecks for the radar to find, from their own random
+    // stream so the rest of the world (and saved discoveries) stays the same
+    const xr = mulberry32(star.seed ^ 0xa11ce);
+    for (let i = 0; i < 30; i++) terra.pois.push({ id: `p2:vein${i}`, kind: 'ore', dir: randomDir(xr), seed: Math.floor(xr() * 1e9) });
+    for (let i = 0; i < 8; i++) terra.pois.push({ id: `p2:hulk${i}`, kind: 'wreck', dir: randomDir(xr), seed: Math.floor(xr() * 1e9) });
+    // a few within a short walk of the capital, so the first radar pulse finds something
+    terra.pois.find((p) => p.id === 'p2:vein0').dir = near(9, 5);
+    terra.pois.find((p) => p.id === 'p2:vein1').dir = near(-8, 10);
+    terra.pois.find((p) => p.id === 'p2:vein2').dir = near(11, -13);
+    terra.pois.find((p) => p.id === 'p2:hulk0').dir = near(7, -17);
     const moons = [
       { id: 'p2m0', parent: 'p2', name: 'Luna', type: 'rocky', radius: 1500, a: 30e3, rate: 0.0028, tier: 0.4, spin: 3600 },
       { id: 'p4m0', parent: 'p4', name: 'Rime', type: 'ice', radius: 1900, a: 100e3, rate: 0.0016, tier: 1.3 },

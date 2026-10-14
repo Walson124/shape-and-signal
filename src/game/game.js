@@ -840,7 +840,8 @@ export class Game {
     if (alive) {
       if (inp.hit('breakthrough')) this.tryBreakthrough();
       if (inp.hit('target')) this.setTarget();
-      if (inp.hit('ping')) this.radarPing();
+      if (inp.hit('ping')) this.toggleScanner();
+      if (rt.scanner && (inp.act('fire') || inp.act('focus') || ['skill1', 'skill2', 'skill3', 'skill4'].some((k) => inp.hit(k)))) rt.scanner = false;
       if (inp.hit('virtual')) this.enterVirtual();
       if (inp.hit('engage')) this.engage();
     }
@@ -910,6 +911,8 @@ export class Game {
     this.updateInteraction(dt, alive);
     this.updatePresentation(dt, camFwd, density, medRate);
     rt.pingCd = Math.max(0, (rt.pingCd || 0) - dt);
+    if (rt.scanner) this.updateScanner(dt);
+    if (rt.scanner && (!alive || rt.inShip || rt.meditating)) rt.scanner = false;
     this.updateDeliveries(dt);
     this.updateScorch(dt);
     if (this.mode !== 'cutscene') this.cutscene.update(dt);
@@ -2480,17 +2483,110 @@ export class Game {
   }
 
   // Pulse the radar: undiscovered sites in range show on the compass.
-  radarPing() {
+  // Take the radar out (it pulses every few seconds while held) or put it away.
+  toggleScanner() {
+    const rt = this.rt;
+    if (rt.inShip) return this.radarPing();
+    rt.scanner = !rt.scanner;
+    if (rt.scanner) {
+      rt.pingCd = 0;
+      this.scanSweep = 0;
+      this.radarPing();
+      this.nix.once('scanner', 'radarHint', {}, 0);
+    }
+    this.sound.ui();
+  }
+
+  updateScanner(dt) {
+    const rt = this.rt;
+    if (rt.pingCd <= 0) this.radarPing(true);
+    this.scanSweep = (this.scanSweep || 0) + dt * 2.4;
+    this.scanDraw = (this.scanDraw || 0) - dt;
+    if (this.scanDraw > 0 || this.camMode !== 'first') return;
+    this.scanDraw = 1 / 15;
+    this.drawScanner();
+  }
+
+  // The scanner's screen: sweep, range rings, blips for finds and beasts, and the nearest find.
+  drawScanner() {
+    const s = this.state, f = this.frame, p = this.player;
+    const R = RADARS[s.radar || 0];
+    const cv = this.viewmodel.scanCanvas, c = cv.getContext('2d');
+    const W = cv.width, cx = W / 2, cy = W / 2 + 8, rad = W * 0.4;
+    c.fillStyle = '#05261d';
+    c.fillRect(0, 0, W, W);
+    c.strokeStyle = 'rgba(120, 255, 210, 0.5)';
+    c.lineWidth = 2;
+    for (const k of [0.33, 0.66, 1]) { c.beginPath(); c.arc(cx, cy, rad * k, 0, Math.PI * 2); c.stroke(); }
+    c.beginPath(); c.moveTo(cx - rad, cy); c.lineTo(cx + rad, cy); c.moveTo(cx, cy - rad); c.lineTo(cx, cy + rad); c.stroke();
+    // sweep wedge
+    const a = this.scanSweep % (Math.PI * 2);
+    const grad = c.createConicGradient ? c.createConicGradient(a - 0.6, cx, cy) : null;
+    if (grad) {
+      grad.addColorStop(0, 'rgba(80,255,200,0)');
+      grad.addColorStop(0.095, 'rgba(120,255,210,0.6)');
+      grad.addColorStop(0.1, 'rgba(80,255,200,0)');
+      c.fillStyle = grad;
+      c.beginPath(); c.arc(cx, cy, rad, 0, Math.PI * 2); c.fill();
+    }
+    const scale = R.ping;
+    const ax = this.navAxes();
+    const plot = (local, color, size, label) => {
+      const d = local.clone().sub(p.pos);
+      const fx = d.dot(ax.fh), rx = d.dot(ax.rh);
+      const dist = Math.hypot(fx, rx);
+      const k = Math.min(1, dist / scale);
+      const ang = Math.atan2(rx, fx);
+      const x = cx + Math.sin(ang) * k * rad, y = cy - Math.cos(ang) * k * rad;
+      c.fillStyle = color;
+      c.beginPath(); c.arc(x, y, size, 0, Math.PI * 2); c.fill();
+      if (label && dist <= scale) { c.font = '13px monospace'; c.fillText(label, x + size + 2, y + 4); }
+    };
+    let nearest = null;
+    if (f && f.details) {
+      for (const r of f.details.pois) {
+        const k = r.poi.kind;
+        if (!R.finds.includes(k)) continue;
+        const id = r.poi.id;
+        const known = s.rumors.includes(id) || s.discovered.includes(id);
+        if (!known || (s.explored.includes(id) && (k === 'ore' || k === 'wreck' || k === 'ruin'))) continue;
+        const d = r.pos.distanceTo(p.pos);
+        plot(r.pos, POI_COLOR[k], 6, null);
+        if (!nearest || d < nearest.d) nearest = { d, k, pos: r.pos };
+      }
+    }
+    for (const b of this.beasts.beasts) if (!b.static && b.pos.distanceTo(p.pos) < scale) plot(b.pos, b.boss ? '#ff3c7d' : '#ff5a5a', b.boss ? 6 : 3);
+    // you
+    c.fillStyle = '#ffffff';
+    c.beginPath(); c.moveTo(cx, cy - 9); c.lineTo(cx - 6, cy + 6); c.lineTo(cx + 6, cy + 6); c.closePath(); c.fill();
+    c.fillStyle = '#7affd8';
+    c.font = 'bold 15px monospace';
+    c.fillText(R.name.toUpperCase(), 10, 20);
+    c.fillText(scale >= 1000 ? `${scale / 1000} KM` : `${scale} M`, W - 66, 20);
+    const names = { ore: 'ORE VEIN', wreck: 'WRECK', camp: 'CAMP', ruin: 'RUIN', spring: 'SPRING', obelisk: 'OBELISK', nest: 'NEST', lair: 'LAIR' };
+    c.font = 'bold 16px monospace';
+    if (nearest) {
+      const d = nearest.d;
+      c.fillStyle = POI_COLOR[nearest.k];
+      c.fillText(`${names[nearest.k]} ${d >= 1000 ? `${(d / 1000).toFixed(1)} KM` : `${Math.round(d)} M`}`, 10, W - 10);
+    } else {
+      c.fillStyle = 'rgba(122,255,216,0.6)';
+      c.fillText('NOTHING IN RANGE', 10, W - 10);
+    }
+    this.viewmodel.scanTex.needsUpdate = true;
+  }
+
+  radarPing(quiet = false) {
     const s = this.state, rt = this.rt, p = this.player, f = this.frame;
     if (rt.pingCd > 0) return;
-    rt.pingCd = 6;
+    rt.pingCd = rt.scanner ? 4 : 6;
     const R = RADARS[s.radar || 0];
     this.hud.pulse();
     this.campaign.event('ping');
-    this.combat.shockwave(p.pos, Math.min(R.ping, 260), 0x3ef2ff, 1.4);
+    if (!quiet) this.combat.shockwave(p.pos, Math.min(R.ping, 120), 0x3ef2ff, 1.2);
     this.sound.lock();
     if (!f || !f.details) {
-      this.nix.event('ping.none', {}, 1);
+      if (!quiet) this.nix.event('ping.none', {}, 1);
       return;
     }
     const counts = {};
@@ -2505,9 +2601,10 @@ export class Game {
       n++;
     }
     if (!n) {
-      this.nix.event('ping.none', {}, 1);
+      if (!quiet) this.nix.event('ping.none', {}, 1);
       return;
     }
+    this.hud.notify(`Radar: found ${Object.entries(counts).map(([k, c]) => `${c} ${POI_LABEL[k].toLowerCase()}${c > 1 ? 's' : ''}`).join(', ')}. They are marked on your HUD.`, 'cy');
     const names = { ore: 'ore vein', wreck: 'wreck', camp: 'camp', ruin: 'ruin', spring: 'spring', obelisk: 'obelisk', nest: 'nest', lair: 'lair' };
     const what = Object.entries(counts).map(([k, c]) => `${c} ${names[k]}${c > 1 ? 's' : ''}`).join(', ');
     this.nix.cool['ping.some'] = -1e9;
@@ -3363,7 +3460,7 @@ export class Game {
     this.viewmodel.update(dt, {
       mouseX: this.lastMouse.x, mouseY: this.lastMouse.y, speed: p.mode === 'ground' ? speed * 8 : speed, boost: p.boosting && !rt.controlling && p.mode !== 'ground',
       meditating: rt.meditating, controlling: rt.controlling, energyFrac: rt.energy / this.stats.maxEnergy, sunDirView, sunColor: this.system.sunColor,
-      guarding: rt.guarding, gripping: !!this.arts.grip, aiming: rt.aiming,
+      guarding: rt.guarding, gripping: !!this.arts.grip, aiming: rt.aiming, scanning: rt.scanner && this.camMode === 'first',
     });
     this.viewmodel.updateThread(dt, this.camera, this.toWorld(this.swords.controlPoint), rt.controlling && this.camMode === 'first', this.time);
     this.flare.update(this.camera, this.system.root.position, this.system.starRadius, this.flareOccluders(), dt);

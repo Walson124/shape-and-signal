@@ -58,10 +58,10 @@ export const SELL = { ore: (realm) => Math.round(9 * Math.pow(1.9, realm)), esse
 // Scanners. reveal: how far unexplored sites show on the HUD. ping: range of an
 // active pulse. finds: which kinds of site a pulse can pick out.
 export const RADARS = [
-  { name: 'Militia Radar', cn: '民用雷达', range: 600, reveal: 900, ping: 1500, finds: ['ore'], price: 0, desc: 'Standard issue. Picks out ore veins close by.' },
-  { name: 'Hunter Radar', cn: '猎人雷达', range: 900, reveal: 1400, ping: 3000, finds: ['ore', 'wreck', 'camp'], price: 400, desc: 'Finds wrecks and hunters’ camps as well as ore.' },
-  { name: 'Prospector Array', cn: '勘探阵列', range: 1300, reveal: 2200, ping: 6000, finds: ['ore', 'wreck', 'camp', 'ruin', 'spring'], price: 3500, desc: 'Reads ruins and energy springs through rock.' },
-  { name: 'Seeker Matrix', cn: '寻踪矩阵', range: 2000, reveal: 3500, ping: 12000, finds: ['ore', 'wreck', 'camp', 'ruin', 'spring', 'obelisk', 'nest'], price: 40000, desc: 'Senses obelisks and beast nests far away.' },
+  { name: 'Militia Radar', cn: '民用雷达', range: 600, reveal: 900, ping: 2500, finds: ['ore', 'wreck'], price: 0, desc: 'Standard issue. Picks out ore veins and wrecks within a couple of kilometres.' },
+  { name: 'Hunter Radar', cn: '猎人雷达', range: 900, reveal: 1400, ping: 5000, finds: ['ore', 'wreck', 'camp'], price: 400, desc: 'Finds wrecks and hunters’ camps as well as ore.' },
+  { name: 'Prospector Array', cn: '勘探阵列', range: 1300, reveal: 2200, ping: 9000, finds: ['ore', 'wreck', 'camp', 'ruin', 'spring'], price: 3500, desc: 'Reads ruins and energy springs through rock.' },
+  { name: 'Seeker Matrix', cn: '寻踪矩阵', range: 2000, reveal: 3500, ping: 16000, finds: ['ore', 'wreck', 'camp', 'ruin', 'spring', 'obelisk', 'nest'], price: 40000, desc: 'Senses obelisks and beast nests far away.' },
   { name: 'Oracle Core', cn: '天机核心', range: 3000, reveal: 6000, ping: 40000, finds: ['ore', 'wreck', 'camp', 'ruin', 'spring', 'obelisk', 'nest', 'lair'], price: 600000, desc: 'Nothing on a world can hide from it, Overlord lairs included.' },
 ];
 export const priceFor = (base, realm) => Math.round(base * Math.pow(2.2, realm));
