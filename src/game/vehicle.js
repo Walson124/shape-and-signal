@@ -137,7 +137,7 @@ export class Vehicle {
     this.pos.addScaledVector(this.fwd, this.speed * dt);
     // hover over the ground (or water); fly off crests, hop on demand
     const n = this.pos.clone().normalize();
-    const floor = ctx.planet.floorRadius(n.x, n.y, n.z) + d.hover;
+    const floor = (ctx.planet.groundBelow ? ctx.planet.groundBelow(this.pos.clone().addScaledVector(n, 1.5)) : ctx.planet.floorRadius(n.x, n.y, n.z)) + d.hover;
     let D = this.pos.length();
     const grounded = D <= floor + 0.15;
     if (grounded && ctx.jump) this.vUp = 9;

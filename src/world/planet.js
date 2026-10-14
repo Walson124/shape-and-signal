@@ -3,6 +3,7 @@ import { makeTerrain, cubeToSphere } from './terrain.js';
 import { texPool } from './texpool.js';
 import { chunkIndex } from './chunkgen.js';
 import { craterOffset } from './terrain.js';
+import { Digs } from './digs.js';
 import { addCompiled, cancelAdd } from '../core/precompile.js';
 import { terrainMaterial, propMaterial, propGeometries } from './props.js';
 import { makeAtmosphere, makeOcean, makeClouds, makeRings } from './planetfx.js';
@@ -108,6 +109,10 @@ export class Planet {
     this.maxLevel = Math.max(3, Math.ceil(Math.log2(this.faceArc / pre.leaf)));
     this.splitK = pre.split;
     this.material = terrainMaterial(0.35);
+    // holes and caves: built volume replaces the heightfield where dug
+    this.voxMaterial = terrainMaterial(0.35);
+    this.digsSys = new Digs(this);
+    this.digsSys.attach(this.material);
     this.propMat = propMaterial();
     this.propGeos = propGeometries();
     this.index = new THREE.BufferAttribute(chunkIndex(RES), 1);
@@ -302,6 +307,19 @@ export class Planet {
     return this.R + this.terrain.floorHeight(dirX, dirY, dirZ);
   }
 
+  // The ground under a point, holes and caves included.
+  groundBelow(pos) {
+    if (this.digsSys && this.digsSys.inZone(pos)) return this.digsSys.groundBelow(pos);
+    const D = pos.length();
+    return this.floorRadius(pos.x / D, pos.y / D, pos.z / D);
+  }
+
+  solidAt(pos) {
+    if (this.digsSys && this.digsSys.inZone(pos)) return this.digsSys.sdf(pos.x, pos.y, pos.z) > 0;
+    const D = pos.length();
+    return D < this.groundRadius(pos.x / D, pos.y / D, pos.z / D);
+  }
+
   groundRadius(dirX, dirY, dirZ) {
     if (!this.terrain) return this.R;
     return this.R + this.terrain.height(dirX, dirY, dirZ) + (this.craters && this.craters.length ? craterOffset(dirX, dirY, dirZ, this.craters) : 0);
@@ -396,6 +414,14 @@ export class Planet {
   // Returns a roof radius if the feet rest on top of something.
   collide(local, radius, eye = 0) {
     let roof = null;
+    // walls and ceilings of dug holes and caves
+    if (this.digsSys && this.digsSys.inZone(local)) {
+      const up = local.clone().normalize();
+      const body = local.clone().addScaledVector(up, -eye * 0.45);
+      const before = body.clone();
+      if (this.digsSys.push(body, radius * 0.9)) local.add(body.sub(before));
+      this.digsSys.push(local, radius * 0.6);
+    }
     if (this.details) {
       for (const s of this.details.settlements) {
         if (local.distanceTo(s.group.position) > s.radius * 1.3 + 200) continue;

@@ -1,7 +1,8 @@
 import { generatePlanet, generateRing } from './planetgen.js';
 import { buildChunk } from './chunkgen.js';
+import { buildVoxelCell } from './voxel.js';
 
-const RUN = { ring: generateRing, chunk: buildChunk, planet: generatePlanet };
+const RUN = { ring: generateRing, chunk: buildChunk, planet: generatePlanet, voxel: buildVoxelCell };
 
 // Worker pool for texture and terrain generation. Jobs may carry a priority
 // function (lower runs first) and a cancelled() check. Falls back to the main

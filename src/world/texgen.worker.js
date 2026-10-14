@@ -1,5 +1,6 @@
 import { generatePlanet, generateRing } from './planetgen.js';
 import { buildChunk } from './chunkgen.js';
+import { buildVoxelCell } from './voxel.js';
 
 self.onmessage = (e) => {
   const { id, kind, job } = e.data;
@@ -7,6 +8,9 @@ self.onmessage = (e) => {
     if (kind === 'ring') {
       const out = generateRing(job);
       self.postMessage({ id, out }, [out.data.buffer]);
+    } else if (kind === 'voxel') {
+      const out = buildVoxelCell(job);
+      self.postMessage({ id, out }, [out.positions.buffer, out.normals.buffer, out.colors.buffer, out.glow.buffer, out.ppos.buffer, out.index.buffer]);
     } else if (kind === 'chunk') {
       const out = buildChunk(job);
       const transfer = [out.positions.buffer, out.normals.buffer, out.colors.buffer, out.glow.buffer, out.ppos.buffer];

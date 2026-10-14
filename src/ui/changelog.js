@@ -1,6 +1,16 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-14', version: '0.9',
+    title: 'Dig into the world',
+    items: [
+      'Blasts now punch real holes in the ground, and your shots chip it away. Keep digging and you can go down into the planet.',
+      'Hidden caves and tunnels run beneath the surface, with glowing star metal veins to mine in the deep rock.',
+      'Underground the daylight fades and your lantern lights the way.',
+      'In the campaign the holes you make are permanent; in Free Play the land heals after ten minutes.',
+    ],
+  },
+  {
     date: '2026-10-14', version: '0.8',
     title: 'The space ring, crafting and taming',
     items: [

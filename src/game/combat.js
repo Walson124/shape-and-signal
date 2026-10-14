@@ -370,6 +370,7 @@ export class Combat {
         if (s.owner === 'player' && ctx.breakAt) {
           ctx.breakAt(s.pos, 2.5 * (s.radius || 1), s.vel.clone().normalize());
           if (ctx.scorch) ctx.scorch(s.pos, 1.6 + s.radius);
+          if (ctx.dig && s.kind !== 'turret') ctx.dig(s.pos, 0.9 + (s.radius || 1) * 0.6);
         }
         this.particles.burst(s.pos, s.color, 8, 30, 1, 0.3, 3);
       }

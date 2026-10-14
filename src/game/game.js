@@ -52,6 +52,7 @@ const SCAN_TIME = 1.6;
 const POI_LABEL = { ruin: 'Ancient Ruins', spring: 'Energy Spring', ore: 'Star Metal Deposit', nest: 'Beast Nest', wreck: 'Wreck', lair: 'Overlord Lair', obelisk: 'Trial Obelisk', camp: 'Hunters Camp' };
 const POI_COLOR = { ruin: '#ffc857', spring: '#7affd8', ore: '#3ef2ff', nest: '#ff4466', wreck: '#b98cff', lair: '#ff3c7d', obelisk: '#c08cff', camp: '#9affc8' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const n0 = (v) => v.clone().normalize();
 
 export class Game {
   constructor(canvas) {
@@ -79,6 +80,8 @@ export class Game {
     this.scene.add(this.ambient, this.hemi);
     // one warm light that follows the nearest settlement; the light count never changes
     this.cityLight = new THREE.PointLight(0xffb070, 0, 700, 1.4);
+    // your lantern, lit only underground (always present so the light count never changes)
+    this.lantern = new THREE.PointLight(0xffe2b0, 0, 50, 1.6);
     // Everything the player touches lives in this group. It is re-parented
     // between the star system and a planet's rotating surface.
     this.localRoot = new THREE.Group();
@@ -86,6 +89,7 @@ export class Game {
     this.scene.add(this.localRoot);
     this.localRoot.add(this.camera);
     this.localRoot.add(this.cityLight);
+    this.localRoot.add(this.lantern);
 
     this.viewmodel = new ViewModel(this.scene);
     this.post = new PostFX(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera);
@@ -366,6 +370,7 @@ export class Game {
     this.clearPods();
     this.syncVehicleFrame();
     this.structures.sync();
+    this.syncDigs();
     this.statics.forEach((b) => this.beasts.removeBeast(b));
     this.statics.clear();
     this.nestTriggered.clear();
@@ -437,6 +442,7 @@ export class Game {
     }
     this.syncVehicleFrame();
     this.structures.sync();
+    this.syncDigs();
     this.camQuat.copy(p.quat);
   }
 
@@ -922,6 +928,7 @@ export class Game {
       solid: (pos) => this.isSolid(pos),
       breakAt: (pos, r, dir) => this.breakAt(pos, r, dir),
       scorch: (pos, size) => this.scorch(pos, size),
+      dig: (pos, r) => this.dig(pos, r),
       hitBeast: (b, dmg, pos, kind, knock) => this.hitBeast(b, dmg, pos, kind, knock),
       hurtPlayer: (d, pos, shot) => this.hurtPlayer(d, pos, null, false, shot),
     });
@@ -963,6 +970,7 @@ export class Game {
     if (rt.scanner && rt.inShip) this.putAwayScanner();
     this.updateDeliveries(dt);
     this.structures.update(dt, this.time);
+    this.updateDigs(dt);
     if (body) this.pets.update(dt, this.time);
     if (this.placing) this.updatePlacing(dt, alive);
     this.updateWater(dt, alive);
@@ -994,6 +1002,8 @@ export class Game {
     let floorR = planet.floorRadius(up.x, up.y, up.z);
     const water = this.waterAt(pos);
     if (water && !this.rt.inShip && !this.rt.inVehicle) floorR = water.bedR;
+    // dug holes and caves
+    if (planet.digsSys && planet.digsSys.inZone(pos)) floorR = planet.digsSys.groundBelow(pos);
     const roof = planet.collide(pos, this.rt.inShip ? 10 : this.player.radius, this.rt.inShip ? 0 : EYE);
     if (roof && roof > floorR && D > roof - 4) floorR = roof;
     return { planet, up, floorR, inAtmo: D < planet.atmoR, alt: D - floorR - (this.rt.inShip ? 0 : EYE), D, water };
@@ -1134,7 +1144,7 @@ export class Game {
     if (!f || !f.body.landable) return false;
     const D = pos.length();
     if (D > f.R + f.body.amp + 50) return false;
-    return D < f.groundRadius(pos.x / D, pos.y / D, pos.z / D);
+    return f.solidAt(pos);
   }
 
   beastEnv(tier) {
@@ -1149,7 +1159,7 @@ export class Game {
         ground: (pos) => {
           const D = pos.length();
           const up = pos.clone().divideScalar(D);
-          return { up, floorR: f.floorRadius(up.x, up.y, up.z) };
+          return { up, floorR: f.groundBelow(pos) };
         },
         resolve: (pos, r) => f.collide(pos, r),
         water: (pos) => this.waterAt(pos),
@@ -1500,9 +1510,19 @@ export class Game {
       this.camera.position.copy(p.pos).add(off);
       this.camera.quaternion.copy(this.camQuat);
     }
-    // keep the camera above ground
+    // keep the camera above ground (and out of the rock in holes and caves)
     const f = this.frame;
-    if (f && f.terrain) {
+    if (f && f.terrain && f.digsSys && f.digsSys.inZone(this.camera.position)) {
+      const eye = rt.inVehicle && this.vehicleObj ? this.vehicleObj.pos.clone().addScaledVector(this.vehicleObj.pos.clone().normalize(), 1.5) : p.pos;
+      const cam = this.camera.position;
+      if (f.digsSys.sdf(cam.x, cam.y, cam.z) > -0.3) {
+        const from = cam.clone();
+        for (let t = 0.1; t <= 1; t += 0.1) {
+          cam.lerpVectors(from, eye, t);
+          if (f.digsSys.sdf(cam.x, cam.y, cam.z) < -0.3) break;
+        }
+      }
+    } else if (f && f.terrain) {
       const D = this.camera.position.length();
       const d = this.camera.position.clone().divideScalar(D);
       const floor = f.floorRadius(d.x, d.y, d.z) + 0.6;
@@ -3674,6 +3694,100 @@ export class Game {
     this.save();
   }
 
+  // -------------------------------------------------------------- digs --
+  digKey() {
+    return this.frame ? `${this.star.key}:${this.frame.body.id}` : null;
+  }
+
+  // Hand the current world its saved holes.
+  syncDigs() {
+    const f = this.frame, s = this.state;
+    if (!f || !f.digsSys) return;
+    s.digs = s.digs || {};
+    const k = this.digKey();
+    s.digs[k] = s.digs[k] || [];
+    f.digsSys.setDigs(s.digs[k]);
+    f.digsSys.onVein = (cellKey, veins) => this.spawnVeins(cellKey, veins);
+  }
+
+  // Blast a hole of radius r at a local point.
+  dig(pos, r) {
+    const f = this.frame;
+    if (!f || !f.terrain || !f.digsSys || !this.env.inAtmo || this.localRoot.parent !== f.spin) return;
+    // the cities are built to last
+    if (f.details) for (const st of f.details.settlements) if (pos.distanceTo(st.group.position) < st.radius + r + 10) return;
+    if (!f.digsSys.digs.length) this.syncDigs();
+    const g = f.digsSys.add(Math.round(pos.x * 100) / 100, Math.round(pos.y * 100) / 100, Math.round(pos.z * 100) / 100, Math.round(r * 100) / 100, Math.round(this.state.playtime));
+    if (!g) return;
+    const list = f.digsSys.digs;
+    if (list.length > 1500) list.splice(0, list.length - 1500);
+    this.breakAt(pos, r + 1, null);
+    this.combat.debris(pos, 0x5a5248, Math.min(14, Math.round(3 + r * 1.5)), 0.3 + Math.min(1.4, r * 0.12));
+    this.digsDirty = true;
+  }
+
+  updateDigs(dt) {
+    const f = this.frame, s = this.state;
+    if (!f || !f.digsSys || this.localRoot.parent !== f.spin) return;
+    const p = this.player;
+    f.digsSys.update(this.rt.inShip && this.shipObj ? this.shipObj.pos : p.pos);
+    // in Free Play the land heals after ten minutes; the campaign remembers
+    this.digHealT = (this.digHealT || 0) - dt;
+    if (this.digHealT <= 0) {
+      this.digHealT = 5;
+      const story = s.campaign && s.campaign.started;
+      if (!story) f.digsSys.remove((g) => g[4] < s.playtime - 600);
+    }
+  }
+
+  // Crystal veins in cave walls can be mined for star metal.
+  spawnVeins(cellKey, veins) {
+    const s = this.state;
+    this.veinStatics = this.veinStatics || new Map();
+    veins.forEach((v, i) => {
+      const id = `vein:${this.digKey()}:${cellKey}:${i}`;
+      if (s.explored.includes(id) || this.veinStatics.has(id)) return;
+      const pos = new THREE.Vector3(v[0], v[1], v[2]).addScaledVector(new THREE.Vector3(v[3], v[4], v[5]), -0.6);
+      const tier = Math.max(0, this.locTier());
+      const b = this.beasts.spawnStatic({
+        pos, radius: 1.6, hp: 60 * Math.pow(2.6, tier) * 1.5, name: 'Star Metal Vein', cn: '星金矿脉', color: 0x3ef2ff, tier,
+        onKill: () => {
+          if (!s.explored.includes(id)) s.explored.push(id);
+          this.veinStatics.delete(id);
+          this.loot.spawn(pos, Math.round(4 + tier * 4 + Math.random() * 5), 0x3ef2ff, 4, 'ore');
+          this.campaign.event('mine');
+        },
+      });
+      this.veinStatics.set(id, b);
+    });
+  }
+
+  // Deep underground the sky's light fades and your lantern takes over.
+  applyUnderground() {
+    const f = this.frame, cam = this.camera.position;
+    let k = 0;
+    if (f && f.terrain && this.localRoot.parent === f.spin) {
+      const D = cam.length();
+      const n = tA.copy(cam).divideScalar(D);
+      const depth = f.R + f.terrain.height(n.x, n.y, n.z) - D;
+      k = Math.max(0, Math.min(1, (depth - 1.5) / 6));
+    }
+    if (this.sunBase === undefined) this.sunBase = this.system.light.intensity;
+    this.system.light.intensity = this.sunBase * (1 - 0.88 * k);
+    if (k > 0) {
+      this.hemi.intensity *= 1 - 0.8 * k;
+      this.ambient.intensity *= 1 - 0.6 * k;
+      this.scene.fog.density = Math.max(this.scene.fog.density, 0.004 * k);
+      this.scene.fog.color.multiplyScalar(1 - 0.8 * k);
+    }
+    this.lantern.intensity = 18 * k;
+    // held up and to one side, so walls get some shape from the light
+    const pu = n0(this.player.pos);
+    const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    this.lantern.position.copy(this.player.pos).addScaledVector(pu, 1.2).addScaledVector(side, 1.1);
+    this.underground = k > 0.3;
+  }
+
   // ----------------------------------------------------------- weapons --
   applyWeapon() {
     const s = this.state;
@@ -3723,7 +3837,7 @@ export class Game {
   impact(pos, radius, crater = false) {
     this.breakAt(pos, radius, null);
     this.scorch(pos, Math.max(1.5, radius * 0.7));
-    if (crater && this.frame && this.frame.addCrater) this.frame.addCrater(pos, radius);
+    if (crater) this.dig(pos.clone().addScaledVector(pos.clone().normalize(), -radius * 0.3), Math.min(18, radius * 1.1));
   }
 
   respecCost() {
@@ -4142,6 +4256,7 @@ export class Game {
     const speed = vel.length();
     fx.speed = settings.get('speedBlur') ? (rt.cruise ? Math.min(0.8, speed / 60000) : p.boosting && p.mode !== 'ground' ? 0.35 : 0) : 0;
     this.updateAtmosphereLighting();
+    this.applyUnderground();
     this.applyUnderwater();
 
     const camWorld = this.camera.getWorldPosition(new THREE.Vector3());
