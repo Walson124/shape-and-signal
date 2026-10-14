@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addCompiled, cancelAdd } from '../core/precompile.js';
 import { BEASTS, BOSSES, power } from './data.js';
 import { glowTexture } from '../world/textures.js';
 import { rimMaterial } from '../world/models.js';
@@ -558,7 +559,7 @@ export class BeastManager {
     const scale = (elite ? 1.35 : 1) * (1 + Math.min(0.8, Math.max(0, tier) * 0.12));
     model.group.scale.multiplyScalar(scale);
     model.group.position.copy(pos);
-    this.scene.add(model.group);
+    addCompiled(this.scene, model.group, `beast:${type}`);
     const hp = 60 * power(tier) * def.hp * (elite ? 2.4 : 1);
     const b = {
       uid: ++this.uid, type, def, model, mesh: model.group, pos: model.group.position, vel: new THREE.Vector3(),
@@ -577,7 +578,7 @@ export class BeastManager {
     const def = BOSSES[index];
     const model = buildBoss(def, index);
     model.group.position.copy(pos);
-    this.scene.add(model.group);
+    addCompiled(this.scene, model.group, `boss:${index}`);
     const hp = 60 * power(tier) * def.hp;
     const b = {
       uid: ++this.uid, type: 'boss', bossIndex: index, def: { ...def, behavior: 'boss', aggro: 900, cores: 30 }, model, mesh: model.group, pos: model.group.position,
@@ -637,6 +638,7 @@ export class BeastManager {
   }
 
   removeModel(b) {
+    cancelAdd(b.mesh);
     this.scene.remove(b.mesh);
     b.mesh.traverse((o) => {
       if (o.geometry) o.geometry.dispose();

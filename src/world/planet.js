@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeTerrain, cubeToSphere } from './terrain.js';
 import { texPool } from './texpool.js';
 import { chunkIndex } from './chunkgen.js';
+import { addCompiled, cancelAdd } from '../core/precompile.js';
 import { terrainMaterial, propMaterial, propGeometries } from './props.js';
 import { makeAtmosphere, makeOcean, makeClouds, makeRings } from './planetfx.js';
 import { buildSettlement } from './city.js';
@@ -313,7 +314,7 @@ export class Planet {
           tB.copy(tA).addScaledVector(c.up, -along);
           const hd = tB.length();
           if (hd < c.radius + radius) {
-            if (feet > c.height - 0.8) {
+            if (feet > c.height - Math.min(3, Math.max(0.8, c.height * 0.2))) {
               roof = Math.max(roof ?? 0, c.pos.length() + c.height);
             } else if (hd > 0.001) {
               local.addScaledVector(tB.divideScalar(hd), c.radius + radius - hd);
@@ -334,7 +335,7 @@ export class Planet {
           tB.copy(tA).addScaledVector(c.up, -along);
           const hd = tB.length();
           if (hd < c.radius + radius) {
-            if (feet > c.height - 0.8) roof = Math.max(roof ?? 0, c.pos.length() + c.height);
+            if (feet > c.height - Math.min(3, Math.max(0.8, c.height * 0.2))) roof = Math.max(roof ?? 0, c.pos.length() + c.height);
             else if (hd > 0.001) local.addScaledVector(tB.divideScalar(hd), c.radius + radius - hd);
           }
         }
@@ -574,9 +575,10 @@ export class Planet {
         const d = center.distanceTo(this.camLocal);
         if (!e.obj && d < 6500) {
           e.obj = buildSettlement(e.site, this.R, { crowd: (this.ctx.preset.crowd ?? 1) * (settings.get('crowds') ? 1 : 0) });
-          this.spin.add(e.obj.group);
+          addCompiled(this.spin, e.obj.group);
           changed = true;
         } else if (e.obj && d > 9500) {
+          cancelAdd(e.obj.group);
           this.spin.remove(e.obj.group);
           e.obj.dispose();
           e.obj = null;
@@ -589,9 +591,10 @@ export class Planet {
         const d = tB.copy(e.dir).multiplyScalar(this.R).distanceTo(this.camLocal);
         if (!e.obj && d < 3200) {
           e.obj = buildRuinField(e.site, this);
-          this.spin.add(e.obj.group);
+          addCompiled(this.spin, e.obj.group);
           changed = true;
         } else if (e.obj && d > 4800) {
+          cancelAdd(e.obj.group);
           this.spin.remove(e.obj.group);
           e.obj.dispose();
           e.obj = null;

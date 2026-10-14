@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng.js';
 import { signTexture } from './textures.js';
 import { buildShip } from './models.js';
+import { addCompiled, cancelAdd } from '../core/precompile.js';
 import { VENUES, VENUE_ORDER, interiorLayout, buildInterior, npcGeometry } from './interiors.js';
 
 let facadeTex = null;
@@ -238,16 +239,6 @@ export function buildSettlement(site, R, opts = {}) {
     if (lay.service) {
       const [sx, sz] = toWorldXZ(lay.service.x, lay.service.z);
       services.push({ kind, name: v.name, pos: toLocal(sx, 1.6, sz), range: 4.5, venue, city: site.name });
-    }
-    if (kind === 'lobby') {
-      // an elevator to the roof, and a hatch on the roof to come back down
-      const [ex, ez] = toWorldXZ(bw / 2 - 1.5, bd / 2 - 3);
-      const [ix, iz] = toWorldXZ(0, 0);
-      const rx = sh.x - sh.w * 0.32, rz = sh.z - sh.d * 0.32;
-      services.push({ kind: 'elevator', name: 'Elevator to the roof', pos: toLocal(ex, 1.6, ez), range: 3.5, to: toLocal(rx + 2.5, sh.h + 0.05, rz), city: site.name });
-      services.push({ kind: 'elevator', name: 'Elevator down', pos: toLocal(rx, sh.h + 1.6, rz), range: 3.5, to: toLocal(ix, 0.05, iz), city: site.name });
-      place(darkParts, new THREE.BoxGeometry(3, 3, 3), rx, sh.h + 1.5, rz);
-      neon('cy', new THREE.BoxGeometry(2.2, 0.15, 0.15), rx, sh.h + 2.6, rz + 1.55);
     }
     venues.push(venue);
   });
@@ -507,9 +498,8 @@ export function buildSettlement(site, R, opts = {}) {
     group.add(beam);
   }
 
-  const light = new THREE.PointLight(0xffb070, outpost ? 1 : 3, outpost ? 200 : 700, 1.4);
-  light.position.set(0, 120, 0);
-  group.add(light);
+  // the settlement's warm glow comes from the game's single city light (see Game.updateCityLight)
+  const glow = { intensity: outpost ? 1 : 3, distance: outpost ? 200 : 700 };
 
   // grid for fast box lookups
   const CELL = 32;
@@ -535,6 +525,7 @@ export function buildSettlement(site, R, opts = {}) {
     venues,
     arena,
     padLocal: toLocal(padX, 2, 0),
+    glow,
     gates: gateAngles.map((a) => ({ pos: toLocal(Math.cos(a) * (radius - 6), 0.2, Math.sin(a) * (radius - 6)), out: toLocal(Math.cos(a) * (radius + 60), 0.2, Math.sin(a) * (radius + 60)), wall: (off) => toLocal(Math.cos(a + off / radius) * (radius - 6), 24.5, Math.sin(a + off / radius) * (radius - 6)) })),
     spawnLocal: toLocal(0, 2, -(capital ? 60 : 44)),
     radius,
@@ -569,7 +560,7 @@ export function buildSettlement(site, R, opts = {}) {
               if (yEye + 0.25 > b.y0) { pc.y = g0 + b.y0 - 0.25; moved = true; }
               continue;
             }
-            if (feet > b.y1 - 0.6) {
+            if (feet > b.y1 - Math.min(3, Math.max(0.6, (b.y1 - b.y0) * 0.2))) {
               roof = Math.max(roof ?? 0, Rs + g0 + b.y1);
               continue;
             }
@@ -673,9 +664,10 @@ export function buildSettlement(site, R, opts = {}) {
             const [cx, cz] = v.frame(0, 0);
             v.interior.group.position.set(cx, drop(cx, cz), cz);
             v.interior.group.rotation.y = v.ry;
-            group.add(v.interior.group);
+            addCompiled(group, v.interior.group, `interior:${v.kind}`);
             interiors.add(v);
           } else if (v.interior && d > 120) {
+            cancelAdd(v.interior.group);
             group.remove(v.interior.group);
             v.interior.dispose();
             v.interior = null;

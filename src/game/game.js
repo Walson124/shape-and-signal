@@ -14,8 +14,9 @@ import { speciesForBody } from './bestiary.js';
 import { codeLabel } from '../core/bindings.js';
 import { newState, loadState, saveState, clearSave, derive } from './state.js';
 import { generateOffers, progressBounties, insightTrial, MAX_BOUNTIES } from './missions.js';
-import { settings } from '../core/settings.js';
+import { settings, detectGpu, QUALITY_ORDER } from '../core/settings.js';
 import { applyShaderFixes } from '../core/shaderfix.js';
+import { initPrecompile } from '../core/precompile.js';
 import { Input } from '../core/input.js';
 import { AudioEngine } from '../core/audio.js';
 import { PostFX } from '../core/post.js';
@@ -53,6 +54,13 @@ export class Game {
     applyShaderFixes();
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, logarithmicDepthBuffer: true });
+    this.gpu = detectGpu(this.renderer);
+    if (settings.fresh) {
+      // first launch: start from a preset that suits this GPU (before anything reads it)
+      settings.data.quality = this.gpu.quality;
+      settings.persist();
+    }
+    this.lowFps = 0;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.dynScale = 1;
@@ -65,15 +73,19 @@ export class Game {
     this.ambient = new THREE.AmbientLight(0x6070a0, 0.2);
     this.hemi = new THREE.HemisphereLight(0x9ab8ff, 0x3a3020, 0.1);
     this.scene.add(this.ambient, this.hemi);
+    // one warm light that follows the nearest settlement; the light count never changes
+    this.cityLight = new THREE.PointLight(0xffb070, 0, 700, 1.4);
     // Everything the player touches lives in this group. It is re-parented
     // between the star system and a planet's rotating surface.
     this.localRoot = new THREE.Group();
     this.localRoot.name = 'local';
     this.scene.add(this.localRoot);
     this.localRoot.add(this.camera);
+    this.localRoot.add(this.cityLight);
 
     this.viewmodel = new ViewModel(this.scene);
     this.post = new PostFX(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera);
+    initPrecompile(this.renderer, this.camera, this.scene, () => this.post.composer && this.post.composer.renderTarget1);
     this.flare = new LensFlare();
     this.post.overlays.push(this.flare);
     this.skyBaker = new SkyBaker(this.renderer);
@@ -538,6 +550,10 @@ export class Game {
     } else {
       setTimeout(() => this.inGame && this.nix.event('resume', {}, 1), 1200);
     }
+    if (this.gpu.software && !this.warnedSoftware) {
+      this.warnedSoftware = true;
+      setTimeout(() => this.hud.notify('Your browser is drawing the game <b>without your graphics card</b>, so it will be slow. Turn on <b>hardware acceleration</b> in your browser settings and restart it.', 'red'), 2500);
+    }
     if (!this.state.intro) {
       this.state.intro = true;
       const tips = [
@@ -652,6 +668,7 @@ export class Game {
     if (this.fpsAcc >= 1) {
       this.fps = this.fpsFrames / this.fpsAcc;
       this.adaptResolution(this.fpsAcc / this.fpsFrames);
+      this.adaptQuality();
       this.fpsAcc = 0;
       this.fpsFrames = 0;
     }
@@ -687,6 +704,26 @@ export class Game {
       this.dynScale = next;
       this.resize();
     }
+  }
+
+  // If the frame rate stays low even at the lowest dynamic resolution, drop a preset.
+  adaptQuality() {
+    if (!settings.get('autoQuality') || this.mode !== 'playing' || this.menus.overlayOpen || !this.input.locked) {
+      this.lowFps = 0;
+      return;
+    }
+    const floor = !settings.get('dynamicRes') || this.dynScale <= 0.61;
+    this.lowFps = this.fps < 30 && floor ? this.lowFps + 1 : 0;
+    if (this.lowFps < 5) return;
+    this.lowFps = -10;
+    const i = QUALITY_ORDER.indexOf(settings.get('quality'));
+    if (i <= 0) return;
+    const next = QUALITY_ORDER[i - 1];
+    settings.set('quality', next);
+    if (next === 'minimal' || next === 'low') settings.set('propDensity', Math.min(settings.get('propDensity'), 0.5));
+    this.dynScale = 1;
+    this.resize();
+    this.hud.notify(`Graphics lowered to <b>${next.toUpperCase()}</b> to keep the game smooth. You can change this in Settings.`, 'yl');
   }
 
   updateTitle(dt) {
@@ -784,6 +821,7 @@ export class Game {
     this.checkFrame();
     this.updateStations();
     this.updateVenue(dt);
+    this.updateCityLight();
 
     // ---- aim and targeting
     const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
@@ -907,7 +945,7 @@ export class Game {
     if (!planet.body.landable) return { planet, up, floorR: null, inAtmo: D < planet.atmoR, alt: D - planet.R, D, gas: true };
     let floorR = planet.floorRadius(up.x, up.y, up.z);
     const roof = planet.collide(pos, this.rt.inShip ? 10 : this.player.radius, this.rt.inShip ? 0 : EYE);
-    if (roof && roof > floorR && D > roof - 2) floorR = roof;
+    if (roof && roof > floorR && D > roof - 4) floorR = roof;
     return { planet, up, floorR, inAtmo: D < planet.atmoR, alt: D - floorR - (this.rt.inShip ? 0 : EYE), D };
   }
 
@@ -1290,8 +1328,9 @@ export class Game {
       const along = to.dot(camFwd);
       if (along < 0 || along > 1800) continue;
       const perp = Math.sqrt(Math.max(0, to.lengthSq() - along * along));
-      if (perp < b.radius + along * 0.035) {
-        const score = perp / (b.radius + along * 0.035) + along / 4000;
+      const tol = b.radius * 1.05 + Math.min(4, along * 0.006);
+      if (perp < tol) {
+        const score = perp / tol + along / 4000;
         if (score < bestScore) { bestScore = score; best = b; }
       }
     }
@@ -1842,8 +1881,6 @@ export class Game {
       this.openPod(it.pod);
     } else if (it.kind === 'dock') {
       this.dockShip(it.station);
-    } else if (it.kind === 'service' && it.service.kind === 'elevator') {
-      this.rideElevator(it.service);
     } else if (it.kind === 'service' && it.service.kind === 'lore') {
       this.readLore(it.service.lore);
     } else if (it.kind === 'service' || it.kind === 'station') {
@@ -2014,6 +2051,24 @@ export class Game {
     return 3 + this.state.realm * 2;
   }
 
+  updateCityLight() {
+    const f = this.frame, L = this.cityLight;
+    let best = null, bd = Infinity;
+    if (f && f.details && this.localRoot.parent === f.spin) {
+      for (const st of f.details.settlements) {
+        const d = st.group.position.distanceTo(this.player.pos);
+        if (d < bd) { bd = d; best = st; }
+      }
+    }
+    if (!best || bd > best.glow.distance + 600) {
+      L.intensity = 0;
+      return;
+    }
+    L.position.copy(best.group.position).addScaledVector(tA.copy(best.group.position).normalize(), 120);
+    L.intensity = best.glow.intensity;
+    L.distance = best.glow.distance;
+  }
+
   // ------------------------------------------------------- story --
   async playCutscene(script) {
     const rt = this.rt;
@@ -2048,26 +2103,6 @@ export class Game {
     this.closePanel();
     this.state.nixAwake = false;
     this.campaign.begin();
-  }
-
-  rideElevator(sv) {
-    const p = this.player;
-    const up = sv.to.clone().normalize();
-    const fade = document.getElementById('fade');
-    fade.style.transition = 'opacity 0.25s';
-    fade.style.background = '#000';
-    fade.style.opacity = 1;
-    this.sound.confirm();
-    setTimeout(() => {
-      const fwd = p.forward().projectOnPlane(up).normalize();
-      const at = sv.to.clone().addScaledVector(up, EYE + 0.05);
-      p.placeAt(at, at.clone().add(fwd), up);
-      p.vel.set(0, 0, 0);
-      p.mode = 'ground';
-      this.camQuat.copy(p.quat);
-      fade.style.opacity = 0;
-      setTimeout(() => { fade.style.background = ''; fade.style.transition = ''; }, 300);
-    }, 280);
   }
 
   // ------------------------------------------------ virtual universe --

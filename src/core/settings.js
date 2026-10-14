@@ -3,6 +3,28 @@ import { DEFAULT_BINDINGS } from './bindings.js';
 // Player settings with graphics presets, persisted in localStorage.
 const KEY = 'starsea-settings-v1';
 
+export const QUALITY_ORDER = ['minimal', 'low', 'medium', 'high', 'ultra'];
+
+// A first guess at the right preset from the GPU's name.
+export function detectGpu(renderer) {
+  let name = '';
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  } catch {
+    /* no info */
+  }
+  const n = name.toLowerCase();
+  const software = /swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(n);
+  let quality = 'high';
+  if (software) quality = 'minimal';
+  else if (/intel|iris|uhd|hd graphics|mali|adreno|powervr|videocore/.test(n)) quality = 'low';
+  else if (/radeon\(tm\) graphics|radeon graphics|vega \d+ graphics|apple m1|apple gpu/.test(n)) quality = 'medium';
+  else if (/rtx [34]0[789]0|rtx 50|rx 7[89]00|rx 9070/.test(n)) quality = 'high';
+  return { name, software, quality };
+}
+
 export const PRESETS = {
   minimal: { label: 'Minimal', pixelRatio: 0.75, msaa: 0, bloomStrength: 0.6, texRes: 512, skyRes: 512, particles: 3000, dust: 300, belt: 250, flare: false, planetSeg: 48, leaf: 160, split: 1.4, crowd: 0.25, interiorLights: false },
   low: { label: 'Low', pixelRatio: 1, msaa: 0, bloomStrength: 0.7, texRes: 512, skyRes: 1024, particles: 5000, dust: 700, belt: 500, flare: false, planetSeg: 64, leaf: 110, split: 1.7, crowd: 0.5, interiorLights: false },
@@ -40,6 +62,7 @@ const DEFAULTS = {
   terrainDetail: 1,
   propDensity: 1,
   crowds: true,
+  autoQuality: true,
   bindings: { ...DEFAULT_BINDINGS },
 };
 
@@ -55,6 +78,7 @@ function load() {
 class Settings {
   constructor() {
     const saved = load();
+    this.fresh = !Object.keys(saved).length;
     this.data = { ...DEFAULTS, ...saved, bindings: { ...DEFAULT_BINDINGS, ...(saved.bindings || {}) } };
     if (!PRESETS[this.data.quality]) this.data.quality = DEFAULTS.quality;
     this.listeners = new Set();

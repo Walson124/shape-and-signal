@@ -131,6 +131,7 @@ export class Menus {
       const seg = e.target.closest('[data-seg]');
       if (seg) {
         const [k, val] = seg.dataset.seg.split(':');
+        if (k === 'quality') settings.set('autoQuality', false);
         const num = Number(val);
         settings.set(k, Number.isNaN(num) || val === '' ? val : num);
         snd().ui();
@@ -320,6 +321,7 @@ export class Menus {
         + row('Terrain detail', 'How finely the ground near you is built. Lower is faster.', seg('terrainDetail', [[0.6, 'LOW'], [1, 'NORMAL'], [1.4, 'HIGH']]))
         + row('Trees and rocks', 'Density of vegetation and boulders.', seg('propDensity', [[0, 'OFF'], [0.5, 'SPARSE'], [1, 'FULL']]))
         + row('City crowds', 'Pedestrians walking the streets.', tog('crowds'))
+        + row('Automatic quality', 'Lower the preset by itself if the frame rate stays low. Picking a preset turns this off.', tog('autoQuality'))
         + row('Show FPS', 'Frame rate counter on the HUD.', tog('showFps'));
       if (this.game.qualityChangePending) html += '<p class="panel-note" style="margin-top:12px">Some changes apply fully the next time you enter a star system.</p>';
     } else if (t === 'visuals') {

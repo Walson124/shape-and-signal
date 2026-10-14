@@ -172,9 +172,6 @@ export function buildPlayerShip(tier, accentHex) {
     gear.add(leg, foot);
   }
   g.add(gear);
-  const light = new THREE.PointLight(accent, 1.5, 60, 1.6);
-  light.position.set(0, 3, 0);
-  g.add(light);
   g.scale.setScalar(s);
   return {
     group: g,
