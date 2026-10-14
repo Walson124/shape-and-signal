@@ -261,6 +261,7 @@ export class Arts {
     const up = this.up();
     g.combat.slash(from.clone().addScaledVector(fwd, 1.5).addScaledVector(up, -0.3), fwd, up, reach, this.color(), this.combo % 2 === 0);
     g.viewmodel.attack('swing', this.combo % 2 === 0);
+    this.meleeDig(ctx, reach, 2.2);
     if (hits.length) {
       g.sound.swordHit(hits[0].pos);
       rt.shake = Math.max(rt.shake, 0.25);
@@ -634,6 +635,34 @@ export class Arts {
     g.hud.banner('ULTIMATE', 'Soul Annihilation', `<span class="cn">灭魂</span>${n} minds`, '#d8a0ff', 2, true);
   }
 
+  // Where the crosshair meets solid ground within reach (for digging), or null.
+  groundHit(ctx, reach) {
+    const g = this.g, cam = g.camera.position;
+    const f = ctx.camFwd;
+    const extra = g.camMode === 'first' ? 0 : 5.5;
+    let prev = cam.clone();
+    for (let d = 0.4; d < reach + extra; d += 0.35) {
+      const q = cam.clone().addScaledVector(f, d);
+      if (g.isSolid(q)) {
+        let a = prev, b = q;
+        for (let k = 0; k < 8; k++) {
+          const m = a.clone().lerp(b, 0.5);
+          if (g.isSolid(m)) b = m; else a = m;
+        }
+        return b;
+      }
+      prev = q;
+    }
+    return null;
+  }
+
+  // Dig where a melee blow meets the ground.
+  meleeDig(ctx, reach, r) {
+    const hit = this.groundHit(ctx, reach);
+    if (hit) this.g.dig(hit, r);
+    return hit;
+  }
+
   // Where an attack from `from` meets a beast's body (not its centre).
   hitPoint(b, from) {
     const d = tA.subVectors(from, b.pos);
@@ -719,6 +748,7 @@ export class Arts {
     const finisher = this.combo % 4 === 0;
     const hits = this.meleeCone(ctx, reach, 0.35, st.atk * (finisher ? 3.2 : 1.7) * this.mult('punch'), 'punch', finisher ? 70 : 15);
     g.viewmodel.attack('punch', this.combo % 2 === 0);
+    this.meleeDig(ctx, reach + 1, finisher ? 2.6 : 1.8);
     const at = g.player.pos.clone().addScaledVector(ctx.camFwd, reach * 0.7);
     g.breakAt(at, finisher ? 3.5 : 1.8, ctx.camFwd);
     if (finisher) {
@@ -811,6 +841,7 @@ export class Arts {
     g.combat.beam(from.clone().addScaledVector(ctx.camFwd, 1.5), to, this.color(), 0.35, 0.16);
     g.breakAt(to, 2.2, ctx.camFwd);
     g.viewmodel.attack('thrust');
+    this.meleeDig(ctx, reach, 1.9);
     if (hits.length) {
       g.sound.swordHit(hits[0].pos);
       rt.shake = Math.max(rt.shake, 0.22);

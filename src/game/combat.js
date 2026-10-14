@@ -366,11 +366,21 @@ export class Combat {
       }
       if (!dead && s.kind !== 'wave' && s.kind !== 'heaven' && ctx.solid && ctx.solid(s.pos)) {
         dead = true;
+        // back up to the surface between last frame and this one
+        let a = prevPos.clone(), b = s.pos.clone();
+        if (!ctx.solid(a)) {
+          for (let k = 0; k < 10; k++) {
+            const m = a.clone().lerp(b, 0.5);
+            if (ctx.solid(m)) b = m; else a = m;
+          }
+          s.pos.copy(a);
+          s.group.position.copy(a);
+        }
         if (s.onImpact) { s.onImpact(s.pos.clone()); s.onImpact = null; }
         if (s.owner === 'player' && ctx.breakAt) {
           ctx.breakAt(s.pos, 2.5 * (s.radius || 1), s.vel.clone().normalize());
           if (ctx.scorch) ctx.scorch(s.pos, 1.6 + s.radius);
-          if (ctx.dig && s.kind !== 'turret') ctx.dig(s.pos, 0.9 + (s.radius || 1) * 0.6);
+          if (ctx.dig && s.kind !== 'turret') ctx.dig(s.pos, { knife: 1.0, arrow: 1.4, thrust: 2.2 }[s.kind] || 1.2 + (s.radius || 1) * 0.4);
         }
         this.particles.burst(s.pos, s.color, 8, 30, 1, 0.3, 3);
       }

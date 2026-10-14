@@ -3715,7 +3715,7 @@ export class Game {
     const f = this.frame;
     if (!f || !f.terrain || !f.digsSys || !this.env.inAtmo || this.localRoot.parent !== f.spin) return;
     // the cities are built to last
-    if (f.details) for (const st of f.details.settlements) if (pos.distanceTo(st.group.position) < st.radius + r + 10) return;
+    if (f.details) for (const st of f.details.settlements) if (pos.distanceTo(st.group.position) < st.radius + r + 2) return;
     if (!f.digsSys.digs.length) this.syncDigs();
     const g = f.digsSys.add(Math.round(pos.x * 100) / 100, Math.round(pos.y * 100) / 100, Math.round(pos.z * 100) / 100, Math.round(r * 100) / 100, Math.round(this.state.playtime));
     if (!g) return;
@@ -4443,6 +4443,7 @@ export class Game {
       for (const b of this.beasts.beasts) {
         if (b.boss) continue;
         const d = b.pos.distanceTo(origin);
+        if (b.static && b.name === 'Star Metal Vein' && d > 25 && this.time - b.lastHit > 4) continue;
         if (d < 450 || this.time - b.lastHit < 4 || b === this.aimTarget || b === rt.lock) near.push([d, b]);
       }
       near.sort((a, b) => a[0] - b[0]);

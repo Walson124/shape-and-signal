@@ -4,7 +4,7 @@ export const CHANGELOG = [
     date: '2026-10-14', version: '0.9',
     title: 'Dig into the world',
     items: [
-      'Blasts now punch real holes in the ground, and your shots chip it away. Keep digging and you can go down into the planet.',
+      'Blasts punch real holes in the ground. Punch, cut or shoot the ground and you dig into it: a few punches make a pit you can walk into, and you can keep going down.',
       'Hidden caves and tunnels run beneath the surface, with glowing star metal veins to mine in the deep rock.',
       'Underground the daylight fades and your lantern lights the way.',
       'In the campaign the holes you make are permanent; in Free Play the land heals after ten minutes.',
@@ -20,7 +20,7 @@ export const CHANGELOG = [
       'Craft a taming collar, beat a beast down, and tame it: it follows you, fights, and grows stronger.',
       'Fold your vehicle into a bigger ring and take it out wherever you are.',
       'New story missions teach the ring, crafting and the Virtual Universe.',
-      'A Support the game link (Ko-fi) on the title screen and pause menu. The game stays free.',
+      'A Support link on the title screen and pause menu.',
       'Messages stay on screen for 10 seconds (14 when they show a key), and a vehicle bought before vehicles stayed parked now waits outside the dealer.',
     ],
   },
