@@ -268,7 +268,7 @@ export class HUD {
     const status = [];
     if (rt.shieldT > 0) status.push(`<span class="status gold">GOLDEN BODY ${rt.shieldT.toFixed(1)}</span>`);
     if (state.devour) status.push('<span class="status mg">DEVOUR</span>');
-    if (rt.invuln > 0) status.push('<span class="status cy">REFORMING</span>');
+    if (rt.invuln > 0.6) status.push('<span class="status cy">PROTECTED</span>');
     e['status-row'].innerHTML = status.join('');
     const bkey = JSON.stringify(state.bounties.map((b) => [b.id, b.progress]));
     if (bkey !== this.lastBounties) {
