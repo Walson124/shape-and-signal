@@ -7,6 +7,7 @@ export const CHANGELOG = [
       'Blasts punch real holes in the ground. Punch, cut or shoot the ground and you dig into it: a few punches make a pit you can walk into, and you can keep going down.',
       'Hidden caves and tunnels run beneath the surface, with glowing star metal veins to mine in the deep rock.',
       'Underground the daylight fades and your lantern lights the way.',
+      'Hold W against the wall of a hole or cave to climb out (Shift to climb faster).',
       'In the campaign the holes you make are permanent; in Free Play the land heals after ten minutes.',
     ],
   },

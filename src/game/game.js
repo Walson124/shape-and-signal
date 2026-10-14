@@ -1297,6 +1297,30 @@ export class Game {
       const D = p.pos.length();
       if (D > water.seaR - 2.5 && D < water.seaR + EYE * 0.35) p.pos.setLength(D + (water.seaR + EYE * 0.35 - D) * Math.min(1, dt * 2.5));
     }
+    // walk into the wall of a dug hole or cave to climb it
+    rt.climbing = false;
+    const dsys = onWorld && env.planet.digsSys;
+    if (dsys && alive && p.mode === 'ground' && move.z > 0 && dsys.inZone(p.pos)) {
+      const up = env.up;
+      const fwd = p.forward().projectOnPlane(up).normalize();
+      // chest and feet: keep climbing until your feet clear the lip
+      const chest = p.pos.clone().addScaledVector(up, -0.9).addScaledVector(fwd, 1.0);
+      const feet = p.pos.clone().addScaledVector(up, -1.6).addScaledVector(fwd, 1.1);
+      if (dsys.sdf(chest.x, chest.y, chest.z) > -0.15 || dsys.sdf(feet.x, feet.y, feet.z) > -0.15) {
+        const climb = sprintKey ? 8 : 5.5;
+        const vn = p.vel.dot(up);
+        if (vn < climb) p.vel.addScaledVector(up, climb - vn);
+        p.grounded = false;
+        rt.climbing = true;
+        if (!this.notifyGate.climbHint) {
+          this.notifyGate.climbHint = 1;
+          this.hud.notify(`Climbing. Keep holding <kbd>W</kbd> against the wall (with ${esc(codeLabel(settings.key('sprint')))} to climb faster).`, 'yl');
+        }
+      } else if (p.vel.dot(up) > 2) {
+        // over the lip: a little shove forward so you land on the edge
+        p.vel.addScaledVector(fwd, 4 * dt * 10);
+      }
+    }
     // a swimmer who can't fly floats with their head just above the surface
     if (swimming && !canFly && p.pos.length() > water.seaR + EYE * 0.35) {
       p.pos.setLength(water.seaR + EYE * 0.35);
