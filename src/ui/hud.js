@@ -492,10 +492,17 @@ export class HUD {
     const d = document.createElement('div');
     d.className = `feed-item ${kind}`;
     d.innerHTML = `<span class="tag">[${FEED_TAGS[kind] || 'SYS'}]</span>${text}`;
+    // messages that show a key stay longest, so there's time to read the binding
+    const keyHint = text.includes('<kbd>');
+    if (keyHint) d.classList.add('key-hint');
     this.el.feed.appendChild(d);
-    while (this.el.feed.children.length > 6) this.el.feed.firstChild.remove();
-    setTimeout(() => { d.style.opacity = '0'; d.style.transform = 'translateX(-12px)'; }, 6000);
-    setTimeout(() => d.remove(), 6700);
+    while (this.el.feed.children.length > 7) {
+      const old = [...this.el.feed.children].find((c) => !c.classList.contains('key-hint')) || this.el.feed.firstChild;
+      old.remove();
+    }
+    const life = keyHint ? 14000 : 10000;
+    setTimeout(() => { d.style.opacity = '0'; d.style.transform = 'translateX(-12px)'; }, life);
+    setTimeout(() => d.remove(), life + 700);
   }
 
   banner(kicker, title, sub, color, duration = 3.6, small = false) {

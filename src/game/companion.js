@@ -216,7 +216,7 @@ export class Companion {
     // speaking: type the current line, hold, then fade
     if (!this.current && this.queue.length) {
       const text = this.queue.shift();
-      this.current = { text, shown: 0, hold: 2.5 + text.length * 0.045 };
+      this.current = { text, shown: 0, hold: Math.max(text.includes('<kbd>') ? 9 : 0, 3.5 + text.length * 0.055) };
       this.textEl.innerHTML = '';
       this.el.classList.remove('hidden', 'fade');
     }

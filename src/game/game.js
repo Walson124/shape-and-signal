@@ -3299,11 +3299,17 @@ export class Game {
   }
 
   // Put your current vehicle at the kerb outside a Vehicle Dealer.
-  deliverVehicle(id) {
+  deliverVehicle(id, home = false) {
     const f = this.frame, s = this.state;
-    if (!f || !f.details) return;
+    if (!f || !f.terrain) return;
+    if (home && f.body.sites.city) f.ensureSettlement(f.body.sites.city);
+    if (!f.details) return;
     const svc = this.lastService && this.lastService.service;
-    let venue = svc && svc.venue && svc.venue.kind === 'dealer' ? svc.venue : null;
+    let venue = !home && svc && svc.venue && svc.venue.kind === 'dealer' ? svc.venue : null;
+    if (!venue && home && f.body.sites.city) {
+      const st = f.ensureSettlement(f.body.sites.city);
+      venue = st && st.venues.find((v) => v.kind === 'dealer' && v.curb);
+    }
     if (!venue) {
       let bd = Infinity;
       for (const st of f.details.settlements) for (const v of st.venues) {
@@ -3323,6 +3329,12 @@ export class Game {
   // Keep the vehicle object only while you're on the world it's parked on.
   syncVehicleFrame() {
     const s = this.state, f = this.frame, loc = s.vehicleLoc;
+    // a vehicle with no parking spot (bought before vehicles stayed parked) waits at the home city's dealer
+    if (s.vehicle && VEHICLES[s.vehicle] && !s.vehicleStored && !loc && f && f.terrain && f === this.homePlanet() && !this.rt.inVehicle) {
+      this.deliverVehicle(s.vehicle, true);
+      if (this.vehicleObj) setTimeout(() => this.hud.notify(`Your <b>${esc(VEHICLES[s.vehicle].name)}</b> is parked outside the Vehicle Dealer in ${esc(f.body.sites.city.name)}. Follow the orange marker.`, 'yl'), 2500);
+      return;
+    }
     const here = !s.vehicleStored && loc && f && loc.star === this.star.key && loc.body === f.body.id && s.vehicle && VEHICLES[s.vehicle];
     if (!here) {
       if (this.vehicleObj && !this.rt.inVehicle) { this.vehicleObj.dispose(); this.vehicleObj = null; }
