@@ -33,6 +33,7 @@ import { Combat } from './combat.js';
 import { BeastManager } from './beasts.js';
 import { Player, EYE } from './player.js';
 import { Ship } from './ship.js';
+import { Vehicle, VEHICLES } from './vehicle.js';
 import { SwordArray } from './swords.js';
 import { ViewModel } from './viewmodel.js';
 import { Loot } from './loot.js';
@@ -326,6 +327,7 @@ export class Game {
       this.frame = planet;
       return;
     }
+    this.dismount(true);
     if (carry && this.localRoot.parent) {
       this.localRoot.updateWorldMatrix(true, false);
       parent.updateWorldMatrix(true, false);
@@ -579,6 +581,7 @@ export class Game {
 
   async quitToTitle() {
     this.exitVirtual();
+    this.dismount(true);
     if (this.cutscene.playing) this.cutscene.skip();
     this.cutscene.talk = null;
     this.cutscene.hideSub();
@@ -809,7 +812,8 @@ export class Game {
     // ---- movement
     const env = this.computeEnv(rt.inShip && this.shipObj ? this.shipObj.pos : p.pos);
     this.env = env;
-    if (rt.inShip && this.shipObj) this.controlShip(dt, move, look, env, alive);
+    if (rt.inVehicle && this.vehicleObj) this.controlVehicle(dt, move, look, env, alive);
+    else if (rt.inShip && this.shipObj) this.controlShip(dt, move, look, env, alive);
     else this.controlPlayer(dt, move, look, env, alive, manual);
     if (this.mode === 'cutscene') this.cutscene.update(dt);
     else this.positionCamera(dt);
@@ -836,7 +840,7 @@ export class Game {
     rt.invuln = Math.max(0, rt.invuln - dt);
     rt.firingT = Math.max(0, rt.firingT - dt);
     const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg;
-    this.arts.update(dt, { alive: alive && !rt.scanner, camFwd, aimPoint, aimBeast, swordDamage });
+    this.arts.update(dt, { alive: alive && !rt.scanner && !rt.inVehicle, camFwd, aimPoint, aimBeast, swordDamage });
     if (alive && !rt.meditating) {
       if (inp.hit('pill1')) this.usePill('heal');
       if (inp.hit('pill2')) this.usePill('energy');
@@ -847,6 +851,7 @@ export class Game {
       if (inp.hit('target')) this.setTarget();
       if (rt.scanner && inp.hit('fire')) { rt.pingCd = Math.min(rt.pingCd, 0); this.radarPing(); }
       if (inp.hit('virtual')) this.enterVirtual();
+      if (inp.hit('vehicle')) this.toggleVehicle();
       if (inp.hit('engage')) this.engage();
     }
 
@@ -1286,7 +1291,13 @@ export class Game {
 
   positionCamera(dt) {
     const p = this.player, rt = this.rt;
-    if (rt.inShip && this.shipObj) {
+    if (rt.inVehicle && this.vehicleObj) {
+      const v = this.vehicleObj;
+      this.camQuat.slerp(p.quat, 1 - Math.exp(-dt * 12));
+      const off = tA.set(0, v.def.cam, v.def.dist).multiplyScalar(this.zoom).applyQuaternion(this.camQuat);
+      this.camera.position.copy(v.pos).add(off);
+      this.camera.quaternion.copy(this.camQuat);
+    } else if (rt.inShip && this.shipObj) {
       const ship = this.shipObj;
       this.camQuat.slerp(ship.quat, 1 - Math.exp(-dt * 6));
       const off = tA.set(0, 7 * ship.scale, 30 * ship.scale).multiplyScalar(this.zoom).applyQuaternion(this.camQuat);
@@ -1437,6 +1448,7 @@ export class Game {
       amount = d.amount;
       if (amount <= 0) return null;
     }
+    if (rt.inVehicle && this.vehicleObj) amount /= this.vehicleObj.def.hull;
     if (rt.inShip && this.shipObj) {
       // the hull soaks damage until it fails
       this.shipObj.hull -= amount * 0.6;
@@ -1478,6 +1490,7 @@ export class Game {
   }
 
   die() {
+    this.dismount();
     const s = this.state, rt = this.rt;
     rt.hp = 0;
     this.mode = 'dead';
@@ -3021,6 +3034,134 @@ export class Game {
     this.save();
   }
 
+  // ---------------------------------------------------------- vehicles --
+  toggleVehicle() {
+    const s = this.state, rt = this.rt, p = this.player, f = this.frame;
+    if (rt.inVehicle) return this.dismount();
+    if (!s.vehicle || !VEHICLES[s.vehicle]) return this.denied('You have no vehicle. Buy one at a Vehicle Dealer in any base city.');
+    if (rt.inShip) return this.denied('Leave your ship first.');
+    if (!f || !f.terrain || !this.env.inAtmo || p.mode === 'space') return this.denied('Vehicles only run on the ground of a world.');
+    if (this.inVenue) return this.denied('Step outside first.');
+    if (this.vehicleObj && this.vehicleObj.id !== s.vehicle) {
+      this.vehicleObj.dispose();
+      this.vehicleObj = null;
+    }
+    const fwd = p.forward().projectOnPlane(p.pos.clone().normalize()).normalize();
+    if (!this.vehicleObj || this.vehicleObj.pos.distanceTo(p.pos) > 30) {
+      // it pulls up beside you
+      if (!this.vehicleObj) this.vehicleObj = new Vehicle(this.localRoot, s.vehicle);
+      const at = p.pos.clone().addScaledVector(fwd, 3);
+      const n = at.clone().normalize();
+      this.vehicleObj.place(n.multiplyScalar(f.floorRadius(n.x, n.y, n.z) + this.vehicleObj.def.hover), fwd);
+      this.particles.burst(this.vehicleObj.pos, new THREE.Color(0.6, 2.2, 2.6), 40, 12, 0.8, 0.6);
+    }
+    rt.inVehicle = true;
+    rt.meditating = false;
+    rt.medToggle = false;
+    rt.controlling = false;
+    this.putAwayScanner();
+    this.player.setVisible(false);
+    this.viewmodel.setVisible(false);
+    this.post.vmEnabled = false;
+    this.swords.setVisible(false);
+    this.sound.confirm();
+    this.campaign.event('ride');
+    if (!this.notifyGate.rideHelp) {
+      this.notifyGate.rideHelp = 1;
+      this.hud.notify(`Steer with the mouse. <kbd>W</kbd> throttle, <kbd>S</kbd> brake, ${esc(codeLabel(settings.key('sprint')))} boost, ${esc(codeLabel(settings.key('jump')))} hop, <kbd>${esc(codeLabel(settings.key('vehicle')))}</kbd> to get off.`, 'yl');
+    }
+  }
+
+  dismount(silent = false) {
+    const rt = this.rt, v = this.vehicleObj, p = this.player;
+    if (!rt.inVehicle) {
+      if (silent && v && !this.frame) { v.dispose(); this.vehicleObj = null; }
+      return;
+    }
+    rt.inVehicle = false;
+    if (v) {
+      const up = v.pos.clone().normalize();
+      const side = new THREE.Vector3().crossVectors(v.fwd, up).normalize();
+      let at = v.pos.clone().addScaledVector(side, v.def.radius + 1.2);
+      const f = this.frame;
+      if (f && f.terrain) {
+        const n = at.clone().normalize();
+        at = n.multiplyScalar(f.floorRadius(n.x, n.y, n.z) + EYE + 0.2);
+      }
+      p.placeAt(at, at.clone().add(v.fwd), up);
+      p.vel.set(0, 0, 0);
+      p.mode = 'ground';
+      v.speed = 0;
+      if (silent) { v.dispose(); this.vehicleObj = null; }
+    }
+    this.applyCamMode();
+    this.swords.setVisible(true);
+    this.swords.reset(p);
+    this.camQuat.copy(p.quat);
+  }
+
+  controlVehicle(dt, move, look, env, alive) {
+    const v = this.vehicleObj, p = this.player, rt = this.rt, inp = this.input, f = env.planet;
+    if (!f || !f.terrain) return this.dismount();
+    p.look(look.x, look.y, { up: env.up });
+    const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat);
+    const boost = alive && inp.act('sprint');
+    v.update(dt, {
+      planet: f, look: camFwd, move: alive ? move : { x: 0, z: 0 }, boost, jump: alive && inp.hit('jump'),
+      collide: (pos, r) => f.collide(pos, r, 0),
+    });
+    if (v.crash > 18) {
+      rt.shake = Math.max(rt.shake, Math.min(1, v.crash / 50));
+      this.sound.explosion(v.pos, false);
+    }
+    v.crash = 0;
+    if (v.landed) {
+      rt.shake = Math.max(rt.shake, Math.min(0.8, v.landed / 30));
+      v.landed = 0;
+    }
+    // smash through trees and lamps at speed
+    if (Math.abs(v.speed) > 16) {
+      // sweep the path ahead every frame so nothing slips between checks
+      const ahead = v.def.radius + Math.abs(v.speed) * dt * 2;
+      this.breakAt(v.pos.clone().addScaledVector(v.fwd, ahead * 0.5), v.def.radius + 0.8 + ahead * 0.5, v.fwd);
+    }
+    // ram beasts
+    for (const b of [...this.beasts.beasts]) {
+      if (b.static || !b.alive || Math.abs(v.speed) < 10) continue;
+      if (b.pos.distanceTo(v.pos) > b.radius + v.def.radius + 0.5) continue;
+      if (this.time < (b.ramT || 0)) continue;
+      b.ramT = this.time + 0.6;
+      const dmg = this.stats.atk * v.def.ram * (Math.abs(v.speed) / 12);
+      this.hitBeast(b, dmg, this.arts.hitPoint(b, v.pos), 'ram', v.fwd.clone().multiplyScalar(Math.abs(v.speed) * 1.5).addScaledVector(env.up, 20));
+      v.speed *= b.radius > v.def.radius * 2 ? 0.2 : 0.7;
+      rt.shake = Math.max(rt.shake, 0.5);
+    }
+    p.pos.copy(v.seat());
+    p.vel.copy(v.fwd).multiplyScalar(v.speed);
+    p.boosting = boost && v.speed > v.def.speed * 0.9;
+    p.grounded = true;
+    p.syncRoot();
+  }
+
+  buyVehicle(id) {
+    const s = this.state, d = VEHICLES[id];
+    if (!d) return;
+    if (!(s.vehicles || []).includes(id)) {
+      if (s.coins < d.price) return this.sound.deny();
+      s.coins -= d.price;
+      s.vehicles = [...(s.vehicles || []), id];
+      this.sound.reward();
+      this.hud.notify(`The <b>${esc(d.name)}</b> is yours. Press <kbd>${esc(codeLabel(settings.key('vehicle')))}</kbd> anywhere outside to call it.`, 'gold');
+      this.campaign.event('vehicle', id);
+    }
+    s.vehicle = id;
+    if (this.vehicleObj && this.vehicleObj.id !== id && !this.rt.inVehicle) {
+      this.vehicleObj.dispose();
+      this.vehicleObj = null;
+    }
+    this.save();
+  }
+
   // ----------------------------------------------------------- weapons --
   applyWeapon() {
     const s = this.state;
@@ -3511,7 +3652,8 @@ export class Game {
 
     const env = this.env;
     let modeLabel;
-    if (rt.inShip && this.shipObj) modeLabel = rt.warpCharge > 0 ? 'WARP CHARGE' : rt.cruise ? 'CRUISE' : this.shipObj.landed ? 'SHIP · LANDED' : 'SHIP';
+    if (rt.inVehicle && this.vehicleObj) modeLabel = this.vehicleObj.def.name.toUpperCase();
+    else if (rt.inShip && this.shipObj) modeLabel = rt.warpCharge > 0 ? 'WARP CHARGE' : rt.cruise ? 'CRUISE' : this.shipObj.landed ? 'SHIP · LANDED' : 'SHIP';
     else modeLabel = rt.cruise ? 'CRUISE' : { ground: 'ON FOOT', fly: 'FLIGHT', space: 'VOID' }[p.mode];
     const f = this.frame;
     const surface = f && f.body.landable && (env.inAtmo || (env.alt !== null && env.alt < 2000));

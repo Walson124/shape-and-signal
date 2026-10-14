@@ -260,7 +260,8 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .menu-item:hover .mi-label { color: #fff; text-shadow: 0 0 12px var(--cy); }
 .mi-idx { font-size: 12px; color: var(--mg); }
 .mi-label { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase; }
-.mi-sub { margin-left: auto; font-size: 12px; color: var(--dim); }
+.mi-sub { margin-left: auto; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+@media (max-height: 760px) { #title-menu .menu-item { padding: 8px 16px; } .tagline { display: none; } }
 .menu.compact .menu-item { padding: 10px 16px; }
 .menu.compact .mi-label { font-size: 15px; }
 #changelog { position: absolute; right: 4vw; top: 50%; transform: translateY(-50%); width: min(360px, 34vw); max-height: 70vh; overflow-y: auto; padding: 14px 16px; background: rgba(5, 8, 18, 0.72); border: 1px solid var(--line); --chamfer: 10px; }
@@ -277,7 +278,7 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 #changelog-full .cl-head span { font-family: var(--mono); color: var(--faint); }
 #changelog-full ul { margin: 4px 0 0; padding-left: 18px; line-height: 1.4; }
 #changelog .cl-more { background: none; border: 0; color: var(--cy); font: inherit; font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; }
-@media (max-width: 900px) { #changelog { display: none; } }
+@media (max-width: 1250px), (max-height: 640px) { #changelog { display: none; } }
 .title-foot { position: absolute; left: 6vw; right: 6vw; bottom: 22px; display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); }
 
 #pause { background: rgba(3, 4, 10, 0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }

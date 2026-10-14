@@ -7,6 +7,7 @@ import { MAX_BOUNTIES } from '../game/missions.js';
 import { LORE } from '../game/lore.js';
 import { ACT1 } from '../game/campaign.js';
 import { CHANGELOG } from './changelog.js';
+import { VEHICLES, VEHICLE_IDS } from '../game/vehicle.js';
 import { settings, PRESETS } from '../core/settings.js';
 import { ACTIONS, codeLabel } from '../core/bindings.js';
 import { fmt, esc, hex } from './hud.js';
@@ -99,6 +100,7 @@ export class Menus {
         radar: () => g.buyRadar(),
         order: () => g.orderDelivery(a.dataset.item),
         sim: () => g.startSim(),
+        'buy-vehicle': () => g.buyVehicle(a.dataset.id),
         story: () => g.beginStory(),
       };
       if (handlers[action]) {
@@ -377,7 +379,7 @@ export class Menus {
       station: [['shop', 'Exchange'], ['armory', 'Armory'], ['forge', 'Sword forge'], ['shipyard', 'Shipyard']],
       exchange: [['shop', 'Exchange']], pills: [['shop', 'Pill pavilion']], forge: [['armory', 'Armory'], ['forge', 'Sword forge']], shipyard: [['shipyard', 'Shipyard']],
       hall: [['bounties', 'Bounties'], ['trainer', 'Skill reset']], clinic: [['clinic', 'Gene clinic']], chamber: [['chamber', 'Chamber']],
-      bar: [['bar', 'Teahouse']], food: [['food', 'Noodle bar']], home: [['home', 'Apartment']], arena: [['arena', 'Arena']],
+      bar: [['bar', 'Teahouse']], food: [['food', 'Noodle bar']], dealer: [['dealer', 'Vehicles']], home: [['home', 'Apartment']], arena: [['arena', 'Arena']],
       camp: [['shop', 'Trader'], ['bar', 'Campfire']],
       virtual: [['vshop', 'Star Mall'], ['bounties', 'Bounty board'], ['vsim', 'Simulator'], ['fame', 'Hall of Fame']],
     };
@@ -396,6 +398,7 @@ export class Menus {
       shop: () => this.renderShop(), forge: () => this.renderForge(), armory: () => this.renderArmory(), trainer: () => this.renderTrainer(), clinic: () => this.renderClinic(),
       chamber: () => this.renderChamber(), bar: () => this.renderBar(), food: () => this.renderFood(), home: () => this.renderHome(), arena: () => this.renderArena(),
       archive: () => this.renderArchive(),
+      dealer: () => this.renderDealer(),
       story: () => this.renderStory(),
       vshop: () => this.renderMall(), vsim: () => this.renderSim(), fame: () => this.renderFame(),
     }[k];
@@ -580,6 +583,19 @@ export class Menus {
     return `<p class="panel-note">Life, energy and spirit restored. You hold ${this.wallet()}.</p>${radar}
       <div class="section-title" style="margin-top:0">Pills and elixirs</div><div class="list">${pills}</div>
       ${vk === 'pills' ? '' : `<div class="section-title">Technique manuals</div><div class="list">${manuals}</div>`}${sell}`;
+  }
+
+  renderDealer() {
+    const { state } = this.game;
+    const rows = VEHICLE_IDS.map((id) => {
+      const v = VEHICLES[id];
+      const have = (state.vehicles || []).includes(id);
+      const btn = state.vehicle === id ? '<span class="tag done">YOUR RIDE</span>'
+        : have ? `<button class="btn small" data-action="buy-vehicle" data-id="${id}">Ride this</button>`
+        : `<span class="price">${fmt(v.price)} ◈</span><button class="btn small ${state.coins >= v.price ? 'primary' : ''}" data-action="buy-vehicle" data-id="${id}" ${state.coins >= v.price ? '' : 'disabled'}>Buy</button>`;
+      return `<div class="item"><div><h4 style="color:${hex(v.color)}">${esc(v.name)}<span class="cn">${v.cn}</span></h4><p>${esc(v.desc)}</p><p class="mono dim" style="font-size:11px">TOP SPEED ${v.speed} M/S · BOOST ×${v.boost} · ARMOUR ×${v.hull} · RAM ×${v.ram}</p></div>${btn}</div>`;
+    }).join('');
+    return `<p class="panel-note">Ground vehicles hover over land and water. Call yours anywhere outside with <kbd>${esc(codeLabel(settings.key('vehicle')))}</kbd>. For the sky, buy a Skyjet at a shipyard. You hold ${this.wallet()}.</p><div class="list">${rows}</div>`;
   }
 
   renderArmory() {

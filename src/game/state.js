@@ -19,6 +19,9 @@ export function newState() {
     // owned weapons beyond bare fists, and the one in hand
     weapons: [],
     weapon: 'fist',
+    // ground vehicles owned, and the one you ride
+    vehicles: [],
+    vehicle: null,
     skills: {},
     home: null,
     stash: 0,

@@ -13,11 +13,12 @@ export const VENUES = {
   food: { name: 'Noodle Bar', cn: '面馆', color: 0xff6a4a, sign: '面馆 NOODLES', desc: 'Hot meals that keep you going in a fight.' },
   home: { name: 'Apartments', cn: '公寓', color: 0x7ad8ff, sign: '公寓 HOME', desc: 'Rent a room: a bed, a respawn point and a safe night’s sleep.' },
   hall: { name: 'Martial Hall', cn: '武馆', color: 0xffe44d, sign: '武馆', desc: 'Bounties, trials and skill resets.' },
+  dealer: { name: 'Vehicle Dealer', cn: '车行', color: 0xff8a4a, sign: '车行 VEHICLES', desc: 'Hoverbikes, rovers and racers.' },
   arena: { name: 'Arena', cn: '竞技场', color: 0xff3c7d, sign: '竞技场 ARENA', desc: 'Fight waves of beasts for prize money.' },
   lobby: { name: 'Residential Block', cn: '住宅', color: 0x8fb8ff, sign: null, desc: '' },
 };
 // Order functional venues are handed out, closest to the plaza first.
-export const VENUE_ORDER = ['exchange', 'forge', 'pills', 'chamber', 'bar', 'clinic', 'home', 'food'];
+export const VENUE_ORDER = ['exchange', 'forge', 'pills', 'chamber', 'bar', 'clinic', 'home', 'food', 'dealer'];
 
 let shared = null;
 function mats() {
