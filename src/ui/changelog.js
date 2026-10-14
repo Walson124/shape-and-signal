@@ -9,6 +9,7 @@ export const CHANGELOG = [
       'The radar is now an item you scroll to, held in both hands in the middle of the screen.',
       'The opening cutscene shows the old Aurean Concord at its height, and the Night of Teeth.',
       'A changelog on the title screen.',
+      'Hold Space to keep hopping (on foot and on vehicles). Double-tapping Space to land no longer lifts you up first.',
     ],
   },
   {

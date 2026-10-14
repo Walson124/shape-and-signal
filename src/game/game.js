@@ -766,7 +766,9 @@ export class Game {
       if (inp.act('back') || inp.down('ArrowDown')) move.z -= 1;
       if (inp.act('right') || inp.down('ArrowRight')) move.x += 1;
       if (inp.act('left') || inp.down('ArrowLeft')) move.x -= 1;
-      if (inp.act('jump')) move.y += 1;
+      // in flight (or swimming) Space rises only once held a moment, so the
+      // double tap that drops you back to the ground doesn't lift you first
+      if (inp.act('jump') && inp.heldFor('jump') > 0.22) move.y += 1;
       if (inp.act('down')) move.y -= 1;
       if (inp.hit('camera')) {
         this.camMode = this.camMode === 'first' ? 'third' : 'first';
@@ -1201,6 +1203,9 @@ export class Game {
         this.lastSpace = this.time;
         jump = p.mode === 'ground';
       }
+    } else if (alive && this.input.act('jump') && p.mode === 'ground' && p.grounded && this.input.heldFor('jump') > 0.2) {
+      // hold Space to keep hopping
+      jump = true;
     }
     if (p.mode === 'fly' && onWorld && p.grounded && move.y < 0) p.mode = 'ground';
 
@@ -3236,7 +3241,7 @@ export class Game {
     const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat);
     const boost = alive && inp.act('sprint');
     v.update(dt, {
-      planet: f, look: camFwd, move: alive ? move : { x: 0, z: 0 }, boost, jump: alive && inp.hit('jump'),
+      planet: f, look: camFwd, move: alive ? move : { x: 0, z: 0 }, boost, jump: alive && inp.act('jump'),
       collide: (pos, r) => f.collide(pos, r, 0),
     });
     if (v.crash > 18) {
