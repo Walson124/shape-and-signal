@@ -10,6 +10,7 @@ export const CHANGELOG = [
       'Craft a taming collar, beat a beast down, and tame it: it follows you, fights, and grows stronger.',
       'Fold your vehicle into a bigger ring and take it out wherever you are.',
       'New story missions teach the ring, crafting and the Virtual Universe.',
+      'A Support the game link (Ko-fi) on the title screen and pause menu. The game stays free.',
       'Messages stay on screen for 10 seconds (14 when they show a key), and a vehicle bought before vehicles stayed parked now waits outside the dealer.',
     ],
   },

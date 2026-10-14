@@ -294,7 +294,7 @@ export class Menus {
       title: 'Starsea Ascension',
       body: `<div class="credits"><p>A cultivation game inspired by the xianxia space epics, especially 吞噬星空 (Swallowed Star).</p>
         <p>Built with Three.js and Vite. Every planet, city, star, nebula, beast, sword and sound is generated in code at runtime.</p>
-        <p>Fonts: Orbitron, Rajdhani, Share Tech Mono, Noto Serif SC (Google Fonts).</p></div>`,
+        <p>Fonts: Orbitron, Rajdhani, Share Tech Mono, Noto Serif SC (Google Fonts).</p><p>Starsea is free and always will be. If you enjoy it, you can support development on <a href="https://ko-fi.com/starseadev" target="_blank" rel="noopener" style="color:#ff9ab8">Ko-fi</a>.</p></div>`,
       actions: [{ label: 'Close', val: 'ok', cls: 'primary' }],
     });
   }
