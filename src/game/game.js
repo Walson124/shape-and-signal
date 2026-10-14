@@ -4165,7 +4165,7 @@ export class Game {
 
     const env = this.env;
     let modeLabel;
-    if (rt.inVehicle && this.vehicleObj) modeLabel = this.vehicleObj.def.name.toUpperCase();
+    if (rt.inVehicle && this.vehicleObj) modeLabel = `${this.vehicleObj.def.name.toUpperCase()} · ${codeLabel(settings.key('interact'))} GET OFF`;
     else if (rt.inShip && this.shipObj) modeLabel = rt.warpCharge > 0 ? 'WARP CHARGE' : rt.cruise ? 'CRUISE' : this.shipObj.landed ? 'SHIP · LANDED' : 'SHIP';
     else modeLabel = rt.cruise ? 'CRUISE' : { ground: 'ON FOOT', fly: 'FLIGHT', space: 'VOID' }[p.mode];
     const f = this.frame;
