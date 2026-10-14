@@ -8,6 +8,8 @@ export const CHANGELOG = [
       'You sit on your vehicle where everyone can see you, and you can fight from the saddle.',
       'You start without a radar; the basic one costs 150 coins at the Exchange.',
       'Story steps you have already done (like buying a radar early) now complete straight away.',
+      'Log in to the Virtual Universe any time, but your body stays out in the world: it can be attacked, and if it dies you are thrown out. Hits flash red at the screen edges and a body readout warns you.',
+      'Fixed beast bites sometimes launching you hundreds of metres into the sky; hits now shove you sideways.',
     ],
   },
   {

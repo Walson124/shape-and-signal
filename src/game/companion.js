@@ -118,7 +118,7 @@ const L = {
   warp: ['Warp drive engaged. Hold onto your organs.'],
   arrive: ['New system. New beasts, new mistakes. Exciting!'],
   station: ['A station! Air, commerce, terrible coffee. Civilisation.'],
-  vuIntro: ['Welcome to the Virtual Universe. Everyone who matters is plugged in here. Your body is parked and safe; do try not to forget where you left it.'],
+  vuIntro: ['Welcome to the Virtual Universe. Everyone who matters is plugged in here. Your body is still out there, by the way. Unguarded. Just a thought.'],
   delivery: ['Delivery ordered. The shipping fee is criminal, by the way. I checked.', 'Ordered. It\'ll fall out of the sky near you. Literally.'],
   podIncoming: ['Incoming pod! Stand clear, or don\'t. It\'d be a funny way to go.'],
   arenaWin: ['The crowd loves you. I\'m warming up to you too. Slowly.'],

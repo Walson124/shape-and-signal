@@ -4,7 +4,7 @@ import { npcGeometry } from '../world/interiors.js';
 
 // The Virtual Universe (虚拟宇宙): a light neon cyberspace you can enter from
 // anywhere through your ring. Its own scene and camera, all unlit materials,
-// so it costs very little to draw. Your real body waits, paused and safe.
+// so it costs very little to draw. Your real body stays in the world meanwhile.
 
 const KIOSKS = [
   { id: 'shop', name: 'Star Mall', cn: '星际商城', color: '#ffe44d', a: -Math.PI / 2 },

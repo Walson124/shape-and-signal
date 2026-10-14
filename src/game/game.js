@@ -679,9 +679,14 @@ export class Game {
     if (this.mode === 'title' || this.mode === 'loading') this.updateTitle(dt);
     else if (this.mode === 'warping') this.updateWarp(dt);
     else if (this.mode === 'virtual') {
-      const paused = this.menus.overlayOpen || !this.input.locked;
-      if (!paused) {
-        this.updateVirtual(dt);
+      // only the pause screen stops time; your body lives on while you're logged in
+      const pauseShown = !this.menus.$('pause').classList.contains('hidden') || !this.menus.$('settings').classList.contains('hidden');
+      if (!pauseShown) {
+        if (!this.menus.overlayOpen && this.input.locked) this.updateVirtual(dt);
+        if (this.mode === 'virtual') {
+          this.update(dt);
+          this.updateBodyStatus();
+        }
         this.state.playtime += dt;
       } else this.input.consumeMouse();
     } else {
@@ -761,6 +766,8 @@ export class Game {
   update(dt) {
     const s = this.state, rt = this.rt, p = this.player, inp = this.input;
     const alive = this.mode === 'playing';
+    // logged into the Virtual Universe your body takes no orders, but it still lives
+    const body = alive || this.mode === 'virtual';
     let st = this.stats;
     s.worldTime += dt;
 
@@ -869,7 +876,7 @@ export class Game {
     const density = this.densityHere();
     const tier = this.locTier();
     const medRate = 0.5 * xpScale(tier) * density * (s.devour ? 1.5 : 1) * st.cultivate * (rt.chamber ? 2.5 : 1);
-    if (alive) {
+    if (body) {
       const brew = this.mealActive('broth') ? 1.5 : 1;
       if (!p.boosting) rt.energy = Math.min(st.maxEnergy, rt.energy + st.regen * dt * (rt.meditating ? 2.2 : 1) * brew);
       if (!rt.controlling) rt.spirit = Math.min(st.maxSpirit, rt.spirit + st.spiritRegen * dt * (rt.meditating ? 2 : 1) * brew);
@@ -892,7 +899,7 @@ export class Game {
 
     // ---- beasts, swords, combat, loot
     this.beasts.setEnv(this.beastEnv(tier));
-    const ctx = { player: p, playerAlive: alive && rt.invuln <= 0, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
+    const ctx = { player: p, playerAlive: body && rt.invuln <= 0, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
     this.beasts.update(dt, ctx);
     this.swords.setup(activePath(s) === 'mind' ? st.swords : 0, s.swordGrade);
     this.swords.update(dt, {
@@ -901,7 +908,7 @@ export class Game {
       hit: (b, dmg, pos, kind, knock) => this.hitBeast(b, dmg, pos, kind, knock),
     });
     this.combat.update(dt, {
-      beasts: this.beasts.beasts, player: p, playerAlive: alive && rt.invuln <= 0,
+      beasts: this.beasts.beasts, player: p, playerAlive: body && rt.invuln <= 0,
       solid: (pos) => this.isSolid(pos),
       breakAt: (pos, r, dir) => this.breakAt(pos, r, dir),
       scorch: (pos, size) => this.scorch(pos, size),
@@ -1587,7 +1594,7 @@ export class Game {
 
   hurtPlayer(amount, pos, knock, silent = false, shot = null) {
     const rt = this.rt;
-    if (this.mode !== 'playing' || rt.invuln > 0) return null;
+    if ((this.mode !== 'playing' && this.mode !== 'virtual') || rt.invuln > 0) return null;
     if (!rt.inShip && !silent) {
       const d = this.arts.defend(amount, pos, shot);
       if (d.reflect) return 'reflect';
@@ -1596,6 +1603,7 @@ export class Game {
       if (amount <= 0) return null;
     }
     if (rt.inVehicle && this.vehicleObj) amount /= this.vehicleObj.def.hull;
+    if (this.mode === 'virtual' && !silent) this.post.fx.glitch = Math.min(1, this.post.fx.glitch + 0.35);
     if (rt.inShip && this.shipObj) {
       // the hull soaks damage until it fails
       this.shipObj.hull -= amount * 0.6;
@@ -1631,12 +1639,27 @@ export class Game {
       this.dmgNum(this.player.pos.clone().addScaledVector(this.player.forward(tA), 4), `-${fmt(amount)}`, 'player');
       rt.cruise = false;
     }
-    if (knock) this.player.vel.add(knock);
+    if (knock) {
+      // a shove, mostly sideways with a little hop: never a launch into the sky
+      const k = knock.clone();
+      const up = this.env.up;
+      if (up) {
+        k.addScaledVector(up, -k.dot(up));
+        k.multiplyScalar(this.player.mode === 'ground' ? 0.3 : 0.4);
+        if (this.player.mode === 'ground') k.addScaledVector(up, 4);
+      } else k.multiplyScalar(0.4);
+      this.player.vel.add(k);
+    }
     if (rt.hp <= 0) this.die();
     return null;
   }
 
   die() {
+    if (this.mode === 'virtual') {
+      // killed while logged in: you're torn out of the Virtual Universe
+      this.exitVirtual();
+      this.hud.notify('Your body was killed while you were logged in to the Virtual Universe.', 'red');
+    }
     this.dismount();
     const s = this.state, rt = this.rt;
     rt.hp = 0;
@@ -2315,11 +2338,6 @@ export class Game {
   enterVirtual() {
     const rt = this.rt;
     if (this.mode !== 'playing') return;
-    if (rt.trib) return this.denied('The heavens will not wait while you browse.');
-    const near = this.beasts.beasts.some((b) => b.aggro && !b.static && b.pos.distanceTo(this.player.pos) < 250);
-    if (near) return this.denied('Too dangerous to log out of your body with beasts hunting you.');
-    if (this.shipObj && rt.inShip) this.shipObj.vel.set(0, 0, 0);
-    this.player.vel.set(0, 0, 0);
     rt.meditating = false;
     rt.cruise = false;
     this.mode = 'virtual';
@@ -2331,7 +2349,8 @@ export class Game {
     this.hud.show(false);
     this.hud.setPrompt(null);
     document.getElementById('vu-hud').classList.remove('hidden');
-    document.getElementById('vu-sub').textContent = `BODY SAFE AT ${this.locationLabel().toUpperCase()}`;
+    document.getElementById('vu-sub').textContent = `BODY AT ${this.locationLabel().toUpperCase()}`;
+    rt.vuHurtT = -99;
     this.sound.warp();
     const fade = document.getElementById('fade');
     fade.style.opacity = 0.8;
@@ -2380,8 +2399,16 @@ export class Game {
       this.input.unlock();
       this.sound.confirm();
     }
-    this.updateDeliveries(dt);
-    this.nix.update(dt, null);
+  }
+
+  // While logged in: how your body is doing out in the world.
+  updateBodyStatus() {
+    const rt = this.rt, el = document.getElementById('vu-body');
+    if (!el) return;
+    const frac = Math.max(0, rt.hp) / this.stats.maxHp;
+    const hurt = this.time - rt.lastHurt < 2;
+    el.classList.toggle('alert', hurt || frac < 0.35);
+    el.innerHTML = `<span>${hurt ? '⚠ YOUR BODY IS UNDER ATTACK' : 'BODY'}</span><div class="vu-hp"><i style="width:${(frac * 100).toFixed(1)}%"></i></div><span>${Math.ceil(Math.max(0, rt.hp))} / ${this.stats.maxHp}</span>`;
   }
 
   startSim() {
@@ -3793,7 +3820,7 @@ export class Game {
     fx.damage = Math.max(0, fx.damage - dt * 2.2);
     fx.flash = Math.max(0, fx.flash - dt * 1.6);
     const hpFrac = rt.hp / this.stats.maxHp;
-    fx.glitch = this.mode === 'playing' && hpFrac < 0.3 ? ((0.3 - hpFrac) / 0.3) * 0.8 : 0;
+    fx.glitch = Math.max((this.mode === 'playing' || this.mode === 'virtual') && hpFrac < 0.3 ? ((0.3 - hpFrac) / 0.3) * 0.8 : 0, this.mode === 'virtual' ? fx.glitch - dt * 2.5 : 0);
     fx.tintAmt += ((rt.trib ? 0.55 : 0) - fx.tintAmt) * Math.min(1, dt * 3);
     const vel = rt.inShip && this.shipObj ? this.shipObj.vel : p.vel;
     const speed = vel.length();
