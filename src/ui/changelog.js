@@ -1,6 +1,18 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-14', version: '0.8',
+    title: 'The space ring, crafting and taming',
+    items: [
+      'Your ring now stores what you carry: open it with I, and expand it at a Star Exchange up to the endless Void Ring.',
+      'Beasts drop hides, scales, fangs and talons. Craft at any Armory: temper weapons, forge hide armour, brew pills.',
+      'Build camp tents (rest and respawn), guard turrets and cultivation totems anywhere outside.',
+      'Craft a taming collar, beat a beast down, and tame it: it follows you, fights, and grows stronger.',
+      'Fold your vehicle into a bigger ring and take it out wherever you are.',
+      'New story missions teach the ring, crafting and the Virtual Universe.',
+    ],
+  },
+  {
     date: '2026-10-14', version: '0.7.1',
     title: 'Riding fixes',
     items: [

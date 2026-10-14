@@ -36,6 +36,7 @@ import { Ship } from './ship.js';
 import { Vehicle, VEHICLES } from './vehicle.js';
 import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing, ringOf, capacity, slotsUsed, addItem, removeItem, count, partFor, pay, affordable } from './ring.js';
 import { Structures, buildStructure } from './structures.js';
+import { Pets, petDef } from './pets.js';
 import { SwordArray } from './swords.js';
 import { ViewModel } from './viewmodel.js';
 import { Loot } from './loot.js';
@@ -106,6 +107,7 @@ export class Game {
     this.vu = new VirtualWorld();
     this.cutscene = new Cutscene(this);
     this.structures = new Structures(this);
+    this.pets = new Pets(this);
     this.campaign = new Campaign(this);
     this.pods = [];
     this.player = new Player(this.localRoot, this.particles);
@@ -332,6 +334,7 @@ export class Game {
     }
     this.dismount(true);
     if (this.vehicleObj) { this.vehicleObj.dispose(); this.vehicleObj = null; }
+    this.pets.despawn();
     if (carry && this.localRoot.parent) {
       this.localRoot.updateWorldMatrix(true, false);
       parent.updateWorldMatrix(true, false);
@@ -960,6 +963,7 @@ export class Game {
     if (rt.scanner && rt.inShip) this.putAwayScanner();
     this.updateDeliveries(dt);
     this.structures.update(dt, this.time);
+    if (body) this.pets.update(dt, this.time);
     if (this.placing) this.updatePlacing(dt, alive);
     this.updateWater(dt, alive);
     this.updateScorch(dt);
@@ -2057,6 +2061,13 @@ export class Game {
     if (this.shipObj && !this.rt.inShip) list.push({ kind: 'ship', name: 'your ship', pos: this.shipObj.pos, range: 18 * this.shipObj.scale });
     if (this.vehicleObj && !this.rt.inVehicle && !this.rt.inShip) list.push({ kind: 'vehicle', name: this.vehicleObj.def.name, pos: this.vehicleObj.pos, range: this.vehicleObj.def.radius + 3 });
     for (const e of this.structures.list) if (e.rec.type === 'tent') list.push({ kind: 'tent', entry: e, name: 'Camp Tent', pos: e.pos, range: 5 });
+    if (count(this.state, 'collar') && !this.rt.inShip && !this.rt.inVehicle) {
+      for (const b of this.beasts.beasts) {
+        if (!b.alive || b.static || b.boss || b.tag || !b.def || !b.def.arch || b.def.aquatic) continue;
+        if (b.hp > b.maxHp / 3) continue;
+        list.push({ kind: 'tame', beast: b, name: b.name, pos: b.pos, range: b.radius + 4 });
+      }
+    }
     const f = this.frame;
     if (f && f.details) {
       for (const sv of f.details.services) list.push({ kind: 'service', service: sv, name: sv.name, pos: sv.pos, range: sv.range });
@@ -2116,6 +2127,7 @@ export class Game {
     if (it.kind === 'ship') return '<kbd>E</kbd> BOARD YOUR SHIP';
     if (it.kind === 'vehicle') return `<kbd>E</kbd> RIDE YOUR ${esc(it.name.toUpperCase())}`;
     if (it.kind === 'tent') return '<kbd>E</kbd> REST IN THE TENT';
+    if (it.kind === 'tame') return `<kbd>E</kbd> TAME THE ${esc(it.name.toUpperCase())}`;
     if (it.kind === 'dismount') return null;
     if (it.kind === 'pod') return '<kbd>E</kbd> OPEN THE DELIVERY POD';
     if (it.kind === 'service' && it.service.kind === 'lore') return `<kbd>E</kbd> ACCESS THE OLD TERMINAL${this.state.lore.includes(it.service.lore) ? ' · READ' : ''}`;
@@ -2149,6 +2161,8 @@ export class Game {
       this.mountVehicle();
     } else if (it.kind === 'tent') {
       this.restInTent(it.entry);
+    } else if (it.kind === 'tame') {
+      this.tame(it.beast);
     } else if (it.kind === 'dismount') {
       this.dismount();
     } else if (it.kind === 'pod') {
@@ -2401,6 +2415,7 @@ export class Game {
     fade.style.opacity = 0.8;
     setTimeout(() => { fade.style.opacity = 0; }, 250);
     this.nix.once('vu', 'vuIntro', {}, 1);
+    this.campaign.event('vuEnter');
     this.save();
   }
 
@@ -2496,6 +2511,7 @@ export class Game {
   }
 
   orderDelivery(item) {
+    setTimeout(() => this.campaign.event('order'), 0);
     const s = this.state;
     const cat = this.mallCatalog().find((c) => c.id === item);
     if (!cat || s.coins < cat.price) return this.sound.deny();
@@ -2579,6 +2595,7 @@ export class Game {
   }
 
   openPod(pod) {
+    this.campaign.event('pod');
     const s = this.state;
     const d = pod.delivery;
     if (d.item === 'heal3') s.pills.heal += 3;
@@ -3415,6 +3432,62 @@ export class Game {
     this.save();
   }
 
+  tame(b) {
+    const s = this.state;
+    if (!b.alive || !count(s, 'collar')) return;
+    removeItem(s, 'collar');
+    const frac = b.hp / b.maxHp;
+    if (Math.random() > Math.min(0.95, 0.6 + (1 / 3 - frac) * 1.5)) {
+      b.aggro = true;
+      b.stunT = 0;
+      this.hud.notify(`The collar snaps. The <b>${esc(b.name)}</b> is furious.`, 'red');
+      this.sound.deny();
+      return;
+    }
+    // it slips into the ring if there's room, and comes out to walk with you
+    const id = `pet${(s.placeSeq = (s.placeSeq || 0) + 1)}`;
+    const rec = { id, name: b.def.name, def: petDef(b.def), tier: b.tier, hp: 1, knockedUntil: 0 };
+    s.pets = [...(s.pets || []), rec];
+    if (slotsUsed(s) > capacity(s)) {
+      s.pets.pop();
+      addItem(s, { id: 'collar', name: ITEMS.collar.name, cn: ITEMS.collar.cn, kind: 'tool' });
+      return this.denied('Your ring has no room for a beast. Free a slot first.');
+    }
+    this.particles.burst(b.pos, new THREE.Color(1.4, 1, 2.4), 50, 10, 0.8, 0.6);
+    this.beasts.removeBeast(b);
+    this.pets.despawn();
+    s.petOut = id;
+    this.pets.sync();
+    this.sound.reward();
+    this.hud.notify(`You tamed the <b>${esc(rec.name)}</b>. It fights at your side; manage your beasts in the ring.`, 'gold');
+    this.nix.say('It likes you. Or it\u2019s plotting. Hard to tell with wolves.', 1);
+    this.campaign.event('tame');
+    this.save();
+  }
+
+  callPet(id) {
+    const s = this.state, rec = (s.pets || []).find((p) => p.id === id);
+    if (!rec) return;
+    if (rec.knockedUntil > s.playtime) return this.denied(`Your ${rec.name} is still recovering.`);
+    if (rec.def.aquatic) return this.denied('It can only live in the water.');
+    this.pets.despawn();
+    s.petOut = id;
+    this.pets.sync();
+    this.closePanel();
+  }
+
+  putAwayPet() {
+    this.pets.despawn();
+    this.state.petOut = null;
+  }
+
+  releasePet(id) {
+    const s = this.state;
+    if (s.petOut === id) this.putAwayPet();
+    s.pets = (s.pets || []).filter((p) => p.id !== id);
+    this.save();
+  }
+
   upgradeRing() {
     const s = this.state, r = ringOf(s), next = RING_TIERS[r.tier + 1];
     if (!hasRing(s) || !next) return;
@@ -3438,6 +3511,7 @@ export class Game {
     if (rec.out.item) addItem(s, { id: rec.out.item, name: ITEMS[rec.out.item].name, cn: ITEMS[rec.out.item].cn, kind: ITEMS[rec.out.item].kind });
     this.sound.confirm();
     this.hud.notify(`Crafted: <b>${rec.name}</b> <span class="cn">${rec.cn}</span>.`, 'gold');
+    if (id === 'collar') this.hud.notify(`To tame a beast, beat it below a third of its life, then press ${esc(codeLabel(settings.key('interact')))} beside it.`, 'yl');
     this.campaign.event('craft', id);
     this.save();
   }
@@ -4213,6 +4287,10 @@ export class Game {
         const color = POI_COLOR[poi.poi.kind];
         list.push({ key: poi.poi.id, kind: 'hotspot', label: `<span style="color:${color}">${POI_LABEL[poi.poi.kind].toUpperCase()}${done ? ' ✓' : ''}</span>`, sub: fmtKm(d), pos: this.toWorld(poi.pos.clone().addScaledVector(poi.up, 10)), dist: d, edge: false, compass: d < 1500 ? color : null });
       }
+    }
+    if (this.pets.active) {
+      const a = this.pets.active, d = a.pos.distanceTo(origin);
+      list.push({ key: 'pet', kind: 'gate', label: `<span style="color:#9affc8">${esc(a.rec.name.toUpperCase())}</span>`, sub: `${Math.round((100 * a.hp) / a.maxHp)}%`, pos: this.toWorld(a.pos.clone().addScaledVector(a.pos.clone().normalize(), (a.rec.def.radius || 2) * 1.6)), dist: d, edge: false, compass: null });
     }
     if (this.vehicleObj && !rt.inVehicle) {
       const d = this.vehicleObj.pos.distanceTo(p.pos);

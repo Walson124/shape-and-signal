@@ -111,6 +111,9 @@ export class Menus {
         pickup: () => g.pickUp(a.dataset.id),
         'store-vehicle': () => g.storeVehicle(),
         'take-vehicle': () => g.takeOutVehicle(),
+        'pet-call': () => g.callPet(a.dataset.id),
+        'pet-away': () => g.putAwayPet(),
+        'pet-release': () => g.releasePet(a.dataset.id),
         story: () => g.beginStory(),
       };
       if (handlers[action]) {
@@ -633,6 +636,12 @@ export class Menus {
     return `<p class="panel-note"><b>${esc(tier.name)}</b> <span class="cn">${tier.cn}</span> · ${used} / ${cap === Infinity ? '∞' : cap} slots. ${esc(tier.desc)} Expand it at a Star Exchange; craft with what it holds at an Armory.</p>
       <div class="ring-bar"><i style="width:${pct.toFixed(1)}%"></i></div>
       <div class="section-title">Inside the ring</div><div class="list">${items}</div>
+      ${(s.pets || []).length ? `<div class="section-title">Tamed beasts</div><div class="list">${s.pets.map((pt) => {
+        const out = s.petOut === pt.id;
+        const ko = pt.knockedUntil > s.playtime;
+        const btn = ko ? `<span class="tag">RECOVERING ${Math.ceil(pt.knockedUntil - s.playtime)} S</span>` : out ? '<button class="btn small" data-action="pet-away">Put away</button>' : `<button class="btn small primary" data-action="pet-call" data-id="${pt.id}">Call out</button>`;
+        return `<div class="item"><div><h4>${esc(pt.name)}<span class="cn">${pt.def.cn || ''}</span> <span class="mono dim" style="font-size:11px">GRADE ${pt.tier.toFixed(1)}${out ? ' · AT YOUR SIDE' : ''}</span></h4><p>Fights beasts that come for you and grows stronger with every kill. Takes 1 slot.</p></div>${btn}<button class="btn small ghost" data-action="pet-release" data-id="${pt.id}">Release</button></div>`;
+      }).join('')}</div>` : ''}
       ${veh ? `<div class="section-title">Vehicle</div><div class="list">${veh}</div>` : ''}
       ${near ? `<div class="section-title">Built nearby</div><div class="list">${near}</div>` : ''}`;
   }

@@ -33,6 +33,9 @@ export function newState() {
     placed: [],
     respawnAt: null,
     placeSeq: 0,
+    // tamed beasts and the one walking with you
+    pets: [],
+    petOut: null,
     skills: {},
     home: null,
     stash: 0,

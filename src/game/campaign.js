@@ -121,8 +121,16 @@ export const ACT1 = [
   ], reward: { coins: 150, pills: { heal: 2 } } },
   { id: 'training', title: 'Training Days', cn: '修炼', steps: [
     { type: 'cultivate', text: 'Cultivate to gain experience', count: 60, start: (c) => c.nix('Sit down and cultivate. Press {cultivate}. Energy springs and chambers are faster; your bedroom floor is slower.') },
-    { type: 'kill', text: 'Hunt beasts beyond the walls', count: 8, start: (c) => c.nix('Experience comes from fighting too. And from not dying, which I recommend.') },
+    { type: 'count', on: 'part', text: 'Hunt beasts and collect their parts with your ring', count: 4, start: (c) => c.nix('My ring folds space. Walk over the hides and fangs beasts drop and they go inside. Yes, with me. I\u2019m thrilled.') },
+    { type: 'event', on: 'craft', text: 'Craft something at an Armory', where: (c) => c.svc('forge'), radius: 0,
+      start: (c) => c.nix('Armory smiths turn beast parts into gear. Temper your weapon, make a tent, a turret, even a collar to tame a beast.') },
   ], reward: { coins: 200, point: 1 } },
+  { id: 'plugged', title: 'Plugged In', cn: '虚拟宇宙', steps: [
+    { type: 'event', on: 'vuEnter', text: () => `Log in to the Virtual Universe (${codeLabel(settings.key('virtual'))})`,
+      start: (c) => c.nix('Everyone who matters is in the Virtual Universe. Your body stays out here while you browse, so pick a quiet spot first.') },
+    { type: 'event', on: 'order', text: 'Order something from the Star Mall', start: (c) => c.nix('The Star Mall delivers anywhere. Even to you.') },
+    { type: 'event', on: 'pod', text: 'Log out and open your delivery pod', where: (c) => (c.g.pods && c.g.pods[0] ? c.g.pods[0].pos.clone() : null), radius: 0 },
+  ], reward: { coins: 200 } },
   { id: 'exam', title: 'The Warrior’s Exam', cn: '战士考核', steps: [
     { type: 'reach', text: 'Go to the Arena for your exam', where: (c) => c.svc('arena'), radius: 8,
       done: (c) => c.g.cutscene.say([['Instructor Hale', 'One wave. No dying. Speak to the registrar when you’re ready.'], ['Kade', 'Passed mine yesterday. Without breaking a sweat.']]) },
@@ -519,6 +527,10 @@ export class Campaign {
       this.advance();
     } else if (step.type === 'event' && kind === step.on) {
       this.advance();
+    } else if (step.type === 'count' && kind === step.on) {
+      this.st.p++;
+      if (this.st.p >= step.count) this.advance();
+      else this.render();
     }
     return false;
   }
@@ -591,6 +603,7 @@ export class Campaign {
     if (step.type === 'kill') prog = `${this.st.p}/${step.count}`;
     else if (step.type === 'cultivate') prog = `${Math.floor(this.st.p)}/${step.count}`;
     else if (step.type === 'waves') prog = `WAVE ${Math.min(this.st.wave, step.waves.length)}/${step.waves.length}`;
+    else if (step.type === 'count') prog = `${this.st.p}/${step.count}`;
     else if (step.progress) prog = step.progress(this);
     if (!this.onTerra()) text = 'Return to Terra to continue the story';
     const t = this.target();
@@ -852,7 +865,7 @@ export class Campaign {
           setTimeout(() => { fade.style.background = ''; fade.style.transition = ''; }, 1300);
           g.state.nixAwake = true;
           if (!g.state.lore.includes(0)) g.state.lore.push(0);
-          g.hud.notify('Nix is bound to you. The ring is a <b>spatial ring</b>, and Nix lives inside it.', 'violet');
+          g.hud.notify(`Nix is bound to you. The ring is a <b>space ring</b>: it folds space to carry what you collect. Press ${key('panelRing')} to look inside.`, 'violet');
         } },
       ],
     });
