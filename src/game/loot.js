@@ -22,7 +22,7 @@ export class Loot {
     return this.mats.get(hex);
   }
 
-  spawn(pos, amount, color, count = 1, kind = 'essence') {
+  spawn(pos, amount, color, count = 1, kind = 'essence', data = null) {
     const m = this.mat(color);
     const per = amount / count;
     for (let i = 0; i < count; i++) {
@@ -35,7 +35,8 @@ export class Loot {
       g.position.copy(pos);
       this.scene.add(g);
       const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(25 + Math.random() * 35);
-      this.items.push({ g, mesh, vel: v, amount: per, kind, life: 90, color: new THREE.Color(color).multiplyScalar(1.6), t: Math.random() * 10, pulled: false });
+      if (kind === 'part') mesh.scale.set(0.7, 0.7, 0.7);
+      this.items.push({ g, mesh, vel: v, amount: per, kind, data, life: kind === 'part' ? 180 : 90, color: new THREE.Color(color).multiplyScalar(1.6), t: Math.random() * 10, pulled: false });
     }
   }
 
@@ -50,7 +51,8 @@ export class Loot {
       }
       const to = player.pos.clone().sub(it.g.position);
       const d = to.length();
-      if (d < magnet || it.pulled) {
+      if (it.refused && d > 6) it.refused = false;
+      if ((d < magnet || it.pulled) && !it.refused) {
         it.pulled = true;
         const pull = to.divideScalar(Math.max(d, 0.01)).multiplyScalar(Math.min(900, 120 + (magnet / Math.max(d, 1)) * 60));
         it.vel.lerp(pull.add(player.vel), 1 - Math.exp(-dt * 6));
@@ -60,8 +62,14 @@ export class Loot {
       it.g.position.addScaledVector(it.vel, dt);
       it.mesh.rotation.y += dt * 2.5;
       it.mesh.rotation.x = Math.sin(it.t * 1.5) * 0.4;
-      if (d < 3.5) {
-        onCollect(it);
+      if (d < 3.5 && !it.refused) {
+        if (onCollect(it) === false) {
+          // nowhere to put it: it stays on the ground until there's room
+          it.refused = true;
+          it.pulled = false;
+          it.vel.set(0, 0, 0);
+          continue;
+        }
         this.particles.burst(it.g.position, it.color, 10, 25, 0.6, 0.3, 4);
         this.sound.pickup();
         this.remove(i);

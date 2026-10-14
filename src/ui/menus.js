@@ -8,6 +8,7 @@ import { LORE } from '../game/lore.js';
 import { ACT1 } from '../game/campaign.js';
 import { CHANGELOG } from './changelog.js';
 import { VEHICLES, VEHICLE_IDS } from '../game/vehicle.js';
+import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing, ringOf, capacity, slotsUsed, affordable, costText, partCount } from '../game/ring.js';
 import { settings, PRESETS } from '../core/settings.js';
 import { ACTIONS, codeLabel } from '../core/bindings.js';
 import { fmt, esc, hex } from './hud.js';
@@ -101,6 +102,15 @@ export class Menus {
         order: () => g.orderDelivery(a.dataset.item),
         sim: () => g.startSim(),
         'buy-vehicle': () => g.buyVehicle(a.dataset.id),
+        'ring-up': () => g.upgradeRing(),
+        'sell-parts': () => g.sellParts(),
+        craft: () => g.craft(a.dataset.id),
+        temper: () => g.temper(a.dataset.id),
+        armor: () => g.forgeArmor(),
+        place: () => g.startPlacing(a.dataset.id),
+        pickup: () => g.pickUp(a.dataset.id),
+        'store-vehicle': () => g.storeVehicle(),
+        'take-vehicle': () => g.takeOutVehicle(),
         story: () => g.beginStory(),
       };
       if (handlers[action]) {
@@ -376,8 +386,8 @@ export class Menus {
   venueTabs() {
     const vk = this.game.atStation ? this.game.venueKind : null;
     const map = {
-      station: [['shop', 'Exchange'], ['armory', 'Armory'], ['forge', 'Sword forge'], ['shipyard', 'Shipyard']],
-      exchange: [['shop', 'Exchange']], pills: [['shop', 'Pill pavilion']], forge: [['armory', 'Armory'], ['forge', 'Sword forge']], shipyard: [['shipyard', 'Shipyard']],
+      station: [['shop', 'Exchange'], ['armory', 'Armory'], ['craft', 'Crafting'], ['forge', 'Sword forge'], ['shipyard', 'Shipyard']],
+      exchange: [['shop', 'Exchange']], pills: [['shop', 'Pill pavilion']], forge: [['armory', 'Armory'], ['craft', 'Crafting'], ['forge', 'Sword forge']], shipyard: [['shipyard', 'Shipyard']],
       hall: [['bounties', 'Bounties'], ['trainer', 'Skill reset']], clinic: [['clinic', 'Gene clinic']], chamber: [['chamber', 'Chamber']],
       bar: [['bar', 'Teahouse']], food: [['food', 'Noodle bar']], dealer: [['dealer', 'Vehicles']], home: [['home', 'Apartment']], arena: [['arena', 'Arena']],
       camp: [['shop', 'Trader'], ['bar', 'Campfire']],
@@ -390,7 +400,7 @@ export class Menus {
     const k = this.panelKind;
     if (!k) return;
     const venue = this.venueTabs();
-    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
+    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['ring', 'Ring'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
     const tabs = [...venue, ...base.filter(([kk]) => !venue.some(([vk]) => vk === kk))];
     this.$('panel-tabs').innerHTML = tabs.map(([kind, label]) => `<button class="tab ${kind === k ? 'on' : ''}" data-kind="${kind}">${label}</button>`).join('');
     const r = {
@@ -399,6 +409,8 @@ export class Menus {
       chamber: () => this.renderChamber(), bar: () => this.renderBar(), food: () => this.renderFood(), home: () => this.renderHome(), arena: () => this.renderArena(),
       archive: () => this.renderArchive(),
       dealer: () => this.renderDealer(),
+      ring: () => this.renderRing(),
+      craft: () => this.renderCraft(),
       story: () => this.renderStory(),
       vshop: () => this.renderMall(), vsim: () => this.renderSim(), fame: () => this.renderFame(),
     }[k];
@@ -580,9 +592,70 @@ export class Menus {
     const radar = vk === 'pills' ? '' : `<div class="section-title">Scanners</div><div class="list">${rn
       ? `<div class="item"><div><h4>${esc(rn.name)}<span class="cn">${rn.cn}</span></h4><p>${esc(rn.desc)} Radar ${rn.range} m · pulse ${rn.ping >= 1000 ? `${rn.ping / 1000} km` : `${rn.ping} m`}.</p></div><span class="price">${fmt(rn.price)} ◈</span><button class="btn small" data-action="radar" ${state.coins >= rn.price ? '' : 'disabled'}>Install</button></div>`
       : '<p class="panel-note">You already carry the finest scanner in the galaxy.</p>'}</div>`;
-    return `<p class="panel-note">Life, energy and spirit restored. You hold ${this.wallet()}.</p>${radar}
+    let ringSec = '';
+    if (vk !== 'pills' && hasRing(state)) {
+      const r = ringOf(state), nt = RING_TIERS[r.tier + 1];
+      const partsHeld = partCount(state, false, 0) + partCount(state, true, 0);
+      const can = nt && state.coins >= nt.coins && state.ore >= nt.ore && state.essence >= nt.essence;
+      ringSec = `<div class="section-title">Space ring</div><div class="list">${nt
+        ? `<div class="item"><div><h4>${esc(nt.name)}<span class="cn">${nt.cn}</span></h4><p>${esc(nt.desc)} ${nt.slots === Infinity ? 'Endless' : nt.slots} slots (you have ${capacity(state)}).</p></div><span class="price">${fmt(nt.coins)} ◈</span> <span class="price" style="color:var(--cy)">${fmt(nt.ore)} ⬢</span> <span class="price ess">${fmt(nt.essence)} ✦</span><button class="btn small" data-action="ring-up" ${can ? '' : 'disabled'}>Expand</button></div>`
+        : '<p class="panel-note">Your Void Ring holds a universe. There is nothing bigger.</p>'}
+        <div class="item"><div><h4>Sell beast parts<span class="cn">兽材</span></h4><p>You carry ${partsHeld} part${partsHeld === 1 ? '' : 's'}. Higher grades and fangs fetch more. Crafting at an Armory is usually better.</p></div><button class="btn small" data-action="sell-parts" ${partsHeld ? '' : 'disabled'}>Sell all</button></div></div>`;
+    }
+    return `<p class="panel-note">Life, energy and spirit restored. You hold ${this.wallet()}.</p>${radar}${ringSec}
       <div class="section-title" style="margin-top:0">Pills and elixirs</div><div class="list">${pills}</div>
       ${vk === 'pills' ? '' : `<div class="section-title">Technique manuals</div><div class="list">${manuals}</div>`}${sell}`;
+  }
+
+  renderRing() {
+    const g = this.game, s = g.state;
+    if (!hasRing(s)) return '<p class="panel-note">You don\u2019t have a space ring yet. Somewhere in the ruins, one is waiting for you.</p>';
+    const r = ringOf(s), tier = RING_TIERS[r.tier];
+    const used = slotsUsed(s), cap = capacity(s);
+    const items = Object.entries(r.items).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([id, it]) => {
+      const def = ITEMS[id];
+      const isPart = id.startsWith('part:');
+      const tag = isPart ? `<span class="mono dim" style="font-size:11px">${it.rare ? 'RARE' : 'COMMON'} · GRADE ${it.grade || 0}</span>` : '';
+      const btn = def && def.kind === 'place' ? `<button class="btn small primary" data-action="place" data-id="${id}">Build</button>` : '';
+      return `<div class="item"><div><h4>${esc(it.name || (def && def.name) || id)}<span class="cn">${it.cn || (def && def.cn) || ''}</span> <b class="gold">×${it.qty}</b></h4><p>${tag} ${def ? esc(def.desc) : ''}</p></div>${btn}</div>`;
+    }).join('') || '<p class="panel-note">Empty. Beasts drop hides, fangs and scales when they die: walk over them to fold them into the ring.</p>';
+    // vehicle
+    let veh = '';
+    if (s.vehicle) {
+      const v = VEHICLES[s.vehicle];
+      veh = s.vehicleStored
+        ? `<div class="item"><div><h4>${esc(v.name)}<span class="cn">${v.cn}</span></h4><p>Folded away in the ring (4 slots).</p></div><button class="btn small primary" data-action="take-vehicle">Take out</button></div>`
+        : `<div class="item"><div><h4>${esc(v.name)}<span class="cn">${v.cn}</span></h4><p>${g.vehicleObj ? `Parked ${Math.round(g.vehicleObj.pos.distanceTo(g.player.pos))} m away.` : 'Parked on another world.'} Stand beside it to fold it into the ring (needs an Iron Storage Ring and 4 free slots).</p></div><button class="btn small" data-action="store-vehicle" ${g.vehicleObj && g.vehicleObj.pos.distanceTo(g.player.pos) < 12 && r.tier >= 1 ? '' : 'disabled'}>Store</button></div>`;
+    }
+    // structures nearby
+    const near = g.structures.list.filter((e) => e.pos.distanceTo(g.player.pos) < 25).map((e) => `<div class="item"><div><h4>${esc(ITEMS[e.rec.type].name)}<span class="cn">${ITEMS[e.rec.type].cn}</span></h4><p>${Math.round(e.pos.distanceTo(g.player.pos))} m away${s.respawnAt === e.rec.id ? ' · your respawn point' : ''}.</p></div><button class="btn small" data-action="pickup" data-id="${e.rec.id}">Pick up</button></div>`).join('');
+    const pct = cap === Infinity ? 100 * Math.min(1, used / 200) : (100 * used) / cap;
+    return `<p class="panel-note"><b>${esc(tier.name)}</b> <span class="cn">${tier.cn}</span> · ${used} / ${cap === Infinity ? '∞' : cap} slots. ${esc(tier.desc)} Expand it at a Star Exchange; craft with what it holds at an Armory.</p>
+      <div class="ring-bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+      <div class="section-title">Inside the ring</div><div class="list">${items}</div>
+      ${veh ? `<div class="section-title">Vehicle</div><div class="list">${veh}</div>` : ''}
+      ${near ? `<div class="section-title">Built nearby</div><div class="list">${near}</div>` : ''}`;
+  }
+
+  renderCraft() {
+    const g = this.game, s = g.state;
+    if (!hasRing(s)) return '<p class="panel-note">Crafting uses beast parts, and you have nowhere to carry them yet.</p>';
+    const row = (name, cn, desc, need, action, id, done) => {
+      const can = !done && affordable(s, need);
+      return `<div class="item"><div><h4>${esc(name)}<span class="cn">${cn}</span></h4><p>${esc(desc)}</p><p class="mono dim" style="font-size:11px">${done ? 'MAXED' : esc(costText(need))}</p></div><button class="btn small ${can ? 'primary' : ''}" data-action="${action}" data-id="${id || ''}" ${can ? '' : 'disabled'}>${done ? 'Done' : 'Make'}</button></div>`;
+    };
+    const gear = s.gear || { armor: 0, temper: {} };
+    const temper = ownedPaths(s).map((id) => {
+      const lv = gear.temper[id] || 0;
+      const p = PATHS[id];
+      return row(`Temper ${p.weapon.name} ${lv >= MAX_TEMPER ? '(max)' : `→ level ${lv + 1}`}`, '淬炼', `Level ${lv}: +${lv * 15}% damage with this weapon. Each level adds 15%.`, temperCost(lv), 'temper', id, lv >= MAX_TEMPER);
+    }).join('');
+    const al = gear.armor || 0;
+    const armor = row(`Beast-hide armour ${al >= MAX_TEMPER ? '(max)' : `→ level ${al + 1}`}`, '兽皮甲', `Level ${al}: ${al * 6}% less damage taken. Each level adds 6%.`, armorCost(al), 'armor', '', al >= MAX_TEMPER);
+    const recipes = RECIPES.map((rc) => row(rc.name, rc.cn, rc.desc, rc.need, 'craft', rc.id, false)).join('');
+    return `<p class="panel-note">The smiths turn beast parts into gear. You carry ${partCount(s, false, 0)} hides/scales and ${partCount(s, true, 0)} fangs/talons; higher-grade parts come from stronger beasts. You hold ${this.wallet()}.</p>
+      <div class="section-title">Weapons and armour</div><div class="list">${temper}${armor}</div>
+      <div class="section-title">Make</div><div class="list">${recipes}</div>`;
   }
 
   renderDealer() {

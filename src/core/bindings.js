@@ -31,6 +31,7 @@ export const ACTIONS = [
   { id: 'panelCult', label: 'Cultivation panel', group: 'Interface', def: 'KeyK' },
   { id: 'panelSkills', label: 'Path & skill tree', group: 'Interface', def: 'KeyU' },
   { id: 'panelBounty', label: 'Bounties', group: 'Interface', def: 'KeyJ' },
+  { id: 'panelRing', label: 'Space ring', group: 'Interface', def: 'KeyI' },
   { id: 'panelGuide', label: 'Guide', group: 'Interface', def: 'KeyH' },
   { id: 'mute', label: 'Mute sound', group: 'Interface', def: 'KeyN' },
 ];

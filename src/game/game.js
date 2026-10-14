@@ -34,6 +34,8 @@ import { BeastManager } from './beasts.js';
 import { Player, EYE } from './player.js';
 import { Ship } from './ship.js';
 import { Vehicle, VEHICLES } from './vehicle.js';
+import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing, ringOf, capacity, slotsUsed, addItem, removeItem, count, partFor, pay, affordable } from './ring.js';
+import { Structures, buildStructure } from './structures.js';
 import { SwordArray } from './swords.js';
 import { ViewModel } from './viewmodel.js';
 import { Loot } from './loot.js';
@@ -103,6 +105,7 @@ export class Game {
     this.nix = new Companion(this);
     this.vu = new VirtualWorld();
     this.cutscene = new Cutscene(this);
+    this.structures = new Structures(this);
     this.campaign = new Campaign(this);
     this.pods = [];
     this.player = new Player(this.localRoot, this.particles);
@@ -343,6 +346,7 @@ export class Game {
       this.particles.rebase(m, q);
       this.arts.rebase(m);
       this.campaign.rebase(m, q);
+      this.structures.rebase(m, q);
       if (this.rt.trib) {
         this.rt.trib.clouds.position.applyMatrix4(m);
         this.rt.trib.clouds.quaternion.premultiply(q);
@@ -358,6 +362,7 @@ export class Game {
     for (const st of this.system.stations) st.prevM = null;
     this.clearPods();
     this.syncVehicleFrame();
+    this.structures.sync();
     this.statics.forEach((b) => this.beasts.removeBeast(b));
     this.statics.clear();
     this.nestTriggered.clear();
@@ -428,6 +433,7 @@ export class Game {
       this.shipObj.placeAt(pos, p.pos, up);
     }
     this.syncVehicleFrame();
+    this.structures.sync();
     this.camQuat.copy(p.quat);
   }
 
@@ -636,6 +642,7 @@ export class Game {
     else if (k('panelSkills')) this.togglePanel('skills');
     else if (k('panelBounty')) this.togglePanel('bounties');
     else if (k('panelGuide')) this.togglePanel('guide');
+    else if (k('panelRing')) this.togglePanel('ring');
     else if (k('mute')) this.hud.notify(this.sound.toggleMute() ? 'Sound muted.' : 'Sound on.');
   }
 
@@ -821,7 +828,7 @@ export class Game {
     // the wheel cycles weapons and the radar on foot; it zooms in a ship, or with sprint held in third person
     const zoomWheel = rt.inShip || (this.camMode === 'third' && inp.act('sprint'));
     if (alive && !rt.controlling && inp.wheel && zoomWheel) this.zoom = clamp(this.zoom + inp.wheel * 0.12, 0.5, 3);
-    else if (alive && !rt.controlling && !rt.inShip && inp.wheel && this.time > (this.wheelCd || 0)) {
+    else if (alive && !rt.controlling && !rt.inShip && !this.placing && inp.wheel && this.time > (this.wheelCd || 0)) {
       this.wheelCd = this.time + 0.15;
       this.cycleWeapon(Math.sign(inp.wheel));
     }
@@ -858,7 +865,7 @@ export class Game {
     rt.invuln = Math.max(0, rt.invuln - dt);
     rt.firingT = Math.max(0, rt.firingT - dt);
     const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg;
-    this.arts.update(dt, { alive: alive && !rt.scanner, camFwd, aimPoint, aimBeast, swordDamage });
+    this.arts.update(dt, { alive: alive && !rt.scanner && !this.placing, camFwd, aimPoint, aimBeast, swordDamage });
     if (alive && !rt.meditating) {
       if (inp.hit('pill1')) this.usePill('heal');
       if (inp.hit('pill2')) this.usePill('energy');
@@ -875,7 +882,7 @@ export class Game {
     // ---- regeneration & cultivation
     const density = this.densityHere();
     const tier = this.locTier();
-    const medRate = 0.5 * xpScale(tier) * density * (s.devour ? 1.5 : 1) * st.cultivate * (rt.chamber ? 2.5 : 1);
+    const medRate = 0.5 * xpScale(tier) * density * (s.devour ? 1.5 : 1) * st.cultivate * (rt.chamber ? 2.5 : 1) * (this.structures.totemNear(p.pos) ? 1.6 : 1);
     if (body) {
       const brew = this.mealActive('broth') ? 1.5 : 1;
       if (!p.boosting) rt.energy = Math.min(st.maxEnergy, rt.energy + st.regen * dt * (rt.meditating ? 2.2 : 1) * brew);
@@ -916,6 +923,18 @@ export class Game {
       hurtPlayer: (d, pos, shot) => this.hurtPlayer(d, pos, null, false, shot),
     });
     this.loot.update(dt, p, 70 + s.realm * 12, (it) => {
+      if (it.kind === 'part') {
+        if (!addItem(s, it.data)) {
+          if (this.time > (this.notifyGate.ringFull || 0)) {
+            this.notifyGate.ringFull = this.time + 8;
+            this.hud.notify('Your ring is <b>full</b>. Sell or use parts, or expand it at a Star Exchange.', 'red');
+          }
+          return false;
+        }
+        this.dmgNum(p.pos.clone().addScaledVector(camFwd, 6), `+ ${it.data.name}`, it.data.rare ? 'crit' : 'xp');
+        this.campaign.event('part');
+        return true;
+      }
       if (it.kind === 'ore') {
         s.ore += Math.round(it.amount);
         this.dmgNum(p.pos.clone().addScaledVector(camFwd, 6), `+${Math.round(it.amount)} ⬢`, 'xp');
@@ -940,6 +959,8 @@ export class Game {
     if (rt.scanner) this.updateScanner(dt);
     if (rt.scanner && rt.inShip) this.putAwayScanner();
     this.updateDeliveries(dt);
+    this.structures.update(dt, this.time);
+    if (this.placing) this.updatePlacing(dt, alive);
     this.updateWater(dt, alive);
     this.updateScorch(dt);
     if (this.mode !== 'cutscene') this.cutscene.update(dt);
@@ -1558,7 +1579,8 @@ export class Game {
     if (!b.alive) return;
     const backstab = kind !== 'poison' && kind !== 'pressure' && this.arts.consumeBackstab();
     const crit = backstab || (kind !== 'pressure' && kind !== 'poison' && Math.random() < this.stats.crit + this.arts.critBonus(kind));
-    const amount = dmg * (backstab ? 3 : crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(b, kind);
+    const temper = kind === 'turret' || kind === 'pet' || kind === 'pressure' || kind === 'ram' ? 0 : ((this.state.gear && this.state.gear.temper[activePath(this.state)]) || 0);
+    const amount = dmg * (backstab ? 3 : crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(b, kind) * (1 + 0.15 * temper);
     const steal = this.arts.lifesteal();
     if (steal > 0 && !b.static) this.rt.hp = Math.min(this.stats.maxHp, this.rt.hp + amount * steal);
     this.dmgNum(pos, fmt(amount), crit ? 'crit' : kind === 'sword' || kind === 'storm' ? 'sword' : kind === 'poison' ? 'xp' : '');
@@ -1708,6 +1730,18 @@ export class Game {
     let planet = null;
     if (bind && bind.star === this.star.key && bind.body) planet = this.system.byId.get(bind.body) || null;
     this.spawnAtSettlement(planet, bind && bind.site);
+    // a tent you rested in takes precedence
+    const tent = (this.state.placed || []).find((r) => r.id === this.state.respawnAt);
+    if (tent && tent.star === this.star.key && this.frame && tent.body === this.frame.body.id) {
+      const at = new THREE.Vector3().fromArray(tent.pos);
+      const up = at.clone().normalize();
+      const side = new THREE.Vector3(1, 0, 0).projectOnPlane(up).normalize();
+      const pos = at.clone().addScaledVector(side, 3.5);
+      const n = pos.clone().normalize();
+      pos.copy(n.multiplyScalar(this.frame.floorRadius(n.x, n.y, n.z) + EYE));
+      this.player.placeAt(pos, at, up);
+      this.camQuat.copy(this.player.quat);
+    }
     this.applyCamMode();
     this.swords.setVisible(true);
     this.swords.reset(this.player);
@@ -1749,6 +1783,13 @@ export class Game {
       this.hud.banner('OVERLORD SLAIN', b.def.name, `<span class="cn">${b.def.cn}</span>+10% life and attack${extra}`, hex(b.def.accent), 5);
       this.post.fx.flash = 0.5;
       if (b.bossIndex === FINAL_BOSS) setTimeout(() => this.hud.notify('The Primordial Devourer is gone. Nothing bars your path to <b>Universe Master</b>.', 'gold'), 2500);
+    }
+    if (hasRing(s) && b.def && b.def.name && b.type !== 'boss') {
+      const n = b.elite ? 2 : Math.random() < 0.65 ? 1 : 0;
+      for (let i = 0; i < n; i++) {
+        const part = partFor(b.def, b.tier, Math.random() < (b.elite ? 0.5 : 0.22));
+        this.loot.spawn(b.pos, 1, part.color, 1, 'part', part);
+      }
     }
     this.applyBounties(progressBounties(s, { kind: 'kill', type: b.type, elite: b.elite, region: this.star.region, bossStar: b.boss ? this.star.key : null, tier: b.tier, realm: s.realm }));
     this.nix.onKill(b);
@@ -2015,6 +2056,7 @@ export class Game {
     for (const pod of this.pods) if (pod.landed) list.push({ kind: 'pod', pod, name: 'Delivery pod', pos: pod.pos, range: 5 });
     if (this.shipObj && !this.rt.inShip) list.push({ kind: 'ship', name: 'your ship', pos: this.shipObj.pos, range: 18 * this.shipObj.scale });
     if (this.vehicleObj && !this.rt.inVehicle && !this.rt.inShip) list.push({ kind: 'vehicle', name: this.vehicleObj.def.name, pos: this.vehicleObj.pos, range: this.vehicleObj.def.radius + 3 });
+    for (const e of this.structures.list) if (e.rec.type === 'tent') list.push({ kind: 'tent', entry: e, name: 'Camp Tent', pos: e.pos, range: 5 });
     const f = this.frame;
     if (f && f.details) {
       for (const sv of f.details.services) list.push({ kind: 'service', service: sv, name: sv.name, pos: sv.pos, range: sv.range });
@@ -2073,6 +2115,7 @@ export class Game {
     if (it.kind === 'leave') return this.canExitShip() ? '<kbd>E</kbd> LEAVE SHIP' : null;
     if (it.kind === 'ship') return '<kbd>E</kbd> BOARD YOUR SHIP';
     if (it.kind === 'vehicle') return `<kbd>E</kbd> RIDE YOUR ${esc(it.name.toUpperCase())}`;
+    if (it.kind === 'tent') return '<kbd>E</kbd> REST IN THE TENT';
     if (it.kind === 'dismount') return null;
     if (it.kind === 'pod') return '<kbd>E</kbd> OPEN THE DELIVERY POD';
     if (it.kind === 'service' && it.service.kind === 'lore') return `<kbd>E</kbd> ACCESS THE OLD TERMINAL${this.state.lore.includes(it.service.lore) ? ' · READ' : ''}`;
@@ -2104,6 +2147,8 @@ export class Game {
       this.boardShip();
     } else if (it.kind === 'vehicle') {
       this.mountVehicle();
+    } else if (it.kind === 'tent') {
+      this.restInTent(it.entry);
     } else if (it.kind === 'dismount') {
       this.dismount();
     } else if (it.kind === 'pod') {
@@ -3261,7 +3306,7 @@ export class Game {
   // Keep the vehicle object only while you're on the world it's parked on.
   syncVehicleFrame() {
     const s = this.state, f = this.frame, loc = s.vehicleLoc;
-    const here = loc && f && loc.star === this.star.key && loc.body === f.body.id && s.vehicle && VEHICLES[s.vehicle];
+    const here = !s.vehicleStored && loc && f && loc.star === this.star.key && loc.body === f.body.id && s.vehicle && VEHICLES[s.vehicle];
     if (!here) {
       if (this.vehicleObj && !this.rt.inVehicle) { this.vehicleObj.dispose(); this.vehicleObj = null; }
       return;
@@ -3354,7 +3399,192 @@ export class Game {
       this.campaign.event('vehicle', id);
     } else this.hud.notify(`Your <b>${esc(d.name)}</b> is brought round to the door.`, '');
     s.vehicle = id;
-    if (!this.rt.inVehicle) this.deliverVehicle(id);
+    if (!this.rt.inVehicle) { s.vehicleStored = false; this.deliverVehicle(id); }
+    this.save();
+  }
+
+  // ------------------------------------------------------------- ring --
+  restInTent(e) {
+    const rt = this.rt, st = this.stats;
+    rt.hp = st.maxHp;
+    rt.energy = st.maxEnergy;
+    rt.spirit = st.maxSpirit;
+    this.state.respawnAt = e.rec.id;
+    this.sound.reward();
+    this.hud.notify('You rest by the fire. Fully healed, and if you fall, your body will reform at this tent.', 'gold');
+    this.save();
+  }
+
+  upgradeRing() {
+    const s = this.state, r = ringOf(s), next = RING_TIERS[r.tier + 1];
+    if (!hasRing(s) || !next) return;
+    if (s.coins < next.coins || s.ore < next.ore || s.essence < next.essence) return this.sound.deny();
+    s.coins -= next.coins;
+    s.ore -= next.ore;
+    s.essence -= next.essence;
+    r.tier++;
+    this.sound.reward();
+    this.hud.notify(`Your ring is now a <b>${next.name}</b> <span class="cn">${next.cn}</span>: ${next.slots === Infinity ? 'endless' : next.slots} slots.`, 'gold');
+    this.nix.say(r.tier >= 4 ? 'A whole pocket universe. I have room to stretch. Finally.' : 'More room. I was getting cramped in here with all those fangs.', 1);
+    this.save();
+  }
+
+  craft(id) {
+    const s = this.state, rec = RECIPES.find((r) => r.id === id);
+    if (!rec || !hasRing(s)) return;
+    if (rec.out.item && slotsUsed(s) >= capacity(s) && !count(s, rec.out.item)) return this.denied('Your ring is full.');
+    if (!pay(s, rec.need)) return this.sound.deny();
+    if (rec.out.pill) s.pills[rec.out.pill]++;
+    if (rec.out.item) addItem(s, { id: rec.out.item, name: ITEMS[rec.out.item].name, cn: ITEMS[rec.out.item].cn, kind: ITEMS[rec.out.item].kind });
+    this.sound.confirm();
+    this.hud.notify(`Crafted: <b>${rec.name}</b> <span class="cn">${rec.cn}</span>.`, 'gold');
+    this.campaign.event('craft', id);
+    this.save();
+  }
+
+  temper(pathId) {
+    const s = this.state;
+    s.gear = s.gear || { armor: 0, temper: {} };
+    const lv = s.gear.temper[pathId] || 0;
+    if (lv >= MAX_TEMPER || !owns(s, pathId)) return;
+    if (!pay(s, temperCost(lv))) return this.sound.deny();
+    s.gear.temper[pathId] = lv + 1;
+    this.sound.breakthrough();
+    this.hud.notify(`Your <b>${esc(PATHS[pathId].weapon.name)}</b> is tempered to level ${lv + 1}: +${(lv + 1) * 15}% damage.`, 'gold');
+    this.campaign.event('craft', 'temper');
+    this.save();
+  }
+
+  forgeArmor() {
+    const s = this.state;
+    s.gear = s.gear || { armor: 0, temper: {} };
+    const lv = s.gear.armor || 0;
+    if (lv >= MAX_TEMPER) return;
+    if (!pay(s, armorCost(lv))) return this.sound.deny();
+    s.gear.armor = lv + 1;
+    this.stats = derive(s);
+    this.sound.breakthrough();
+    this.hud.notify(`Beast-hide armour level ${lv + 1}: you take ${(lv + 1) * 6}% less damage.`, 'gold');
+    this.campaign.event('craft', 'armor');
+    this.save();
+  }
+
+  sellParts() {
+    const s = this.state, r = ringOf(s);
+    let coins = 0;
+    for (const [id, it] of Object.entries(r.items)) {
+      if (!id.startsWith('part:')) continue;
+      coins += it.qty * Math.round((it.rare ? 30 : 10) * Math.pow(2.2, it.grade || 0));
+      delete r.items[id];
+    }
+    if (!coins) return;
+    s.coins += coins;
+    this.sound.reward();
+    this.hud.notify(`Sold your beast parts for <b>${fmt(coins)} ◈</b>.`, 'gold');
+    this.save();
+  }
+
+  // Building: pick a spot in front of you and set a structure down.
+  startPlacing(id) {
+    const s = this.state, f = this.frame, rt = this.rt;
+    if (!count(s, id) || !ITEMS[id] || ITEMS[id].kind !== 'place') return;
+    if (!f || !f.terrain || !this.env.inAtmo || rt.inShip || rt.inVehicle || this.inVenue) return this.denied('Build outside, on the ground of a world.');
+    this.closePanel();
+    this.cancelPlacing();
+    const obj = buildStructure(id);
+    obj.ghost(true);
+    this.localRoot.add(obj.group);
+    this.placing = { id, obj, rot: 0, pos: null, ok: false };
+    this.hud.notify(`Placing a <b>${ITEMS[id].name}</b>: ${esc(codeLabel(settings.key('fire')))} to build, ${esc(codeLabel(settings.key('focus')))} to cancel, mouse wheel to turn it.`, 'yl');
+  }
+
+  cancelPlacing() {
+    if (!this.placing) return;
+    this.localRoot.remove(this.placing.obj.group);
+    this.placing.obj.dispose();
+    this.placing = null;
+  }
+
+  updatePlacing(dt, alive) {
+    const pl = this.placing, f = this.frame, inp = this.input, p = this.player;
+    if (!alive || !f || !f.terrain) return this.cancelPlacing();
+    // where the crosshair meets the ground, within reach
+    const cam = this.camera.position;
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    let spot = null;
+    for (let d = 2; d < 24; d += 0.5) {
+      const q = cam.clone().addScaledVector(fwd, d);
+      const n = q.clone().normalize();
+      if (q.length() < f.floorRadius(n.x, n.y, n.z)) { spot = q; break; }
+    }
+    if (!spot) spot = p.pos.clone().addScaledVector(fwd.clone().projectOnPlane(p.pos.clone().normalize()).normalize(), 8);
+    const n = spot.clone().normalize();
+    spot.copy(n).multiplyScalar(f.floorRadius(n.x, n.y, n.z));
+    if (inp.wheel) pl.rot += Math.sign(inp.wheel) * 0.25;
+    pl.pos = spot;
+    pl.obj.group.position.copy(spot);
+    pl.obj.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+    pl.obj.group.rotateY(pl.rot);
+    if (inp.hit('focus')) return this.cancelPlacing();
+    if (inp.hit('fire')) {
+      const s = this.state;
+      if (!removeItem(s, pl.id)) return this.cancelPlacing();
+      s.placeSeq = (s.placeSeq || 0) + 1;
+      const rec = { id: `b${s.placeSeq}`, type: pl.id, star: this.star.key, body: f.body.id, pos: spot.toArray(), rot: pl.rot };
+      s.placed = [...(s.placed || []), rec];
+      this.structures.add(rec);
+      this.particles.burst(spot, new THREE.Color(2, 1.6, 1), 30, 8, 0.8, 0.5);
+      this.sound.confirm();
+      this.hud.notify(`Built a <b>${ITEMS[pl.id].name}</b>.`, 'gold');
+      this.campaign.event('build', pl.id);
+      this.cancelPlacing();
+      this.save();
+    }
+  }
+
+  // Take a structure back into the ring.
+  pickUp(recId) {
+    const s = this.state;
+    const e = this.structures.list.find((x) => x.rec.id === recId);
+    if (!e || e.pos.distanceTo(this.player.pos) > 25) return;
+    if (!addItem(s, { id: e.rec.type, name: ITEMS[e.rec.type].name, cn: ITEMS[e.rec.type].cn, kind: 'place' })) return this.denied('Your ring is full.');
+    this.structures.remove(e);
+    s.placed = s.placed.filter((r) => r.id !== recId);
+    if (s.respawnAt === recId) s.respawnAt = null;
+    this.sound.confirm();
+    this.save();
+  }
+
+  // Fold your vehicle into the ring, or unfold it beside you.
+  storeVehicle() {
+    const s = this.state, v = this.vehicleObj;
+    if (!v || this.rt.inVehicle) return;
+    if (v.pos.distanceTo(this.player.pos) > 12) return this.denied('Walk up to your vehicle first.');
+    if (ringOf(s).tier < 1) return this.denied('A vehicle needs an Iron Storage Ring or better.');
+    if (slotsUsed(s) + 4 > capacity(s)) return this.denied('Your ring needs 4 free slots for a vehicle.');
+    v.dispose();
+    this.vehicleObj = null;
+    s.vehicleStored = true;
+    s.vehicleLoc = null;
+    this.particles.burst(v.pos, new THREE.Color(1.4, 1, 2.4), 40, 10, 0.8, 0.6);
+    this.sound.warp();
+    this.save();
+  }
+
+  takeOutVehicle() {
+    const s = this.state, f = this.frame, p = this.player;
+    if (!s.vehicleStored || !s.vehicle) return;
+    if (!f || !f.terrain || !this.env.inAtmo || this.inVenue || this.rt.inShip) return this.denied('Unfold your vehicle outside, on the ground.');
+    const fwd = p.forward().projectOnPlane(p.pos.clone().normalize()).normalize();
+    const at = p.pos.clone().addScaledVector(fwd, 4);
+    const n = at.clone().normalize();
+    this.vehicleObj = new Vehicle(this.localRoot, s.vehicle);
+    this.vehicleObj.place(n.multiplyScalar(f.floorRadius(n.x, n.y, n.z) + this.vehicleObj.def.hover), fwd);
+    s.vehicleStored = false;
+    s.vehicleLoc = { star: this.star.key, body: f.body.id, pos: this.vehicleObj.pos.toArray(), fwd: this.vehicleObj.fwd.toArray() };
+    this.particles.burst(this.vehicleObj.pos, new THREE.Color(1.4, 1, 2.4), 40, 10, 0.8, 0.6);
+    this.sound.warp();
+    this.closePanel();
     this.save();
   }
 

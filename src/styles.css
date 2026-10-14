@@ -528,3 +528,5 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 #vu-body.alert { color: #ff5a6a; border-color: #ff5a6a; animation: vuAlert 0.6s ease-in-out infinite alternate; }
 #vu-body.alert .vu-hp i { background: #ff4466; }
 @keyframes vuAlert { from { box-shadow: 0 0 0 rgba(255, 60, 90, 0); } to { box-shadow: 0 0 18px rgba(255, 60, 90, 0.7); } }
+.ring-bar { height: 6px; background: rgba(255, 255, 255, 0.1); margin: -4px 0 10px; }
+.ring-bar i { display: block; height: 100%; background: linear-gradient(90deg, #b98cff, #3ef2ff); }

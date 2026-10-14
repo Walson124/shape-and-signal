@@ -24,6 +24,15 @@ export function newState() {
     vehicle: null,
     // where your vehicle is parked: { star, body, pos, fwd }
     vehicleLoc: null,
+    vehicleStored: false,
+    // the space ring: { tier, items: { id: { qty, name, ... } } }
+    ring: { tier: 0, items: {} },
+    // crafted gear: weapon tempering per discipline and hide armour level
+    gear: { armor: 0, temper: {} },
+    // structures built in the world: [{ id, type, star, body, pos, rot }]
+    placed: [],
+    respawnAt: null,
+    placeSeq: 0,
     skills: {},
     home: null,
     stash: 0,
@@ -164,7 +173,7 @@ export function derive(s) {
     // flying swords come with the Spirit Sword Set
     swords: owns(s, 'mind') ? Math.max(1, Math.round(swordCount(s.realm) * 1.5) + (mods.swords || 0)) : 0,
     crit: 0.08 + (mods.crit || 0),
-    armor: Math.min(0.6, mods.armor || 0),
+    armor: Math.min(0.7, (mods.armor || 0) + 0.06 * ((s.gear && s.gear.armor) || 0)),
     lifesteal: mods.lifesteal || 0,
     cdr: Math.min(0.5, mods.cdr || 0),
     cultivate: 1 + (mods.cultivate || 0),
