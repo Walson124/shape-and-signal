@@ -48,17 +48,20 @@ export async function openFeedback(menus, game) {
   // the fields are still in the (hidden) modal, so read them either way and keep the draft
   const $ = (id) => document.getElementById(id);
   draft = { kind: $('fb-kind').value, message: $('fb-message').value, contact: $('fb-contact').value };
+  const trap = $('fb-website').value;
   if (val !== 'send') return;
   if (draft.message.trim().length < 5) {
     if (await menus.modal({ kicker: 'FEEDBACK', title: 'A little more?', body: '<p>Please write a few words so we know what you mean.</p>', actions: [{ label: 'Cancel', val: 'no', cls: 'ghost' }, { label: 'Back to the form', val: 'back', cls: 'primary' }] }) === 'back') return openFeedback(menus, game);
     return;
   }
+  // something on screen while the email goes out (the result replaces it)
+  menus.modal({ kicker: 'FEEDBACK', title: 'Sending…', body: '<p>Sending your message.</p>', actions: [] });
   let result;
   try {
     const res = await fetch('/api/feedback', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...draft, website: $('fb-website').value, context: context(game) }),
+      body: JSON.stringify({ ...draft, website: trap, context: context(game) }),
     });
     const body = await res.json().catch(() => ({}));
     result = res.ok ? { ok: true } : { ok: false, error: body.error || `The server said no (${res.status}).` };
