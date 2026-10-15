@@ -248,6 +248,15 @@ export class Menus {
     }
   }
 
+  // Point at the Resume button (Esc can't resume: only a click may recapture the mouse).
+  flashPauseHint() {
+    const hint = this.$('pause-hint');
+    if (!hint) return;
+    hint.classList.remove('flash');
+    void hint.offsetWidth;
+    hint.classList.add('flash');
+  }
+
   showPause(v) {
     this.$('pause').classList.toggle('hidden', !v);
   }

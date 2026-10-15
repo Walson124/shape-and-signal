@@ -132,7 +132,7 @@ export const REALM_PERKS = [
   { realm: 0, name: 'Tempered Body', desc: 'You can run, leap and fight. Your body is bound to your homeworld.' },
   { realm: 1, name: 'Flight', desc: 'Double-tap jump to fly anywhere within an atmosphere. Leaps carry you over rooftops.' },
   { realm: 2, name: 'Void Body', desc: 'You survive the vacuum of space. Leave the atmosphere and fly between worlds.' },
-  { realm: 3, name: 'Star Step', desc: 'Blink a long distance forward in an instant (Star Step key).' },
+  { realm: 3, name: 'Star Step', desc: 'Your dodge becomes Star Step: blink a long distance forward in an instant.' },
   { realm: 4, name: 'Aura of Dread', desc: 'Beasts two or more grades below you flee rather than fight.' },
   { realm: 5, name: 'Domain', desc: 'Your domain slows beasts within 70 m and makes them take 20% more damage.' },
   { realm: 6, name: 'Pressure', desc: 'Beasts three or more grades below you are crushed by your presence alone.' },

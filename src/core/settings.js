@@ -81,6 +81,9 @@ class Settings {
     this.fresh = !Object.keys(saved).length;
     this.data = { ...DEFAULTS, ...saved, bindings: { ...DEFAULT_BINDINGS, ...(saved.bindings || {}) } };
     if (!PRESETS[this.data.quality]) this.data.quality = DEFAULTS.quality;
+    // dodge left Ctrl (Ctrl+W closes the browser tab); Star Step now shares its key
+    if (this.data.bindings.dodge === 'ControlLeft') this.data.bindings.dodge = 'AltLeft';
+    delete this.data.bindings.blink;
     this.listeners = new Set();
   }
 

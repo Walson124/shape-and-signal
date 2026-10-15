@@ -673,7 +673,11 @@ export class Game {
       if (!m.$('modal').classList.contains('hidden')) { m.closeModal(null); return; }
       if (!m.$('settings').classList.contains('hidden')) { m.closeSettings(); return; }
       if (m.panelOpen) { m.closePanel(); this.pause(); return; }
-      if (this.inGame) { if (m.pauseOpen) this.resume(); else this.pause(); }
+      // browsers only let a click recapture the mouse, so Esc can't resume: point at the button instead
+      if (this.inGame) {
+        if (m.pauseOpen) m.flashPauseHint?.();
+        else this.pause();
+      }
       return;
     }
     if (this.mode !== 'playing' || !m.$('settings').classList.contains('hidden') || !m.$('modal').classList.contains('hidden')) return;
@@ -960,7 +964,9 @@ export class Game {
     const beastEnvironment = this.beastEnv(tier);
     if (this.training.active || this.campaign.planetary.active) { beastEnvironment.max = 0; beastEnvironment.spawn = () => null; }
     this.beasts.setEnv(beastEnvironment);
-    const ctx = { player: p, playerAlive: body && rt.invuln <= 0, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
+    // beasts keep chasing through a dodge or a brief invulnerability (hurtPlayer ignores the hits);
+    // only a dead or absent player makes them give up
+    const ctx = { player: p, playerAlive: body, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
     if (!this.training.active || !this.training.options.freeze) this.beasts.update(dt, ctx);
     if (this.training.active) this.training.duel.update(dt);
     this.swords.setup(activePath(s) === 'mind' ? st.swords : 0, s.swordGrade);
@@ -1324,7 +1330,10 @@ export class Game {
     }
     if (boost && p.mode !== 'ground') rt.energy = Math.max(0, rt.energy - 9 * dt);
     p.look(look.x, look.y, { up: p.mode !== 'space' && env.up ? env.up : null });
-    if (alive && !swimming && !this.placing && !this.arts.dash && this.input.hit('dodge')) {
+    if (alive && !this.placing && !this.arts.dash && this.input.hit('dodge') && s.realm >= 3) {
+      // from the Stellar realm the dodge becomes Star Step
+      this.arts.blink({ camFwd: new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion) });
+    } else if (alive && !swimming && !this.placing && !this.arts.dash && this.input.hit('dodge')) {
       if (beginDodge(rt, p, move, env.up, st.walk)) {
         jump = false;
         this.particles.burst(p.pos.clone().addScaledVector(env.up, -EYE + 0.2), p.trailColor, 12, 8, 0.3, 0.4);
@@ -1925,10 +1934,11 @@ export class Game {
         this.loot.spawn(b.pos, 1, part.color, 1, 'part', part);
       }
     }
-    this.applyBounties(progressBounties(s, { kind: 'kill', type: b.type, elite: b.elite, region: this.star.region, bossStar: b.boss ? this.star.key : null, tier: b.tier, realm: s.realm }));
+    this.applyBounties(progressBounties(s, { kind: 'kill', type: b.type, elite: b.elite, region: this.star.region, bossStar: b.boss && !b.planetary ? this.star.key : null, tier: b.tier, realm: s.realm }));
     this.nix.onKill(b);
     this.campaign.event('kill', b);
-    if (b.boss) this.gainInsight('the fallen Overlord');
+    // planetary bosses are rewarded by their story mission, not here
+    if (b.boss && !b.planetary) this.gainInsight('the fallen Overlord');
     this.addXp(xp);
     if (b.boss) this.save();
   }
@@ -2534,7 +2544,6 @@ export class Game {
     rt.meditating = false;
     rt.cruise = false;
     this.mode = 'virtual';
-    this.training.prepare().catch(() => {});
     this.vu.enter(this.width / this.height);
     this.post.renderPass.scene = this.vu.scene;
     this.post.renderPass.camera = this.vu.camera;
@@ -2557,6 +2566,8 @@ export class Game {
   exitVirtual() {
     if (this.mode !== 'virtual') return;
     this.mode = 'playing';
+    // a training world built for a session that never started is thrown away
+    if (!this.training.active) this.training.release();
     this.vu.clearTargets();
     this.post.renderPass.scene = this.scene;
     this.post.renderPass.camera = this.camera;
@@ -2590,6 +2601,8 @@ export class Game {
       this.lastService = { kind: 'service', service: { kind: 'virtual' } };
       if (k.id === 'bounties' && this.state.offers.length < 3) this.state.offers.push(...generateOffers(this.state, this.offerContext(), 3 - this.state.offers.length));
       this.interact = { kind: 'service', service: { kind: 'virtual' } };
+      // walking up to the simulator: start building the training world in the background
+      if (k.id === 'sim') this.training.prepare().catch(() => {});
       this.menus.openPanel({ shop: 'vshop', bounties: 'bounties', sim: 'vsim', fame: 'fame' }[k.id]);
       this.input.unlock();
       this.sound.confirm();
@@ -2646,13 +2659,13 @@ export class Game {
   }
 
   orderDelivery(item) {
-    setTimeout(() => this.campaign.event('order'), 0);
     const s = this.state;
     const cat = this.mallCatalog().find((c) => c.id === item);
     if (!cat || s.coins < cat.price) return this.sound.deny();
     s.coins -= cat.price;
+    setTimeout(() => this.campaign.event('order'), 0);
     const eta = this.deliveryEta();
-    s.deliveries.push({ id: `d${Date.now()}-${s.deliveries.length}`, item, label: cat.name, due: s.playtime + eta,
+    s.deliveries.push({ id: `d${Date.now()}-${s.deliveries.length}`, item, label: cat.name, due: s.playtime + eta, price: cat.price,
       ...(item === 'radar' ? { radarTier: (s.radar ?? -1) + 1 } : {}) });
     this.hud.notify(`Ordered <b>${esc(cat.name)}</b>. A drop pod will reach you in about ${eta} s.`, 'yl');
     this.nix.event('delivery', {}, 0);
@@ -2735,7 +2748,6 @@ export class Game {
 
   openPod(pod) {
     if (!this.pods.includes(pod) || !pod.landed) return;
-    this.campaign.event('pod');
     this.receiveDelivery(pod.delivery);
   }
 
@@ -2758,13 +2770,19 @@ export class Game {
       // exact tier instead of silently upgrading whatever is equipped now.
       const legacyTier = RADARS.findIndex(r => r.name === d.label);
       const tier = Number.isInteger(d.radarTier) ? d.radarTier : legacyTier >= 0 ? legacyTier : (s.radar ?? -1) + 1;
-      if (!RADARS[tier]) return;
-      s.radar = Math.max(s.radar ?? -1, tier);
-      this.hud.notify(`Installed the <b>${RADARS[s.radar].name}</b>.`, 'violet');
-      this.campaign.event('radar');
+      if (RADARS[tier]) {
+        s.radar = Math.max(s.radar ?? -1, tier);
+        this.hud.notify(`Installed the <b>${RADARS[s.radar].name}</b>.`, 'violet');
+        this.campaign.event('radar');
+      } else {
+        // nothing better to install: send the money back rather than leave the order hanging
+        if (d.price) s.coins += d.price;
+        this.hud.notify(`Your radar is already the best there is. The <b>${esc(d.label)}</b> order was returned${d.price ? ' and refunded' : ''}.`, 'yl');
+      }
     }
     s.deliveries = s.deliveries.filter((x) => x !== d);
     for (const pod of [...this.pods]) if (pod.delivery === d) this.removePod(pod);
+    this.campaign.event('pod');
     this.sound.pickup();
     this.hud.notify(`${inShip ? 'Received aboard your ship' : 'Unpacked'} <b>${esc(d.label)}</b>.`, 'green');
     this.save();

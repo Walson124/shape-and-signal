@@ -118,7 +118,9 @@ test('death during a live siege defers destruction, persists defeat, and waits f
   assert.equal(c.advanced, undefined); assert.ok(f.script().shots.reduce((t, s) => t + s.dur, 0) >= 10);
   f.choice('retry'); await Promise.resolve(); await Promise.resolve();
   assert.equal(e.status, 'fighting'); assert.equal(g.state.coins, originalCoins); assert.equal(surface.visible, true);
-  assert.equal(g.state.campaign.siegeCheckpoint.state.campaign.siegeCheckpoint, undefined);
+  // the full copy is kept out of the save, and never nests another checkpoint
+  assert.equal(g.state.campaign.siegeCheckpoint.state, undefined);
+  assert.equal(e.snapshot.campaign.siegeCheckpoint, undefined);
   e.dispose(); g.beasts.clear();
 });
 
@@ -141,7 +143,8 @@ test('loading a mid-siege checkpoint restores the original attempt without neste
   Campaign.prototype.resume.call(c);
   assert.equal(e.status, 'fighting'); assert.equal(g.state.coins, original);
   assert.equal(g.beasts.beasts.filter(b => b.planetary).length, 1);
-  assert.equal(c.st.siegeCheckpoint.state.campaign.siegeCheckpoint, undefined);
+  assert.equal(c.st.siegeCheckpoint.state, undefined);
+  assert.equal(e.snapshot.campaign.siegeCheckpoint, undefined);
   e.dispose(); g.beasts.clear();
 });
 

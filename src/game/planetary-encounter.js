@@ -2,6 +2,19 @@ import * as THREE from 'three';
 import { PlanetaryBrain, PLANETARY_BOSSES, attackHits } from './planetary-bosses.js';
 import { buildPlanetDestruction } from './planet-destruction.js';
 import { derive } from './state.js';
+
+// The pre-siege checkpoint is a whole copy of the save. It lives under its own
+// storage key (with an in-memory copy) so it doesn't double the main save.
+const CHECKPOINT_KEY = 'starsea-ascension-siege-checkpoint';
+export function storeCheckpoint(state) {
+  try { localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(state)); return true; } catch { return false; }
+}
+export function loadCheckpoint() {
+  try { const raw = localStorage.getItem(CHECKPOINT_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+export function clearCheckpoint() {
+  try { localStorage.removeItem(CHECKPOINT_KEY); } catch { /* storage unavailable */ }
+}
 const esc = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const Y = new THREE.Vector3(0, 1, 0);
@@ -27,7 +40,9 @@ export class PlanetaryEncounter {
     if (!retry && !this.c.st.siegeCheckpoint) {
       g.save();
       const snapshot = structuredClone(g.state); delete snapshot.campaign.siegeCheckpoint; delete snapshot.campaign.siegeFailure;
-      this.c.st.siegeCheckpoint = { state: snapshot, hp: g.rt.hp, energy: g.rt.energy, spirit: g.rt.spirit };
+      this.snapshot = snapshot;
+      storeCheckpoint(snapshot);
+      this.c.st.siegeCheckpoint = { hp: g.rt.hp, energy: g.rt.energy, spirit: g.rt.spirit };
     }
     this.c.st.siegeFailure = null;
     g.beasts.clear(); g.combat.clear();
@@ -100,6 +115,7 @@ export class PlanetaryEncounter {
       g.hud.el?.alert?.classList.remove('planetary');
       this.c.st.slain = [...new Set([...(this.c.st.slain || []), this.def.id])];
       delete this.c.st.siegeCheckpoint; delete this.c.st.siegeFailure;
+      this.snapshot = null; clearCheckpoint();
       g.hud.banner('PLANET SAVED', this.def.planet, `${this.def.name} has fallen`, '#5dffa8', 5);
       this.boss = null; this.c.advance(); return;
     }
@@ -165,10 +181,11 @@ export class PlanetaryEncounter {
   }
   retry() {
     const g = this.g, checkpoint = this.c.st.siegeCheckpoint;
-    if (!checkpoint) return;
+    const saved = this.snapshot || checkpoint?.state || loadCheckpoint();
+    if (!checkpoint || !saved) return;
     const id = this.def.id;
     this.clearDestruction(); this.clearTells(); this.status = 'idle';
-    g.state = structuredClone(checkpoint.state); g.stats = derive(g.state); g.rt = g.freshRuntime(); g.arts.reset();
+    g.state = structuredClone(saved); g.stats = derive(g.state); g.rt = g.freshRuntime(); g.arts.reset();
     g.setFrame(this.planet, false); g.beasts.clear(); g.combat.clear();
     const pos = new THREE.Vector3(...g.state.loc.pos), up = pos.clone().normalize();
     g.player.placeAt(pos, this.arena(id), up); g.player.vel.set(0, 0, 0); g.player.setRealm(g.state.realm);

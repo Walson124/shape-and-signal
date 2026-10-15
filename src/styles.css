@@ -558,3 +558,6 @@ a.menu-item { text-decoration: none; }
 #simulation-hit.hit-flash { animation: virtualHit .4s ease-out; }
 #physical-hit.hit-flash { animation: virtualHit 1.2s ease-out; }
 @keyframes virtualHit { 0%, 15% { opacity: 1; } 100% { opacity: 0; } }
+.pause-hint { font-size: 11px; letter-spacing: 0.16em; color: var(--dim); margin: -4px 0 10px; }
+.pause-hint.flash { animation: pauseHint 0.9s ease-out; }
+@keyframes pauseHint { 0%, 30% { color: #ffe44d; text-shadow: 0 0 10px rgba(255, 228, 77, 0.8); } 100% { color: var(--dim); text-shadow: none; } }

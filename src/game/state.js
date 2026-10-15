@@ -147,6 +147,7 @@ export function saveState(state) {
 export function clearSave() {
   try {
     localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem('starsea-ascension-siege-checkpoint');
   } catch {
     /* ignore */
   }

@@ -5,7 +5,7 @@ import { speciesForBody } from './bestiary.js';
 import { LORE, RUIN_NAMES } from './lore.js';
 import { settings } from '../core/settings.js';
 import { codeLabel } from '../core/bindings.js';
-import { PlanetaryEncounter } from './planetary-encounter.js';
+import { PlanetaryEncounter, storeCheckpoint } from './planetary-encounter.js';
 import { PLANETARY_BOSSES } from './planetary-bosses.js';
 
 // Story mode. Act I: an ordinary kid in Base City 07 buys a first weapon, earns
@@ -496,12 +496,21 @@ export class Campaign {
 
   // Resume after loading a save mid-story.
   resume() {
+    // saves from before missions were added can point past the end of a mission
+    const m = this.mission;
+    if (m && (this.st.si >= m.steps.length || this.st.si < 0)) this.st.si = 0;
     const step = this.step;
     if (!step) return this.render();
     if (step.type === 'planetary') {
       if (this.st.siegeFailure) {
         this.planetary.def = PLANETARY_BOSSES[step.boss]; this.planetary.planet = this.planetary.planetFor(step.boss);
         if (this.planetary.planet) { this.planetary.fail(this.st.siegeFailure); return; }
+      }
+      // older saves kept the whole checkpoint inside the save: move it out
+      if (this.st.siegeCheckpoint && this.st.siegeCheckpoint.state) {
+        this.planetary.snapshot = this.st.siegeCheckpoint.state;
+        storeCheckpoint(this.st.siegeCheckpoint.state);
+        delete this.st.siegeCheckpoint.state;
       }
       if (this.st.siegeCheckpoint) {
         this.planetary.def = PLANETARY_BOSSES[step.boss]; this.planetary.planet = this.planetary.planetFor(step.boss);

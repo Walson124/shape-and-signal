@@ -195,6 +195,14 @@ export class TrainingGround {
     if (this.active && ['realm', 'stage', 'weapon', 'grade', 'mastery', 'armor', 'temper'].includes(key)) this.apply();
   }
 
+  // Drop a training world that was built but never used.
+  release() {
+    const p = this.prepared;
+    if (!p) return;
+    this.prepared = null;
+    p.then((system) => system && system.dispose && system.dispose(), () => {});
+  }
+
   prepare() {
     if (!this.prepared) {
       this.prepared = this.g.buildSystem(TRAINING_STAR).catch((error) => {
@@ -286,8 +294,10 @@ export class TrainingGround {
     const forward = g.player.forward().projectOnPlane(up).normalize();
     if (forward.lengthSq() < 0.001) forward.copy(g.player.localUp()).projectOnPlane(up).normalize();
     const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-    for (let i = 0; i < (boss ? 1 : this.options.count); i++) {
-      const pos = g.player.pos.clone().addScaledVector(forward, boss ? 180 : 55).addScaledVector(right, (i - (this.options.count - 1) / 2) * 12);
+    const n = boss ? 1 : this.options.count;
+    for (let i = 0; i < n; i++) {
+      // a single boss lands straight ahead; a pack spreads out in a line
+      const pos = g.player.pos.clone().addScaledVector(forward, boss ? 180 : 55).addScaledVector(right, (i - (n - 1) / 2) * 12);
       const dir = pos.clone().normalize();
       pos.copy(dir.multiplyScalar(f.floorRadius(dir.x, dir.y, dir.z) + (boss ? 90 : 8)));
       const def = species.find((s) => s.id === this.enemy) || species[0];

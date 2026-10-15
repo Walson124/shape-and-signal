@@ -164,7 +164,6 @@ export class Arts {
       const keys = ['skill1', 'skill2', 'skill3', 'skill4'];
       keys.forEach((k, i) => { if (inp.hit(k)) this.cast(P.skills[i], ctx); });
       if (inp.hit('formation') && pathId === 'mind') g.hud.notify(`Sword formation: <b>${g.swords.toggleFormation() === 'swarm' ? 'Swarm' : 'Lance'}</b>.`, 'violet');
-      if (inp.hit('blink')) this.blink(ctx);
     } else {
       rt.guarding = false;
       rt.aiming = false;
