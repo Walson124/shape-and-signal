@@ -7,7 +7,7 @@ const RUN = { ring: generateRing, chunk: buildChunk, planet: generatePlanet, vox
 // Worker pool for texture and terrain generation. Jobs may carry a priority
 // function (lower runs first) and a cancelled() check. Falls back to the main
 // thread if workers can't start.
-class WorkerPool {
+export class WorkerPool {
   constructor() {
     this.workers = [];
     this.queue = [];
@@ -20,26 +20,52 @@ class WorkerPool {
         const w = new Worker(new URL('./texgen.worker.js', import.meta.url), { type: 'module' });
         w.busy = false;
         w.onmessage = (e) => this.onDone(w, e.data);
-        w.onerror = () => { this.failed = true; };
+        w.onerror = () => this.failWorkers();
+        w.onmessageerror = () => this.failWorkers();
         this.workers.push(w);
       }
     } catch {
-      this.failed = true;
+      this.failWorkers();
     }
   }
 
   get busy() {
-    return this.queue.length + this.workers.filter((w) => w.busy).length;
+    return this.pending.size;
+  }
+
+  runLocal(task) {
+    setTimeout(() => {
+      try {
+        task.resolve(task.cancelled && task.cancelled() ? null : RUN[task.kind](task.job));
+      } catch (error) {
+        task.reject(error);
+      } finally {
+        this.pending.delete(task.id);
+      }
+    }, 0);
+  }
+
+  failWorkers() {
+    if (this.failed) return;
+    this.failed = true;
+    for (const w of this.workers) {
+      w.onmessage = w.onerror = w.onmessageerror = null;
+      w.terminate();
+    }
+    this.workers = [];
+    this.queue = [];
+    for (const task of this.pending.values()) this.runLocal(task);
   }
 
   run(kind, job, opts = {}) {
-    if (this.failed || !this.workers.length) {
-      return new Promise((resolve) => setTimeout(() => resolve(RUN[kind](job)), 0));
-    }
     return new Promise((resolve, reject) => {
       const id = ++this.seq;
       const task = { id, kind, job, priority: opts.priority || null, cancelled: opts.cancelled || null, resolve, reject };
       this.pending.set(id, task);
+      if (this.failed || !this.workers.length) {
+        this.runLocal(task);
+        return;
+      }
       this.queue.push(task);
       this.pump();
     });
@@ -65,11 +91,17 @@ class WorkerPool {
       }
       const task = this.queue.splice(bi, 1)[0];
       w.busy = true;
-      w.postMessage({ id: task.id, kind: task.kind, job: task.job });
+      try {
+        w.postMessage({ id: task.id, kind: task.kind, job: task.job });
+      } catch {
+        this.failWorkers();
+        return;
+      }
     }
   }
 
   onDone(w, { id, out, error }) {
+    if (this.failed) return;
     w.busy = false;
     const t = this.pending.get(id);
     this.pending.delete(id);

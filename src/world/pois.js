@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bevelBox, smoothSurface } from './geometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng.js';
 import { glowTexture } from './textures.js';
@@ -31,13 +32,13 @@ export function buildPoi(poi, accent = 0x3ef2ff) {
       }
       parts.push(p);
       if (h > 9 && i % 2 === 0) {
-        const lintel = new THREE.BoxGeometry(2.6, 1.2, 8).rotateY(-a).translate(Math.cos(a + 0.3) * 16, h + 0.6, Math.sin(a + 0.3) * 16);
+        const lintel = bevelBox(2.6, 1.2, 8).rotateY(-a).translate(Math.cos(a + 0.3) * 16, h + 0.6, Math.sin(a + 0.3) * 16);
         parts.push(lintel);
       }
     }
     parts.push(new THREE.CylinderGeometry(6, 7, 1.6, 12).translate(0, 0.8, 0));
-    parts.push(new THREE.BoxGeometry(3, 3, 3).translate(0, 3, 0));
-    g.add(new THREE.Mesh(mergeGeometries(parts), stone));
+    parts.push(bevelBox(3, 3, 3).translate(0, 3, 0));
+    g.add(new THREE.Mesh(mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p)), stone));
     const rune = new THREE.Mesh(new THREE.TorusGeometry(5, 0.18, 6, 48).rotateX(Math.PI / 2), glowMat(0xffc857, 3));
     rune.position.y = 1.7;
     g.add(rune);
@@ -108,8 +109,7 @@ export function buildPoi(poi, accent = 0x3ef2ff) {
       const s = 0.8 + Math.sin(p.getX(i) * 0.7 + p.getZ(i)) * 0.15;
       p.setXYZ(i, p.getX(i) * s, Math.max(-2, p.getY(i) * 0.45 * s), p.getZ(i) * s);
     }
-    mound.computeVertexNormals();
-    g.add(new THREE.Mesh(mound, new THREE.MeshStandardMaterial({ color: lair ? 0x2a1018 : 0x2a2420, roughness: 1, flatShading: true })));
+    g.add(new THREE.Mesh(smoothSurface(mound), new THREE.MeshStandardMaterial({ color: lair ? 0x2a1018 : 0x2a2420, roughness: 1 })));
     const eggMat = glowMat(lair ? 0xff2a6a : 0xff6a3a, 2.2);
     for (let i = 0; i < (lair ? 9 : 6); i++) {
       const a = r() * Math.PI * 2, d = (lair ? 14 : 5) + r() * 3;
@@ -143,7 +143,7 @@ export function buildPoi(poi, accent = 0x3ef2ff) {
     parts.push(ob);
     for (let i = 0; i < 4; i++) {
       const a2 = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      parts.push(new THREE.BoxGeometry(1.4, 5, 1.4).translate(Math.cos(a2) * 12, 2.5, Math.sin(a2) * 12));
+      parts.push(bevelBox(1.4, 5, 1.4).translate(Math.cos(a2) * 12, 2.5, Math.sin(a2) * 12));
     }
     g.add(new THREE.Mesh(mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p))), new THREE.MeshStandardMaterial({ color: 0x2a2630, roughness: 0.7, metalness: 0.3, flatShading: true })));
     const glyphs = [];
@@ -174,7 +174,7 @@ export function buildPoi(poi, accent = 0x3ef2ff) {
       tent.rotation.y = r() * 3;
       g.add(tent);
     }
-    const crate = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 1.4), new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.8 }));
+    const crate = new THREE.Mesh(bevelBox(2.4, 1.2, 1.4), new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.8 }));
     crate.position.set(0, 0.6, 3.2);
     g.add(crate);
     const fire = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 6), glowMat(0xff7a2a, 3));

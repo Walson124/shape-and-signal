@@ -8,6 +8,7 @@ import { REGIONS, regionForTier, makeName, BOSSES } from '../game/data.js';
 export const SECTOR = 25;
 export const HOME_KEY = 'home';
 export const CORE_KEY = 'core';
+export const ATLAS_KEY = 'atlas-reach';
 export const CORE_POS = new THREE.Vector3(60, 0, -470);
 
 function sectorSeed(x, y, z) {
@@ -40,6 +41,7 @@ function makeStar(key, pos, seed, forced = {}) {
 
 const HOME = makeStar(HOME_KEY, new THREE.Vector3(0, 0, 0), 0x51ace, { tier: 0, cls: 'yellow', name: 'Solace' });
 const CORE = makeStar(CORE_KEY, CORE_POS.clone(), 0xc0de, { tier: 8.6, cls: 'violet', name: 'Primordial Heart', boss: BOSSES.length - 1 });
+const ATLAS = makeStar(ATLAS_KEY, new THREE.Vector3(0, 0, -180), 0xa71a5, { tier: 3.6, cls: 'yellow', name: 'Atlas Reach' });
 
 const sectorCache = new Map();
 export function sectorStars(sx, sy, sz) {
@@ -65,6 +67,7 @@ export function sectorStars(sx, sy, sz) {
 export function getStar(key) {
   if (key === HOME_KEY) return HOME;
   if (key === CORE_KEY) return CORE;
+  if (key === ATLAS_KEY) return ATLAS;
   const [sec, idx] = key.split(':');
   const [sx, sy, sz] = sec.split(',').map(Number);
   return sectorStars(sx, sy, sz).find((s) => s.key === key) || HOME;
@@ -85,7 +88,7 @@ export function starsNear(pos, radius) {
       }
     }
   }
-  for (const s of [HOME, CORE]) {
+  for (const s of [HOME, CORE, ATLAS]) {
     const d = s.pos.distanceTo(pos);
     if (d <= radius && d > 0.01) out.push({ star: s, dist: d });
   }

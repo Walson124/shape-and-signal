@@ -1123,7 +1123,7 @@ export class Arts {
     if (this.perkT > 0) return;
     this.perkT = 0.25;
     for (const b of [...g.beasts.beasts]) {
-      if (b.static || b.boss) continue;
+      if (b.static || b.boss || b.duelist) continue;
       const gap = s.realm - b.tier;
       const d = b.pos.distanceTo(p.pos);
       if (hasPerk(s.realm, 6) && gap >= 3 && d < 140) {

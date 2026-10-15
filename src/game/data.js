@@ -158,11 +158,11 @@ export const FLIGHT = {
 
 // Starships, built at a city shipyard once you reach the Planetary realm.
 export const SHIPS = [
-  { name: 'Skyjet', cn: '飞梭', range: 15, cruise: 120000, speed: 900, hull: 1, coins: 800, ore: 12, essence: 40, color: 0x3ef2ff },
-  { name: 'Corvette', cn: '护卫舰', range: 35, cruise: 300000, speed: 1400, hull: 2.6, coins: 12000, ore: 60, essence: 2000, color: 0x5dffa8 },
-  { name: 'Frigate', cn: '巡航舰', range: 80, cruise: 800000, speed: 2200, hull: 7, coins: 150000, ore: 200, essence: 30000, color: 0xffe066 },
-  { name: 'Cruiser', cn: '战列舰', range: 170, cruise: 2000000, speed: 3500, hull: 18, coins: 2000000, ore: 600, essence: 400000, color: 0xff3c7d },
-  { name: 'Star Ark', cn: '星槎', range: 450, cruise: 5000000, speed: 6000, hull: 50, coins: 25000000, ore: 2000, essence: 5000000, color: 0xfff0b8 },
+  { name: 'Skyjet', desc: 'Compact delta-wing shuttle with a single main engine.', cn: '飞梭', range: 15, cruise: 120000, speed: 900, hull: 1, coins: 800, ore: 12, essence: 40, color: 0x3ef2ff },
+  { name: 'Corvette', desc: 'Compact escort hull with swept wings and close-set twin engines.', cn: '护卫舰', range: 35, cruise: 300000, speed: 1400, hull: 2.6, coins: 12000, ore: 60, essence: 2000, color: 0x5dffa8 },
+  { name: 'Frigate', desc: 'Substantial patrol hull with a full bow, raised bridge and equipment bays.', cn: '巡航舰', range: 80, cruise: 800000, speed: 2200, hull: 7, coins: 150000, ore: 200, essence: 30000, color: 0xffe066 },
+  { name: 'Cruiser', desc: 'Broad wedge hull with layered armor and four main engines.', cn: '战列舰', range: 170, cruise: 2000000, speed: 3500, hull: 18, coins: 2000000, ore: 600, essence: 400000, color: 0xff3c7d },
+  { name: 'Star Ark', desc: 'Twin habitat hulls, an exposed drive hoop and six main engines.', cn: '星槎', range: 450, cruise: 5000000, speed: 6000, hull: 50, coins: 25000000, ore: 2000, essence: 5000000, color: 0xfff0b8 },
 ];
 
 const SYL_A = ['Ka', 'Vel', 'Or', 'Zeph', 'Tal', 'Mir', 'Sar', 'Quo', 'Ny', 'Ar', 'Lux', 'Dra', 'Ser', 'Xi', 'Hel', 'Cor', 'Ves', 'Ul', 'Rhe', 'Tau', 'Ae', 'Bel', 'Cyr', 'Eld', 'Fen', 'Gal', 'Ith', 'Jor'];

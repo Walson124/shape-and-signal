@@ -1,17 +1,21 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { smoothSurface } from './geometry.js';
 import { PROP } from './terrain.js';
 
 // Low-poly props with baked vertex colours, merged into one geometry each so
 // a chunk can draw hundreds of them with one instanced draw call per type.
 function colored(geo, hex, jitter = 0.08) {
   const g = geo.index ? geo.toNonIndexed() : geo;
-  const c = new THREE.Color(hex).convertSRGBToLinear();
+  const c = new THREE.Color(hex);
   const n = g.attributes.position.count;
   const arr = new Float32Array(n * 3);
-  for (let i = 0; i < n; i += 3) {
-    const k = 1 + (Math.random() - 0.5) * jitter * 2;
-    for (let v = 0; v < 3 && i + v < n; v++) arr.set([c.r * k, c.g * k, c.b * k], (i + v) * 3);
+  const p = g.attributes.position;
+  for (let i = 0; i < n; i++) {
+    // Continuous variation keeps shared corners the same colour, eliminating
+    // the random triangle patchwork without adding texture lookups.
+    const k = 1 + Math.sin(p.getX(i) * 1.7 + p.getY(i) * 0.7 + p.getZ(i) * 1.3) * jitter;
+    arr.set([c.r * k, c.g * k, c.b * k], i * 3);
   }
   g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
   const glow = new Float32Array(n);
@@ -26,7 +30,7 @@ function glowing(geo, hex) {
 }
 const merge = (parts) => {
   const m = mergeGeometries(parts);
-  m.computeVertexNormals();
+  // Keep the source normals: spheres/capsules are smooth, crystals stay sharp.
   return m;
 };
 
@@ -52,7 +56,8 @@ export function propGeometries() {
       const s = 0.75 + Math.sin(p.getX(i) * 3.1 + p.getZ(i) * 2.3) * 0.2 + Math.cos(p.getY(i) * 4.2) * 0.1;
       p.setXYZ(i, p.getX(i) * s, p.getY(i) * s * 0.7, p.getZ(i) * s);
     }
-    return merge([colored(g.translate(0, 0.6, 0), 0x9a948a, 0.15)]);
+    const smooth = smoothSurface(g);
+    return merge([colored(smooth.translate(0, 0.6, 0), 0x9a948a, 0.1)]);
   })();
   const cactus = merge([
     colored(new THREE.CapsuleGeometry(0.45, 4, 3, 8).translate(0, 2.4, 0), 0x4a7a3a),
@@ -101,19 +106,32 @@ export function terrainMaterial(detailScale = 0.35) {
       ${shader.fragmentShader}`.replace(
       '#include <color_fragment>',
       `#include <color_fragment>
-      float dn = vn(vPP * ${detailScale.toFixed(3)}) * 0.55 + vn(vPP * ${(detailScale * 4.1).toFixed(3)}) * 0.3 + vn(vPP * 0.031) * 0.35;
-      diffuseColor.rgb *= 0.72 + 0.5 * dn;`,
+      float groundDetail = vn(vPP * ${detailScale.toFixed(3)}) * 0.55 + vn(vPP * ${(detailScale * 4.1).toFixed(3)}) * 0.3 + vn(vPP * 0.031) * 0.35;
+      diffuseColor.rgb *= 0.72 + 0.5 * groundDetail;`,
+    ).replace(
+      '#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>
+      // Surface-gradient bump from the existing detail signal. No new noise
+      // evaluations or texture reads; fades before distant pixels shimmer.
+      vec3 groundDx = dFdx(-vViewPosition);
+      vec3 groundDy = dFdy(-vViewPosition);
+      vec3 groundR1 = cross(groundDy, normal);
+      vec3 groundR2 = cross(normal, groundDx);
+      float groundDet = dot(groundDx, groundR1);
+      vec3 groundGrad = sign(groundDet) * (dFdx(groundDetail) * groundR1 + dFdy(groundDetail) * groundR2) / max(abs(groundDet), 0.000001);
+      float groundRelief = 0.35 * (1.0 - smoothstep(25.0, 130.0, length(vViewPosition)));
+      normal = normalize(normal - groundGrad * groundRelief);`,
     ).replace(
       '#include <emissivemap_fragment>',
       '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vGlow * 3.0;',
     );
   };
-  mat.customProgramCacheKey = () => `terrain-${detailScale}`;
+  mat.customProgramCacheKey = () => `terrain-relief-v2-${detailScale}`;
   return mat;
 }
 
 export function propMaterial() {
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, flatShading: true, envMapIntensity: 0.3 });
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, envMapIntensity: 0.3 });
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = `attribute float glow;\nvarying float vGlow;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
     shader.fragmentShader = `varying float vGlow;\n${shader.fragmentShader}`.replace(

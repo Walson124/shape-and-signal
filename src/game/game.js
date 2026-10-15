@@ -38,6 +38,8 @@ import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing,
 import { Structures, buildStructure } from './structures.js';
 import { Pets, petDef } from './pets.js';
 import { FEATURES } from './features.js';
+import { beginDodge, DODGE } from './evasion.js';
+import { TrainingGround } from './training.js';
 import { SwordArray } from './swords.js';
 import { ViewModel } from './viewmodel.js';
 import { Loot } from './loot.js';
@@ -114,6 +116,7 @@ export class Game {
     this.structures = new Structures(this);
     this.pets = new Pets(this);
     this.campaign = new Campaign(this);
+    this.training = new TrainingGround(this);
     this.pods = [];
     this.player = new Player(this.localRoot, this.particles);
     this.shipObj = null;
@@ -179,6 +182,7 @@ export class Game {
       shieldT: 0, meditating: false, medBlock: 0, hurtFlash: 0, lastHurt: -99,
       trib: null, deadT: 0, invuln: 0, nav: null, cruise: false, shake: 0, hand: 1,
       lock: null, controlling: false, spiritLock: false, scanT: 0, firingT: 0,
+      dodgeT: 0, dodgeCd: 0, dodgeDir: null, dodgeSpeed: 0,
       inShip: false, warpCharge: 0, warpTarget: null,
     };
   }
@@ -265,9 +269,10 @@ export class Game {
   }
 
   // Let the terrain under the player finish generating before revealing it.
-  async warmTerrain(onProgress) {
+  async warmTerrain(onProgress, cancelled = () => false) {
     const start = performance.now();
     for (;;) {
+      if (cancelled()) return;
       const el = performance.now() - start;
       if (el > 15000) break;
       this.positionCamera(0.016);
@@ -346,6 +351,7 @@ export class Game {
       const m = new THREE.Matrix4().copy(parent.matrixWorld).invert().multiply(this.localRoot.matrixWorld);
       const q = new THREE.Quaternion().setFromRotationMatrix(m);
       this.player.rebase(m, q);
+      if (this.rt.dodgeDir) this.rt.dodgeDir.applyQuaternion(q);
       if (this.shipObj) this.shipObj.rebase(m, q);
       this.beasts.rebase(m, q);
       this.combat.rebase(m, q);
@@ -551,7 +557,7 @@ export class Game {
     this.applyWeapon();
     this.arts.reset();
     this.sound.init();
-    this.input.lock();
+    this.resume();
     this.camera.fov = settings.get('fov');
     this.camera.updateProjectionMatrix();
     this.camQuat.copy(this.rt.inShip && this.shipObj ? this.shipObj.quat : this.player.quat);
@@ -572,6 +578,7 @@ export class Game {
         ['Welcome to <b>Base City 07</b>, Warrior. Beasts roam the wilds beyond the walls.', 'gold'],
         ['Your body is still bound to Terra. Reach the <b>War God</b> realm to fly, and <b>Planetary</b> to leave the planet.', 'violet'],
         [this.pathTip(), ''],
+        [`Move and press <kbd>${codeLabel(settings.key('dodge'))}</kbd> to dodge an attack. Watch your energy and the Dodge cooldown on the skill bar.`, ''],
         [`Press <kbd>${codeLabel(settings.key('cultivate'))}</kbd> to cultivate. Energy springs, the beams of light in the wilds, are the richest places.`, 'gold'],
         ['Many city buildings are open. Walk in through any glowing door to shop, train, take jobs or fight in the arena.', 'yl'],
         ['Visit the <b>Martial Hall</b> and <b>Exchange</b> in the city with <kbd>E</kbd> for bounties, pills and the sword forge.', 'yl'],
@@ -601,10 +608,25 @@ export class Game {
   resume() {
     this.menus.showPause(false);
     this.sound.init();
-    this.input.lock();
+    this.input.clear();
+    const request = this.resumeRequest = (this.resumeRequest || 0) + 1;
+    return this.input.lock().then((locked) => {
+      if (!locked && request === this.resumeRequest && this.inGame && !this.menus.overlayOpen && !this.training.busy) this.menus.showPause(true);
+      return locked;
+    });
+  }
+
+  pause() {
+    this.resumeRequest = (this.resumeRequest || 0) + 1;
+    this.input.clear();
+    this.menus.showPause(true);
+    this.input.unlock();
+    this.save();
   }
 
   async quitToTitle() {
+    this.campaign?.planetary?.dispose();
+    if (this.training.active) this.training.leave();
     this.exitVirtual();
     this.dismount(true);
     if (this.cutscene.playing) this.cutscene.skip();
@@ -623,10 +645,12 @@ export class Game {
   }
 
   onLockChange(locked) {
+    if (this.training.busy) return;
     if (!locked && this.mode === 'cutscene') {
       this.cutscene.skip();
       return;
     }
+    if (locked && this.menus.overlayOpen) { this.input.unlock(); return; }
     if (locked) this.menus.showPause(false);
     else if (this.inGame && !this.menus.overlayOpen) {
       this.menus.showPause(true);
@@ -636,6 +660,11 @@ export class Game {
 
   onKey(code) {
     const m = this.menus;
+    if (code === settings.key('returnBody')) {
+      if (this.training.active) { this.training.leave({ returnToBody: true }); return; }
+      if (this.mode === 'virtual') { m.closePanel(); m.closeModal(null); m.closeSettings(); this.exitVirtual(); this.resume(); return; }
+    }
+    if (this.training.busy) { if (code === 'Escape') this.training.pauseOnArrival = true; return; }
     if (this.mode === 'cutscene') {
       if (code === 'Escape' || code === 'Enter') this.cutscene.skip();
       return;
@@ -643,11 +672,13 @@ export class Game {
     if (code === 'Escape') {
       if (!m.$('modal').classList.contains('hidden')) { m.closeModal(null); return; }
       if (!m.$('settings').classList.contains('hidden')) { m.closeSettings(); return; }
-      if (m.panelOpen) { this.closePanel(); return; }
+      if (m.panelOpen) { m.closePanel(); this.pause(); return; }
+      if (this.inGame) { if (m.pauseOpen) this.resume(); else this.pause(); }
       return;
     }
     if (this.mode !== 'playing' || !m.$('settings').classList.contains('hidden') || !m.$('modal').classList.contains('hidden')) return;
     const k = (a) => code === settings.key(a);
+    if (k('panelTraining') && this.training.active) { this.togglePanel('training'); return; }
     if (k('panelCult')) this.togglePanel('cultivation');
     else if (k('panelSkills')) this.togglePanel('skills');
     else if (k('panelBounty')) this.togglePanel('bounties');
@@ -657,6 +688,9 @@ export class Game {
   }
 
   togglePanel(kind, tab) {
+    this.resumeRequest = (this.resumeRequest || 0) + 1;
+    this.input.clear();
+    this.menus.showPause(false);
     if (this.menus.panelKind === kind && (!tab || this.menus.panelTab === tab)) {
       this.closePanel();
       return;
@@ -669,10 +703,7 @@ export class Game {
   closePanel() {
     this.menus.closePanel();
     if (!this.inGame) return;
-    this.input.lock();
-    setTimeout(() => {
-      if (!this.input.locked && !this.menus.overlayOpen && this.inGame) this.menus.showPause(true);
-    }, 300);
+    this.resume();
   }
 
   get atStation() {
@@ -692,6 +723,14 @@ export class Game {
       this.fpsAcc = 0;
       this.fpsFrames = 0;
     }
+    if (this.training.active && !this.menus.pauseOpen && this.menus.$('settings').classList.contains('hidden')) this.training.updatePhysical(dt);
+    if (this.mode === 'transferring') {
+      this.training.transfer.update(dt);
+      this.sound.setListener(this.post.renderPass.camera);
+      this.post.render(this.time);
+      this.input.endFrame();
+      return;
+    }
     if (!this.system) return;
     if (this.mode === 'title' || this.mode === 'loading') this.updateTitle(dt);
     else if (this.mode === 'warping') this.updateWarp(dt);
@@ -707,7 +746,7 @@ export class Game {
         this.state.playtime += dt;
       } else this.input.consumeMouse();
     } else {
-      const paused = (this.menus.overlayOpen && this.mode !== 'cutscene') || (!this.input.locked && this.mode === 'playing');
+      const paused = this.mode === 'campaign-defeat' || this.menus.pauseOpen || (this.menus.overlayOpen && this.mode !== 'cutscene') || (!this.input.locked && this.mode === 'playing');
       if (!paused) {
         this.update(dt);
         this.state.playtime += dt;
@@ -786,6 +825,9 @@ export class Game {
     // logged into the Virtual Universe your body takes no orders, but it still lives
     const body = alive || this.mode === 'virtual';
     let st = this.stats;
+    if (this.training.active) this.training.update();
+    rt.dodgeT = Math.max(0, rt.dodgeT - dt);
+    rt.dodgeCd = Math.max(0, rt.dodgeCd - dt);
     s.worldTime += dt;
 
     // ---- input
@@ -875,7 +917,7 @@ export class Game {
     rt.invuln = Math.max(0, rt.invuln - dt);
     rt.firingT = Math.max(0, rt.firingT - dt);
     const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg;
-    this.arts.update(dt, { alive: alive && !rt.scanner && !this.placing, camFwd, aimPoint, aimBeast, swordDamage });
+    this.arts.update(dt, { alive: alive && !rt.scanner && !this.placing && rt.dodgeT <= 0, camFwd, aimPoint, aimBeast, swordDamage });
     if (alive && !rt.meditating) {
       if (inp.hit('pill1')) this.usePill('heal');
       if (inp.hit('pill2')) this.usePill('energy');
@@ -915,9 +957,12 @@ export class Game {
     rt.hurtFlash = Math.max(0, rt.hurtFlash - dt);
 
     // ---- beasts, swords, combat, loot
-    this.beasts.setEnv(this.beastEnv(tier));
+    const beastEnvironment = this.beastEnv(tier);
+    if (this.training.active || this.campaign.planetary.active) { beastEnvironment.max = 0; beastEnvironment.spawn = () => null; }
+    this.beasts.setEnv(beastEnvironment);
     const ctx = { player: p, playerAlive: body && rt.invuln <= 0, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
-    this.beasts.update(dt, ctx);
+    if (!this.training.active || !this.training.options.freeze) this.beasts.update(dt, ctx);
+    if (this.training.active) this.training.duel.update(dt);
     this.swords.setup(activePath(s) === 'mind' ? st.swords : 0, s.swordGrade);
     this.swords.update(dt, {
       player: p, camera: this.camera, aimDir: camFwd, aimTarget: aimBeast, beasts: this.beasts.beasts, realm: s.realm,
@@ -933,6 +978,7 @@ export class Game {
       hitBeast: (b, dmg, pos, kind, knock) => this.hitBeast(b, dmg, pos, kind, knock),
       hurtPlayer: (d, pos, shot) => this.hurtPlayer(d, pos, null, false, shot),
     });
+    if (this.training.active) this.training.duel.flush();
     this.loot.update(dt, p, 70 + s.realm * 12, (it) => {
       if (it.kind === 'part') {
         if (!addItem(s, it.data)) {
@@ -970,11 +1016,11 @@ export class Game {
     if (rt.scanner) this.updateScanner(dt);
     if (rt.scanner && rt.inShip) this.putAwayScanner();
     this.updateDeliveries(dt);
-    this.structures.update(dt, this.time);
+    if (!this.training.duel.active) this.structures.update(dt, this.time);
     this.updateDigs(dt);
     if (body) this.pets.update(dt, this.time);
     if (this.placing) this.updatePlacing(dt, alive);
-    this.updateWater(dt, alive);
+    this.updateWater(dt, body);
     this.updateScorch(dt);
     if (this.mode !== 'cutscene') this.cutscene.update(dt);
     this.campaign.update(dt);
@@ -1278,12 +1324,19 @@ export class Game {
     }
     if (boost && p.mode !== 'ground') rt.energy = Math.max(0, rt.energy - 9 * dt);
     p.look(look.x, look.y, { up: p.mode !== 'space' && env.up ? env.up : null });
+    if (alive && !swimming && !this.placing && !this.arts.dash && this.input.hit('dodge')) {
+      if (beginDodge(rt, p, move, env.up, st.walk)) {
+        jump = false;
+        this.particles.burst(p.pos.clone().addScaledVector(env.up, -EYE + 0.2), p.trailColor, 12, 8, 0.3, 0.4);
+      } else if (rt.energy < DODGE.cost) this.denied('Not enough energy to dodge.');
+    }
     p.update(dt, move, {
       up: p.mode !== 'space' ? env.up : null,
       floorR: onWorld ? env.floorR : null,
       gravity: 18,
       jumpSpeed: st.jump,
       jump,
+      dodge: alive && !swimming && rt.dodgeT > 0 ? { dir: rt.dodgeDir, speed: rt.dodgeSpeed } : null,
       speed,
       boost,
       accel: rt.cruise ? 1.6 : 2.6,
@@ -1377,7 +1430,27 @@ export class Game {
       p.pos.copy(sp.applyMatrix4(dk.M));
       p.syncRoot();
     }
+    this.updateFootsteps(dt, env);
     this.hazards(dt, p.pos, env);
+  }
+
+  updateFootsteps(dt, env) {
+    const p = this.player, rt = this.rt;
+    if (!p.grounded || p.mode !== 'ground' || rt.inShip || rt.inVehicle || rt.hp <= 0) { rt.footDistance = 0; return; }
+    const velocity = p.vel.clone();
+    if (env.up) velocity.projectOnPlane(env.up);
+    const speed = velocity.length();
+    if (speed < 0.8) { rt.footDistance = 0; return; }
+    rt.footDistance = (rt.footDistance || 0) + Math.min(speed, 18) * dt;
+    const stride = 1.35 + Math.min(speed, 18) * 0.035;
+    if (rt.footDistance < stride) return;
+    rt.footDistance %= stride;
+    let surface = this.inVenue ? 'interior' : 'ground';
+    if (!this.inVenue && this.frame?.details) for (const st of this.frame.details.settlements) {
+      const local = st.toCity(p.pos);
+      if (st.block?.surfaceAt(local) || st.architecture?.surfaceAt(local) || st.streets?.surfaceAt(local)) { surface = 'paving'; break; }
+    }
+    this.sound.footstep?.(surface, speed);
   }
 
   controlShip(dt, move, look, env, alive) {
@@ -1629,7 +1702,12 @@ export class Game {
     const backstab = kind !== 'poison' && kind !== 'pressure' && this.arts.consumeBackstab();
     const crit = backstab || (kind !== 'pressure' && kind !== 'poison' && Math.random() < this.stats.crit + this.arts.critBonus(kind));
     const temper = kind === 'turret' || kind === 'pet' || kind === 'pressure' || kind === 'ram' ? 0 : ((this.state.gear && this.state.gear.temper[activePath(this.state)]) || 0);
-    const amount = dmg * (backstab ? 3 : crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(b, kind) * (1 + 0.15 * temper);
+    let amount = dmg * (backstab ? 3 : crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(b, kind) * (1 + 0.15 * temper);
+    if (b.planetary && this.campaign.planetary.boss === b) amount *= this.campaign.planetary.brain.vulnerability;
+    if (b.duelist) {
+      amount = this.training.duel.reduceIncoming(amount, kind);
+      if (amount <= 0) { this.dmgNum(pos, this.training.duel.countdown > 0 ? 'GET READY' : 'EVADE', 'xp'); return; }
+    }
     const steal = this.arts.lifesteal();
     if (steal > 0 && !b.static) this.rt.hp = Math.min(this.stats.maxHp, this.rt.hp + amount * steal);
     this.dmgNum(pos, fmt(amount), crit ? 'crit' : kind === 'sword' || kind === 'storm' ? 'sword' : kind === 'poison' ? 'xp' : '');
@@ -1664,6 +1742,8 @@ export class Game {
   }
 
   hurtPlayer(amount, pos, knock, silent = false, shot = null) {
+    if (this.training?.duel?.active && this.training.duel.countdown > 0) return null;
+    if (this.training?.active && this.training.options.god) return null;
     const rt = this.rt;
     if ((this.mode !== 'playing' && this.mode !== 'virtual') || rt.invuln > 0) return null;
     if (!rt.inShip && !silent) {
@@ -1680,7 +1760,8 @@ export class Game {
       this.shipObj.hull -= amount * 0.6;
       if (!silent) {
         rt.shake = Math.min(1.2, rt.shake + 0.4);
-        this.post.fx.damage = Math.min(1, this.post.fx.damage + 0.3);
+        if (this.training?.active) this.hud.simulationHit();
+        else { this.post.fx.damage = Math.min(1, this.post.fx.damage + 0.3); if (this.mode === 'virtual') this.hud.physicalHit(); }
         this.sound.hurt();
       }
       if (this.shipObj.hull > 0) return null;
@@ -1698,13 +1779,15 @@ export class Game {
       this.particles.burst(this.player.pos, new THREE.Color(1.6, 1.2, 2.4), 120, 30, 1.2, 1);
       return null;
     }
+    if (this.training?.duel?.active && rt.hp - amount <= 0) { this.training.duel.finish('lost'); return null; }
     rt.hp -= amount;
     rt.lastHurt = this.time;
     if (!silent) {
       rt.hurtFlash = 0.4;
       rt.medBlock = 0.8;
       rt.shake = Math.min(1.2, rt.shake + 0.5);
-      this.post.fx.damage = Math.min(1, this.post.fx.damage + 0.6);
+      if (this.training?.active) this.hud.simulationHit();
+      else { this.post.fx.damage = Math.min(1, this.post.fx.damage + 0.6); if (this.mode === 'virtual') this.hud.physicalHit(); }
       this.viewmodel.hit();
       this.sound.hurt();
       this.dmgNum(this.player.pos.clone().addScaledVector(this.player.forward(tA), 4), `-${fmt(amount)}`, 'player');
@@ -1726,6 +1809,7 @@ export class Game {
   }
 
   die() {
+    if (this.campaign?.planetary?.onDeath()) return;
     if (this.mode === 'virtual') {
       // killed while logged in: you're torn out of the Virtual Universe
       this.exitVirtual();
@@ -1801,6 +1885,7 @@ export class Game {
   }
 
   onBeastKilled(b) {
+    if (b.duelist) { this.training.duel.finish('won'); return; }
     const s = this.state, rt = this.rt;
     if (b.static) return;
     s.kills++;
@@ -1816,7 +1901,7 @@ export class Game {
     this.loot.spawn(b.pos, essenceFor(b.tier) * cores * this.stats.loot, b.boss ? b.def.accent : 0xff3c7d, Math.min(cores, 12));
     const up = this.env.up || Y;
     this.dmgNum(b.pos.clone().addScaledVector(up, b.radius), `+${fmt(xp)} EXP`, 'xp');
-    if (b.boss) {
+    if (b.boss && !b.planetary) {
       const key = b.bossIndex === FINAL_BOSS ? CORE_KEY : this.star.key;
       if (!s.bosses.includes(key)) s.bosses.push(key);
       if (!s.bosses.includes(this.star.key)) s.bosses.push(this.star.key);
@@ -1850,6 +1935,7 @@ export class Game {
 
   // ------------------------------------------------------ progression --
   addXp(amount) {
+    if (this.training?.active) return;
     const s = this.state;
     s.xp += amount;
     let guard = 0;
@@ -1901,7 +1987,7 @@ export class Game {
     const s = this.state;
     const full = s.stage === 3 && s.xp >= this.stats.xpNeed;
     if (!full || s.realm >= MAX_REALM || this.rt.trib) return { ready: false, blocked: null };
-    if (s.realm === MAX_REALM - 1 && !s.bosses.includes(CORE_KEY)) return { ready: false, blocked: 'PEAK · SLAY THE PRIMORDIAL DEVOURER TO ASCEND' };
+    if (s.realm === MAX_REALM - 1 && !s.bosses.includes(CORE_KEY) && !this.training?.active) return { ready: false, blocked: 'PEAK · SLAY THE PRIMORDIAL DEVOURER TO ASCEND' };
     if ((s.insight || 0) < 1) return { ready: false, blocked: 'BOTTLENECK · SEEK A REALM INSIGHT', bottleneck: true };
     return { ready: true, blocked: null };
   }
@@ -2433,6 +2519,7 @@ export class Game {
   }
 
   beginStory() {
+    if (this.training.active) return this.denied('Return to your real character to begin the story.');
     this.closePanel();
     this.state.nixAwake = false;
     this.campaign.begin();
@@ -2440,11 +2527,14 @@ export class Game {
 
   // ------------------------------------------------ virtual universe --
   enterVirtual() {
+    if (this.campaign?.planetary?.active) return this.denied('The planetary siege is live. You cannot leave your body undefended.');
+    if (this.training.active) { this.training.leave(); return; }
     const rt = this.rt;
     if (this.mode !== 'playing') return;
     rt.meditating = false;
     rt.cruise = false;
     this.mode = 'virtual';
+    this.training.prepare().catch(() => {});
     this.vu.enter(this.width / this.height);
     this.post.renderPass.scene = this.vu.scene;
     this.post.renderPass.camera = this.vu.camera;
@@ -2518,7 +2608,7 @@ export class Game {
 
   startSim() {
     this.menus.closePanel();
-    this.input.lock();
+    this.resume();
     this.vu.startSim();
     this.hud.notify('Simulation running. Hit every target as fast as you can.', 'violet');
   }
@@ -2562,7 +2652,8 @@ export class Game {
     if (!cat || s.coins < cat.price) return this.sound.deny();
     s.coins -= cat.price;
     const eta = this.deliveryEta();
-    s.deliveries.push({ id: `d${Date.now()}`, item, label: cat.name, due: s.playtime + eta });
+    s.deliveries.push({ id: `d${Date.now()}-${s.deliveries.length}`, item, label: cat.name, due: s.playtime + eta,
+      ...(item === 'radar' ? { radarTier: (s.radar ?? -1) + 1 } : {}) });
     this.hud.notify(`Ordered <b>${esc(cat.name)}</b>. A drop pod will reach you in about ${eta} s.`, 'yl');
     this.nix.event('delivery', {}, 0);
     this.sound.confirm();
@@ -2580,28 +2671,31 @@ export class Game {
       { id: 'ore10', name: 'Crate of star metal (10)', desc: 'Pricier than mining, but no smashing required.', price: Math.round(SELL.ore(Math.max(r, 1)) * 10 * 2.6) },
     ];
     const rn = RADARS[(s.radar ?? -1) + 1];
-    if (rn) items.push({ id: 'radar', name: rn.name, desc: rn.desc, price: Math.round(rn.price * fee) });
+    if (rn && !s.deliveries?.some(d => d.item === 'radar')) items.push({ id: 'radar', name: rn.name, desc: rn.desc, price: Math.round(rn.price * fee) });
     return items;
   }
 
-  updateDeliveries() {
+  updateDeliveries(dt = 0.016) {
     const s = this.state;
     if (this.mode !== 'playing' || !s.deliveries || !s.deliveries.length) {
-      for (const pod of this.pods) this.animatePod(pod, 0.016);
       return;
     }
     for (const d of s.deliveries) {
-      if (d.due > s.playtime || this.pods.some((p) => p.delivery === d)) continue;
+      if (d.due > s.playtime) continue;
+      // Couriers rendezvous with a piloted ship instead of stranding its
+      // cargo on the planet below. This also recovers existing overdue pods.
+      if (this.rt.inShip && this.shipObj) { this.receiveDelivery(d, true); continue; }
+      if (this.pods.some((p) => p.delivery === d)) continue;
       this.spawnPod(d);
       this.nix.event('podIncoming', {}, 0);
     }
-    for (const pod of this.pods) this.animatePod(pod, 0.016);
+    for (const pod of this.pods) this.animatePod(pod, dt);
   }
 
   spawnPod(d) {
     const p = this.player, f = this.frame;
     const up = this.env.up ? this.env.up.clone() : p.localUp();
-    const side = new THREE.Vector3(1, 0, 0).projectOnPlane(up).normalize().applyAxisAngle(up, Math.random() * 6.28);
+    const side = new THREE.Vector3(Math.abs(up.x) < 0.9 ? 1 : 0, Math.abs(up.x) < 0.9 ? 0 : 1, 0).projectOnPlane(up).normalize().applyAxisAngle(up, Math.random() * 6.28);
     let land = p.pos.clone().addScaledVector(side, 12);
     if (f && f.terrain) {
       const dd = land.clone().normalize();
@@ -2640,21 +2734,39 @@ export class Game {
   }
 
   openPod(pod) {
+    if (!this.pods.includes(pod) || !pod.landed) return;
     this.campaign.event('pod');
+    this.receiveDelivery(pod.delivery);
+  }
+
+  redirectDelivery(id) {
+    const d = this.state.deliveries.find(d => d.id === id);
+    if (!d || d.due > this.state.playtime) return;
+    for (const pod of [...this.pods]) if (pod.delivery === d) this.removePod(pod);
+    this.hud.notify('Delivery redirected. Return to your body to receive it; ships receive cargo automatically.', 'yl');
+  }
+
+  receiveDelivery(d, inShip = false) {
     const s = this.state;
-    const d = pod.delivery;
+    if (!s.deliveries.includes(d)) return;
     if (d.item === 'heal3') s.pills.heal += 3;
     else if (d.item === 'energy3') s.pills.energy += 3;
     else if (d.item === 'cult1') s.pills.cult += 1;
     else if (d.item === 'ore10') s.ore += 10;
-    else if (d.item === 'radar' && RADARS[(s.radar ?? -1) + 1]) {
-      s.radar = (s.radar ?? -1) + 1;
+    else if (d.item === 'radar') {
+      // Old saves only stored the purchased radar's label. Recover that
+      // exact tier instead of silently upgrading whatever is equipped now.
+      const legacyTier = RADARS.findIndex(r => r.name === d.label);
+      const tier = Number.isInteger(d.radarTier) ? d.radarTier : legacyTier >= 0 ? legacyTier : (s.radar ?? -1) + 1;
+      if (!RADARS[tier]) return;
+      s.radar = Math.max(s.radar ?? -1, tier);
       this.hud.notify(`Installed the <b>${RADARS[s.radar].name}</b>.`, 'violet');
+      this.campaign.event('radar');
     }
     s.deliveries = s.deliveries.filter((x) => x !== d);
-    this.removePod(pod);
+    for (const pod of [...this.pods]) if (pod.delivery === d) this.removePod(pod);
     this.sound.pickup();
-    this.hud.notify(`Unpacked <b>${esc(d.label)}</b>.`, 'green');
+    this.hud.notify(`${inShip ? 'Received aboard your ship' : 'Unpacked'} <b>${esc(d.label)}</b>.`, 'green');
     this.save();
   }
 
@@ -3174,7 +3286,7 @@ export class Game {
     }
     this.arena = { wave, beasts, venue: v, settlement: st, prize: Math.round(priceFor(40, s.realm) * (1 + wave * 0.35)) };
     this.menus.closePanel();
-    this.input.lock();
+    this.resume();
     this.hud.banner('ARENA', `Wave ${wave}`, `<span class="cn">竞技场</span>${n} beasts · prize ${fmt(this.arena.prize)} ◈`, '#ff3c7d', 2.5);
     this.sound.thunder();
   }
@@ -3956,7 +4068,9 @@ export class Game {
     const s = this.state;
     const def = SHIPS[tier];
     const cur = s.ship ? s.ship.tier : -1;
-    if (!def || (tier > 0 && s.realm < 2) || tier !== cur + 1) return this.sound.deny();
+    const replacement = cur >= 0 && tier === cur;
+    if (!def || !Number.isInteger(tier) || (!replacement && tier > 0 && s.realm < 2) || (!replacement && tier !== cur + 1)) return this.sound.deny();
+    if (replacement && this.rt.inShip) return this.denied('Leave your ship before building a replacement hull.');
     if (s.coins < def.coins || s.ore < def.ore || s.essence < def.essence) return this.sound.deny();
     s.coins -= def.coins;
     s.ore -= def.ore;
@@ -3970,6 +4084,12 @@ export class Game {
     } else {
       this.shipObj = new Ship(this.localRoot, tier);
     }
+    if (!this.rt.inShip) {
+      this.shipObj.vel.set(0, 0, 0);
+      this.shipObj.thrust = 0;
+      this.shipObj.dockedAt = null;
+      this.shipObj.landed = false;
+    }
     // a new or upgraded hull is delivered to the pad here
     if (settlement && !this.rt.inShip) {
       const up = settlement.padLocal.clone().normalize();
@@ -3978,13 +4098,20 @@ export class Game {
       this.shipObj.placeAt(settlement.padLocal.clone().addScaledVector(up, this.shipObj.gearHeight), look, up);
     } else if (!this.rt.inShip) {
       const p = this.player;
-      this.shipObj.placeAt(p.pos.clone().add(p.forward().multiplyScalar(80)), p.pos, p.localUp());
+      let pos = p.pos.clone().add(p.forward().multiplyScalar(80));
+      const up = f?.terrain ? pos.clone().normalize() : p.localUp();
+      if (f?.terrain) {
+        pos = up.clone().multiplyScalar(f.floorRadius(up.x, up.y, up.z) + this.shipObj.gearHeight);
+        this.shipObj.landed = true;
+      }
+      this.shipObj.placeAt(pos, p.pos, up);
     }
     s.ship = { tier, star: this.star.key, body: f ? f.body.id : null, pos: this.shipObj.pos.toArray(), quat: this.shipObj.quat.toArray(), landed: this.shipObj.landed, hull: this.shipObj.hull };
     this.campaign.event('ship');
     this.sound.breakthrough();
     this.nix.event('ship', {}, 1);
     this.hud.banner('SHIPYARD', def.name, `<span class="cn">${def.cn}</span>Warp range ${def.range} light years · waiting on the pad`, hex(def.color), 4);
+    if (replacement) this.hud.notify(`Built a replacement <b>${esc(def.name)}</b>. Your registered ship is now here, fully repaired.`, 'green');
     this.save();
   }
 
@@ -4078,6 +4205,18 @@ export class Game {
     this.sound.lock();
   }
 
+  targetExpedition(key) {
+    if (this.training.active) return this.denied('Return to your physical body to chart an expedition.');
+    const star = getStar(key);
+    const dist = star.pos.distanceTo(this.star.pos);
+    if (dist < 0.01) return this.hud.notify('You are already in this system. Target one of its planet markers.', 'yl');
+    this.rt.nav = { kind: 'star', star, dist, label: star.name };
+    this.rt.warpCharge = 0;
+    this.rt.cruise = false;
+    const range = this.shipObj ? SHIPS[this.shipObj.tier].range : 0;
+    this.hud.notify(`Expedition charted: <b>${esc(star.name)}</b> · ${dist.toFixed(1)} light years. ${dist <= range ? 'Board your ship and engage warp.' : 'Use a longer-range ship or reach it through shorter jumps.'}`, 'yl');
+  }
+
   engage() {
     const rt = this.rt;
     if (rt.warpCharge > 0) {
@@ -4100,6 +4239,8 @@ export class Game {
   }
 
   tryWarp(star, dist) {
+    if (this.campaign?.planetary?.active) return this.denied('The World Rend disrupts interstellar warp. Defend the planet first.');
+    if (this.training.active) return this.denied('Training is limited to the Prism world. Return to the Virtual Universe to leave.');
     const rt = this.rt;
     if (!rt.inShip || !this.shipObj) return this.denied('You need a starship to cross the void between stars. Build one at a shipyard.');
     const range = SHIPS[this.shipObj.tier].range;
@@ -4147,6 +4288,21 @@ export class Game {
     });
   }
 
+  updateWarpLines(dt, intensity) {
+    const arr = this.warpLines.geometry.attributes.position.array;
+    const speed = 500 + intensity * 2600;
+    for (let i = 0; i < this.warpData.length; i++) {
+      const d = this.warpData[i];
+      d.z += speed * dt;
+      if (d.z > -10) d.z -= 700;
+      const len = 4 + intensity * 110;
+      arr[i * 6] = d.x; arr[i * 6 + 1] = d.y; arr[i * 6 + 2] = d.z;
+      arr[i * 6 + 3] = d.x; arr[i * 6 + 4] = d.y; arr[i * 6 + 5] = d.z - len;
+    }
+    this.warpLines.geometry.attributes.position.needsUpdate = true;
+    this.warpLines.material.opacity = intensity;
+  }
+
   updateWarp(dt) {
     const w = this.warp, p = this.player;
     let inten, fade;
@@ -4169,18 +4325,7 @@ export class Game {
     document.getElementById('fade').style.opacity = fade;
     this.camera.fov = settings.get('fov') + inten * 40;
     this.camera.updateProjectionMatrix();
-    const arr = this.warpLines.geometry.attributes.position.array;
-    const speed = 500 + inten * 2600;
-    for (let i = 0; i < this.warpData.length; i++) {
-      const d = this.warpData[i];
-      d.z += speed * dt;
-      if (d.z > -10) d.z -= 700;
-      const len = 4 + inten * 110;
-      arr[i * 6] = d.x; arr[i * 6 + 1] = d.y; arr[i * 6 + 2] = d.z;
-      arr[i * 6 + 3] = d.x; arr[i * 6 + 4] = d.y; arr[i * 6 + 5] = d.z - len;
-    }
-    this.warpLines.geometry.attributes.position.needsUpdate = true;
-    this.warpLines.material.opacity = inten;
+    this.updateWarpLines(dt, inten);
     if (this.shipObj) {
       this.shipObj.vel.copy(this.shipObj.forward()).multiplyScalar(w.swapped ? 400 * inten : 2000 + inten * 20000);
       this.shipObj.pos.addScaledVector(this.shipObj.vel, dt);
@@ -4332,6 +4477,7 @@ export class Game {
     const nav = rt.nav && rt.nav.kind !== 'star' ? rt.nav : null;
     this.hud.update(dt, {
       state: s, stats: this.stats, rt, loc, density, medRate, bt: this.breakthroughStatus(), path: activePath(s),
+      canDodge: this.mode === 'playing' && p.mode === 'ground' && p.grounded && !rt.swimming && !rt.inShip && !rt.inVehicle && !this.placing && !this.arts.dash,
       boss: this.beasts.liveBoss, target, locked: !!rt.lock && target === rt.lock, targetDist: target ? target.pos.distanceTo(p.pos) : 0,
       nav, navDist: nav ? Math.max(0, nav.world().distanceTo(camWorld) - nav.arrive * 0.5) : 0, cruise: rt.cruise,
       swordStates: this.swords.states(), formation: this.swords.formation, controlRange: 260 + 50 * s.realm, speed,
@@ -4404,7 +4550,8 @@ export class Game {
       if (m.kind === 'hotspot' && dist > 2e7) continue;
       const surf = Math.max(0, dist - (m.radius || 0));
       const nav = !!rt.nav && rt.nav.kind === 'marker' && rt.nav.key === m.key;
-      list.push({ key: m.key, kind: m.kind === 'moon' ? 'planet' : m.kind, label: esc(m.label), sub: fmtKm(surf), pos: world, dist, edge: nav, nav, compass: nav ? '#ffe44d' : null });
+      const size = m.planet ? ` · Ø ${(m.planet.R / 500).toLocaleString('en-US', { maximumFractionDigits: 1 })} KM` : '';
+      list.push({ key: m.key, kind: m.kind === 'moon' ? 'planet' : m.kind, label: esc(m.label), sub: `${fmtKm(surf)}${size}`, pos: world, dist, edge: nav, nav, compass: nav ? '#ffe44d' : null });
     }
     const f = this.frame;
     if (f && f.details) {
@@ -4455,6 +4602,12 @@ export class Game {
       const d = this.shipObj.pos.distanceTo(p.pos);
       list.push({ key: 'ship', kind: 'gate', label: 'YOUR SHIP', sub: fmtKm(d), pos: this.toWorld(this.shipObj.pos), dist: d, edge: true, compass: '#b98cff' });
     }
+    for (const pod of this.pods) {
+      const pos = pod.group.position.clone().addScaledVector(pod.up, 3);
+      const d = pos.distanceTo(origin);
+      list.push({ key: `delivery:${pod.delivery.id}`, kind: 'gate', label: esc(pod.delivery.label),
+        sub: `${pod.landed ? 'DELIVERY POD' : 'INCOMING DELIVERY'} · ${fmtKm(d)}`, pos: this.toWorld(pos), dist: d, edge: true, compass: '#ffe44d' });
+    }
     const story = this.mode === 'playing' ? this.storyTarget() : null;
     if (story) {
       const d = story.distanceTo(origin);
@@ -4489,6 +4642,7 @@ export class Game {
 
   // -------------------------------------------------------------- save --
   save() {
+    if (this.training?.active) return this.training.physical?.save() ?? false;
     const s = this.state;
     if (this.mode === 'loading' || this.mode === 'warping' || !this.system) return;
     const p = this.player;
@@ -4508,6 +4662,13 @@ export class Game {
         pos: this.shipObj.pos.toArray(), quat: this.shipObj.quat.toArray(), landed: this.shipObj.landed, hull: this.shipObj.hull,
       };
     }
-    saveState(s);
+    const saved = saveState(s);
+    if (!saved && !this.saveFailed) {
+      this.hud.notify('Progress could not be saved. Browser storage may be full or unavailable. Keep this tab open and free up storage before leaving.', 'red');
+    } else if (saved && this.saveFailed) {
+      this.hud.notify('Saving restored. Your progress has been saved.', 'green');
+    }
+    this.saveFailed = !saved;
+    return saved;
   }
 }

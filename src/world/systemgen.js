@@ -133,7 +133,7 @@ function makeBody(r, def) {
     seed: def.seed,
     tier: def.tier,
     landable: info.landable,
-    amp: def.type === 'gas' ? 0 : radius * AMP[def.type],
+    amp: def.type === 'gas' ? 0 : def.amp ?? radius * AMP[def.type],
     sea: null,
     atmo: null,
     ocean: null,
@@ -153,7 +153,7 @@ function makeBody(r, def) {
     pois: [],
   };
   if (info.atmo && !(def.kind === 'moon' && def.type === 'rocky')) {
-    body.atmo = { color: info.atmo, height: ATMO_HEIGHT[def.type] };
+    body.atmo = { color: info.atmo, height: def.atmoHeight ?? ATMO_HEIGHT[def.type] };
   }
   if (info.ocean) {
     body.ocean = info.ocean === 'lava' ? { lava: true, color: 0xff5a1a } : { lava: false, color: info.ocean };
@@ -188,6 +188,52 @@ export function generateSystem(star) {
     boss: star.boss,
   };
   const tierOf = () => Math.max(0, star.tier + (r() - 0.5) * 0.6);
+
+  // A dedicated expedition system adds genuinely vast worlds without
+  // resizing existing planets or moving saved characters/buildings.
+  if (star.key === 'atlas-reach') {
+    sys.starRadius = 1.5e6;
+    const defs = [
+      { id: 'atlas', name: 'Atlas', type: 'crystal', radius: 6.4e6, a: 180e6, amp: 8000, atmoHeight: 80000 / 6.4e6, tier: 3.4, spin: 86400, seed: 71001 },
+      { id: 'khamsin', name: 'Khamsin', type: 'desert', radius: 3e6, a: 420e6, amp: 6000, atmoHeight: 50000 / 3e6, tier: 3.7, spin: 72000, seed: 71002 },
+      { id: 'behemoth', name: 'Behemoth', type: 'gas', radius: 48e6, a: 1.2e9, tier: 4, spin: 43200, seed: 71003, rings: true },
+      { id: 'behemoth-m0', parent: 'behemoth', name: 'Pale Watch', type: 'rocky', radius: 400000, a: 180e6, amp: 5000, tier: 3.9, spin: 100000, seed: 71004 },
+    ];
+    for (const def of defs) {
+      const body = makeBody(r, { ...def, kind: def.parent ? 'moon' : 'planet', radius: def.radius / S, a: def.a / S,
+        e: 0.01, inc: 0.02, rate: def.parent ? 0.000008 : orbitRate(def.a / S), tilt: 0.15 });
+      body.scaleClass = 'colossal';
+      if (body.landable) {
+        const site = { ...findSite(body, 300, 20, false), radius: 300, name: `${body.name} Expedition Base`, size: 'outpost' };
+        body.sites.outposts.push(site);
+        // A local expedition region gives the landing area discoveries;
+        // distant regions remain wilderness instead of millions of props.
+        addPois(r, body, { ruin: 4, spring: 4, ore: 12, nest: 4, wreck: 4, obelisk: 3, camp: 2 });
+        const up = [site.x, site.y, site.z];
+        const east = [-up[2], 0, up[0]], el = Math.hypot(...east) || 1;
+        east.forEach((v, i) => { east[i] = v / el; });
+        const north = [up[1] * east[2] - up[2] * east[1], up[2] * east[0] - up[0] * east[2], up[0] * east[1] - up[1] * east[0]];
+        body.pois.slice(0, 16).forEach((poi, i) => {
+          const angle = i * 2.399963, distance = 1800 + i * 850;
+          const dir = up.map((v, k) => v + (east[k] * Math.cos(angle) + north[k] * Math.sin(angle)) * distance / body.radius);
+          const length = Math.hypot(...dir);
+          poi.dir = dir.map(v => v / length);
+        });
+      }
+      sys.bodies.push(body);
+    }
+    sys.stations.push({ id: 'atlas-gateway', name: 'Atlas Gateway', parent: 'atlas', a: 7.0e6, rate: 0.00001, phase: 0.6, inc: 0.05 });
+    return sys;
+  }
+
+  if (star.key === 'virtual-training') {
+    sys.starRadius = 52000 * S;
+    const body = makeBody(r, { id: 'prism-training', kind: 'planet', name: 'Prism Training World', type: 'crystal', radius: 4000, a: 1.15e6, tier: 0, seed: 8675309, spin: 3600, tilt: 0.1, phase: 0.6 });
+    body.sites.city = { ...findSite(body, 420, 20, true), radius: 420, name: 'Simulation Hub', main: true, size: 'city' };
+    addPois(r, body, { ruin: 2, spring: 3, ore: 8, nest: 2, wreck: 2, obelisk: 2, camp: 1 });
+    sys.bodies.push(body);
+    return sys;
+  }
 
   if (isHome) {
     sys.starRadius = 52000;

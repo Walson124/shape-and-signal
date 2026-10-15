@@ -90,7 +90,7 @@ export class VirtualWorld {
     this.core.add(halo);
     this.core.position.y = 16;
     s.add(this.core);
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(10, 12, 1.2, 6), new THREE.MeshBasicMaterial({ color: 0x0c1020 }));
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(10, 12, 1.2, 32), new THREE.MeshBasicMaterial({ color: 0x0c1020 }));
     base.position.y = 0.6;
     s.add(base);
     s.add(new THREE.Mesh(new THREE.TorusGeometry(11, 0.15, 4, 6).rotateX(Math.PI / 2).translate(0, 1.25, 0), ringMat(0x3ef2ff)));
@@ -106,8 +106,8 @@ export class VirtualWorld {
       g.position.set(Math.cos(k.a) * R, 0, Math.sin(k.a) * R);
       g.lookAt(0, 0, 0);
       const c = new THREE.Color(k.color);
-      g.add(new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.6, 0.8, 6), new THREE.MeshBasicMaterial({ color: 0x0c1020 })));
-      g.add(new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.1, 4, 6).rotateX(Math.PI / 2).translate(0, 0.85, 0), new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(2.4) })));
+      g.add(new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.6, 0.8, 24), new THREE.MeshBasicMaterial({ color: 0x0c1020 })));
+      g.add(new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.1, 4, 24).rotateX(Math.PI / 2).translate(0, 0.85, 0), new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(2.4) })));
       const panel = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.12), new THREE.MeshBasicMaterial({ map: signTexture(`${k.name.toUpperCase()} · ${k.cn}`, k.color), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, color: new THREE.Color(1.8, 1.8, 1.8) }));
       panel.position.set(0, 5.2, 0);
       g.add(panel);
@@ -156,6 +156,7 @@ export class VirtualWorld {
     while (this.targets.children.length) {
       const t = this.targets.children[0];
       this.targets.remove(t);
+      t.geometry.dispose();
       t.material.dispose();
     }
   }
@@ -231,6 +232,7 @@ export class VirtualWorld {
         if (hits.length) {
           const t = hits[0].object;
           this.targets.remove(t);
+          t.geometry.dispose();
           t.material.dispose();
           this.sim.left--;
           if (this.sim.left > 0) this.spawnTarget();

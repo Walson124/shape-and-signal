@@ -184,6 +184,15 @@ export class AudioEngine {
   }
 
   // ------------------------------------------------------------ effects --
+  footstep(surface = 'ground', speed = 5) {
+    if (!this.throttle('footstep', 0.16)) return;
+    const hard = surface === 'paving' || surface === 'interior';
+    const strength = Math.min(1.4, 0.7 + speed / 18);
+    this.tone({ freq: (hard ? 155 : 85) + Math.random() * 15, slide: -45, dur: 0.055, vol: 0.035 * strength, filter: 900 });
+    this.noise({ dur: hard ? 0.045 : 0.09, vol: (hard ? 0.035 : 0.055) * strength, freq: hard ? 2000 : 750,
+      type: 'bandpass', q: 0.6 });
+  }
+
   bolt() {
     if (!this.throttle('bolt', 0.05)) return;
     this.tone({ freq: 1400, type: 'triangle', dur: 0.1, vol: 0.05, slide: -1000 });

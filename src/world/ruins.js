@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bevelBox } from './geometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng.js';
 
@@ -47,11 +48,12 @@ function ruinTextures() {
 }
 
 function uvBox(w, h, d) {
-  const g = new THREE.BoxGeometry(w, h, d);
+  const g = bevelBox(w, h, d);
   const uv = g.attributes.uv, n = g.attributes.normal;
   for (let i = 0; i < uv.count; i++) {
-    const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i));
-    uv.setXY(i, uv.getX(i) * (ay > 0.5 ? w : ax > 0.5 ? d : w) / 32, uv.getY(i) * (ay > 0.5 ? d : h) / 26);
+    const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i));
+    const roof = ay >= ax && ay >= az;
+    uv.setXY(i, uv.getX(i) * (roof ? w : ax >= az ? d : w) / 32, uv.getY(i) * (roof ? d : h) / 26);
   }
   return g;
 }
@@ -113,7 +115,7 @@ export function buildRuinField(site, planet, opts = {}) {
       put(parts.concrete, uvBox(sw, sh, sd), x + (r() - 0.5) * (w - sw), gy + h + sh / 2 - 0.5, z + (r() - 0.5) * (d - sd), tilt, ry, tilt * 0.5);
     }
     // exposed floor slabs sticking out
-    for (let k = 0; k < 3; k++) put(parts.dark, new THREE.BoxGeometry(w + 3, 0.6, d * (0.3 + r() * 0.5)), x, gy + h * (0.3 + r() * 0.6), z, tilt, ry, tilt * 0.5);
+    for (let k = 0; k < 3; k++) put(parts.dark, bevelBox(w + 3, 0.6, d * (0.3 + r() * 0.5)), x, gy + h * (0.3 + r() * 0.6), z, tilt, ry, tilt * 0.5);
     // moss on top
     for (let k = 0; k < 4; k++) {
       const m = new THREE.IcosahedronGeometry(1.5 + r() * 2.5, 0);
@@ -156,15 +158,15 @@ export function buildRuinField(site, planet, opts = {}) {
       if (i === broken) {
         // the collapsed span leans down to the ground
         const g2 = groundY(mx, mz);
-        put(parts.concrete, new THREE.BoxGeometry(18, 1.6, span), mx, g2 + deckY * 0.45, mz, 0.5, -a + Math.PI / 2, 0);
+        put(parts.concrete, bevelBox(18, 1.6, span), mx, g2 + deckY * 0.45, mz, 0.5, -a + Math.PI / 2, 0);
         continue;
       }
-      put(parts.concrete, new THREE.BoxGeometry(18, 1.6, span + 0.2), mx, deckY, mz, 0, -a + Math.PI / 2, 0);
-      put(parts.rust, new THREE.BoxGeometry(0.3, 1, span), mx + Math.sin(a) * 8.6, deckY + 1.2, mz - Math.cos(a) * 8.6, 0, -a + Math.PI / 2, 0);
-      put(parts.rust, new THREE.BoxGeometry(0.3, 1, span), mx - Math.sin(a) * 8.6, deckY + 1.2, mz + Math.cos(a) * 8.6, 0, -a + Math.PI / 2, 0);
+      put(parts.concrete, bevelBox(18, 1.6, span + 0.2), mx, deckY, mz, 0, -a + Math.PI / 2, 0);
+      put(parts.rust, bevelBox(0.3, 1, span), mx + Math.sin(a) * 8.6, deckY + 1.2, mz - Math.cos(a) * 8.6, 0, -a + Math.PI / 2, 0);
+      put(parts.rust, bevelBox(0.3, 1, span), mx - Math.sin(a) * 8.6, deckY + 1.2, mz + Math.cos(a) * 8.6, 0, -a + Math.PI / 2, 0);
       for (let k = -1; k <= 1; k++) collider(mx + dx * k * 10, mz + dz * k * 10, 9, 1.8, deckY - 1);
       // abandoned cars on the deck
-      if (r() < 0.6) put(parts.rust, new THREE.BoxGeometry(2, 1.4, 4.4), mx + (r() - 0.5) * 10, deckY + 1.5, mz + (r() - 0.5) * 6, 0, -a + r() * 0.5, 0);
+      if (r() < 0.6) put(parts.rust, bevelBox(2, 1.4, 4.4), mx + (r() - 0.5) * 10, deckY + 1.5, mz + (r() - 0.5) * 6, 0, -a + r() * 0.5, 0);
     }
   }
 
@@ -174,8 +176,8 @@ export function buildRuinField(site, planet, opts = {}) {
     if (!free(x, z, 3)) continue;
     const gy = groundY(x, z);
     const ry = r() * Math.PI * 2, roll = r() < 0.2 ? Math.PI * (0.4 + r() * 0.6) : 0;
-    put(parts.rust, new THREE.BoxGeometry(2.1, 1.1, 4.6), x, gy + 0.7, z, 0, ry, roll);
-    put(parts.dark, new THREE.BoxGeometry(1.9, 0.8, 2.4), x, gy + 1.5 * (roll ? -0.1 : 1), z, 0, ry, roll);
+    put(parts.rust, bevelBox(2.1, 1.1, 4.6), x, gy + 0.7, z, 0, ry, roll);
+    put(parts.dark, bevelBox(1.9, 0.8, 2.4), x, gy + 1.5 * (roll ? -0.1 : 1), z, 0, ry, roll);
     collider(x, z, 2.4, 1.6, gy);
   }
   for (let i = 0; i < 40; i++) {
@@ -192,12 +194,12 @@ export function buildRuinField(site, planet, opts = {}) {
     const s = 1 + r() * 0.6;
     // a toppled guardian statue: head, hand and a ring
     put(parts.stone, new THREE.SphereGeometry(9 * s, 14, 10), x, gy + 4 * s, z);
-    put(parts.stone, new THREE.BoxGeometry(14 * s, 3 * s, 7 * s), x, gy + 7 * s, z + 3 * s, 0.3, 0, 0);
+    put(parts.stone, bevelBox(14 * s, 3 * s, 7 * s), x, gy + 7 * s, z + 3 * s, 0.3, 0, 0);
     put(parts.stone, new THREE.ConeGeometry(4 * s, 9 * s, 6), x, gy + 15 * s, z - 2 * s, -0.4, 0, 0);
     const hx = x + 22 * s, hz = z - 8 * s;
     const hy = groundY(hx, hz);
-    put(parts.stone, new THREE.BoxGeometry(6 * s, 16 * s, 5 * s), hx, hy + 6 * s, hz, 0.25, 0.4, 0.15);
-    for (let f = 0; f < 4; f++) put(parts.stone, new THREE.BoxGeometry(1.4 * s, 6 * s, 1.4 * s), hx - 2 * s + f * 1.4 * s, hy + 16 * s, hz + 0.5 * s, 0.4, 0.4, 0);
+    put(parts.stone, bevelBox(6 * s, 16 * s, 5 * s), hx, hy + 6 * s, hz, 0.25, 0.4, 0.15);
+    for (let f = 0; f < 4; f++) put(parts.stone, bevelBox(1.4 * s, 6 * s, 1.4 * s), hx - 2 * s + f * 1.4 * s, hy + 16 * s, hz + 0.5 * s, 0.4, 0.4, 0);
     put(parts.glow, new THREE.TorusGeometry(1.4 * s, 0.35 * s, 6, 16), hx - 0.6 * s, hy + 17 * s, hz + 0.5 * s, Math.PI / 2, 0.4, 0);
     collider(x, z, 10 * s, 14 * s, gy);
     collider(hx, hz, 4 * s, 20 * s, hy);
@@ -206,8 +208,8 @@ export function buildRuinField(site, planet, opts = {}) {
     const gy = groundY(x, z);
     const a = r() * Math.PI * 2;
     put(parts.dark, new THREE.CylinderGeometry(5, 5, 60, 14), x, gy + 2, z, Math.PI / 2 - 0.1, a, 0.15);
-    put(parts.dark, new THREE.BoxGeometry(46, 1.2, 9), x, gy + 1, z, 0.2, a, 0.25);
-    put(parts.dark, new THREE.BoxGeometry(1.2, 12, 8), x + Math.sin(a) * 28, gy + 6, z + Math.cos(a) * 28, 0, a, 0.4);
+    put(parts.dark, bevelBox(46, 1.2, 9), x, gy + 1, z, 0.2, a, 0.25);
+    put(parts.dark, bevelBox(1.2, 12, 8), x + Math.sin(a) * 28, gy + 6, z + Math.cos(a) * 28, 0, a, 0.4);
     put(parts.glow, new THREE.SphereGeometry(0.5, 6, 4), x + Math.sin(a) * 31, gy + 11, z + Math.cos(a) * 31);
     for (let k = -2; k <= 2; k++) collider(x + Math.sin(a) * k * 12, z + Math.cos(a) * k * 12, 5.5, 6, gy - 2);
   }
@@ -218,8 +220,8 @@ export function buildRuinField(site, planet, opts = {}) {
     const gy = groundY(x, z);
     const ry = r() * Math.PI * 2;
     put(parts.concrete, uvBox(12, 6, 9), x, gy + 2.5, z, 0, ry, 0);
-    put(parts.dark, new THREE.BoxGeometry(4, 3.4, 0.6), x + Math.sin(ry) * 4.6, gy + 1.9, z + Math.cos(ry) * 4.6, 0, ry, 0);
-    put(parts.glow, new THREE.BoxGeometry(1.2, 0.8, 0.2), x + Math.sin(ry) * 4.95 + Math.cos(ry) * 2.8, gy + 1.6, z + Math.cos(ry) * 4.95 - Math.sin(ry) * 2.8, 0, ry, 0);
+    put(parts.dark, bevelBox(4, 3.4, 0.6), x + Math.sin(ry) * 4.6, gy + 1.9, z + Math.cos(ry) * 4.6, 0, ry, 0);
+    put(parts.glow, bevelBox(1.2, 0.8, 0.2), x + Math.sin(ry) * 4.95 + Math.cos(ry) * 2.8, gy + 1.6, z + Math.cos(ry) * 4.95 - Math.sin(ry) * 2.8, 0, ry, 0);
     collider(x, z, 6.8, 5.5, gy);
     const sx = x + Math.sin(ry) * 9, sz = z + Math.cos(ry) * 9;
     services.push({ kind: 'lore', name: 'Old Concord Terminal', pos: toLocal(sx, groundY(sx, sz) + 1.6, sz), range: 6, lore: site.index });

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { REALMS, STAGES, MAX_REALM, PILLS, realmOf } from '../game/data.js';
 import { PATHS, TECHS, knows, ownedPaths } from '../game/paths.js';
 import { settings } from '../core/settings.js';
+import { DODGE } from '../game/evasion.js';
 import { codeLabel } from '../core/bindings.js';
 
 export function fmt(n) {
@@ -79,6 +80,20 @@ export class HUD {
     this.el.hud.classList.toggle('hidden', !v);
   }
 
+  simulationHit() {
+    const el = document.getElementById('simulation-hit');
+    el.classList.remove('hit-flash');
+    void el.offsetWidth;
+    el.classList.add('hit-flash');
+  }
+
+  physicalHit() {
+    const el = document.getElementById('physical-hit');
+    el.classList.remove('hit-flash');
+    void el.offsetWidth;
+    el.classList.add('hit-flash');
+  }
+
   buildSkills(pathId) {
     this.path = pathId;
     const P = PATHS[pathId] || PATHS.fist;
@@ -94,6 +109,7 @@ export class HUD {
     const slots = [
       ...this.techSlots.map((t) => ({ id: t.id, key: t.key, name: short(t.id), cn: TECHS[t.id].cn })),
       { sep: true },
+      { id: 'dodge', key: key('dodge'), name: 'Dodge', cn: '闪避' },
       { id: 'meditate', key: key('cultivate'), name: 'Cultivate', cn: '修炼' },
       { id: 'breakthrough', key: key('breakthrough'), name: 'Break', cn: '突破' },
       { sep: true },
@@ -109,6 +125,7 @@ export class HUD {
         continue;
       }
       d.className = 'skill';
+      if (s.id === 'dodge') d.title = `Dodge: ${DODGE.cost} energy. Move to choose a direction; standing still dodges backward. Brief protection, ${DODGE.cooldown}s cooldown.`;
       d.innerHTML = `<div class="s-cd"></div><span class="s-key">${esc(s.key)}</span><span class="s-cn">${s.cn}</span><span class="s-name">${esc(s.name)}</span>${s.pill ? '<span class="s-count"></span>' : ''}`;
       this.el.skills.appendChild(d);
       this.skillEls[s.id] = { el: d, cd: d.querySelector('.s-cd'), count: d.querySelector('.s-count'), wasCd: false };
@@ -144,6 +161,11 @@ export class HUD {
       s.wasCd = cd > 0;
     }
     this.skillEls.meditate.el.classList.toggle('active', rt.meditating);
+    const dodge = this.skillEls.dodge;
+    dodge.cd.style.setProperty('--p', `${Math.min(100, (rt.dodgeCd / DODGE.cooldown) * 100)}%`);
+    dodge.el.classList.toggle('active', rt.dodgeT > 0);
+    dodge.el.classList.toggle('low', rt.energy < DODGE.cost);
+    dodge.el.classList.toggle('locked', !info.canDodge);
     this.skillEls.breakthrough.el.classList.toggle('active', info.bt.ready);
     this.skillEls.breakthrough.el.classList.toggle('locked', !info.bt.ready);
     for (const k of Object.keys(PILLS)) {
@@ -174,6 +196,7 @@ export class HUD {
     if (boss) {
       e['boss-bar'].classList.remove('hidden');
       e['boss-name'].textContent = boss.name;
+      e['boss-bar'].querySelector('.boss-tag').textContent = boss.planetary ? 'WORLD THREAT' : 'OVERLORD';
       e['boss-cn'].textContent = boss.cn;
       const pct = `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%`;
       e['boss-fill'].style.width = pct;
@@ -210,7 +233,7 @@ export class HUD {
     const bt = e['bt-ready'];
     if (info.bt.ready) {
       bt.classList.remove('hidden', 'blocked');
-      bt.innerHTML = 'BREAKTHROUGH READY · PRESS <kbd>B</kbd>';
+      bt.innerHTML = `BREAKTHROUGH READY · PRESS <kbd>${esc(codeLabel(settings.key('breakthrough')))}</kbd>`;
     } else if (info.bt.blocked) {
       bt.classList.remove('hidden');
       bt.classList.add('blocked');
@@ -263,6 +286,10 @@ export class HUD {
       e['t-name'].textContent = tgt.name;
       e['t-cn'].textContent = tgt.cn;
       e['t-realm'].innerHTML = `<span class="${dangerClass(tgt.tier, state.realm)}">${realmOf(tgt.tier).name.toUpperCase()}</span>${info.locked ? ' <span class="mg">· LOCKED</span>' : ''}`;
+      if (tgt.state === 'windup') e['t-realm'].innerHTML += ' <span class="red">· ATTACK INCOMING</span>';
+      else if (tgt.state === 'charge') e['t-realm'].innerHTML += ' <span class="red">· CHARGING</span>';
+      else if (tgt.duelist && tgt.state === 'guard') e['t-realm'].innerHTML += ' <span class="gold">· GUARDING</span>';
+      else if (tgt.duelist && tgt.state === 'evade') e['t-realm'].innerHTML += ' <span class="cy">· DODGING</span>';
       e['t-dist'].textContent = `${fmtDist(info.targetDist)}M`;
     }
     const status = [];

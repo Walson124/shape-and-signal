@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bevelBox } from '../world/geometry.js';
 import { rimMaterial } from '../world/models.js';
 
 // Procedural planet-bound beasts. Every builder works in a unit frame where
@@ -14,7 +15,7 @@ function hide(color, accent, opts = {}) {
     emissiveIntensity: opts.emissive ?? 0.05,
     metalness: opts.metal ?? 0.15,
     roughness: opts.rough ?? 0.7,
-    flatShading: opts.flat ?? true,
+    flatShading: opts.flat ?? false,
     rim: accent,
     rimPower: 2.6,
     rimStrength: opts.rim ?? 0.45,
@@ -74,10 +75,12 @@ function buildQuad(spec) {
   head.position.set(0, bodyY + P.body[1] * 0.45, P.body[2] * 0.9 + P.neck);
   const skull = new THREE.Mesh(new THREE.SphereGeometry(P.head, 10, 8), mat);
   head.add(skull);
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(P.head * 0.9, P.head * 0.7, P.snout * 1.6), dark);
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), dark);
+  snout.scale.set(P.head * 0.45, P.head * 0.35, P.snout * 0.8);
   snout.position.set(0, -P.head * 0.2, P.head * 0.6 + P.snout * 0.5);
   head.add(snout);
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(P.head * 0.8, P.head * 0.25, P.snout * 1.4), dark);
+  const jaw = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), dark);
+  jaw.scale.set(P.head * 0.4, P.head * 0.125, P.snout * 0.7);
   jaw.position.set(0, -P.head * 0.6, P.head * 0.5 + P.snout * 0.45);
   head.add(jaw);
   eyes(head, spec.accent, P.head * 0.45, P.head * 0.2, P.head * 0.75, P.head * 0.16);
@@ -119,7 +122,7 @@ function buildQuad(spec) {
   }
   if (P.plates) {
     for (let i = 0; i < 4; i++) {
-      const pl = new THREE.Mesh(new THREE.BoxGeometry(P.body[0] * 1.6, 0.07, 0.3), dark);
+      const pl = new THREE.Mesh(bevelBox(P.body[0] * 1.6, 0.07, 0.3), dark);
       pl.position.set(0, bodyY + P.body[1] * 0.75, P.body[2] * (0.5 - i * 0.35));
       pl.rotation.x = 0.15;
       rig.add(pl);
@@ -217,7 +220,7 @@ function buildAvian(spec) {
     const w = new THREE.Mesh(wingGeo, wingMat);
     if (s < 0) w.scale.x = -1;
     pivot.add(w);
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.03, 0.03), accent);
+    const edge = new THREE.Mesh(bevelBox(2.0, 0.03, 0.03), accent);
     edge.position.set(s * 1.0, 0, 0.05);
     edge.rotation.y = s * -0.18;
     pivot.add(edge);
@@ -271,7 +274,8 @@ function buildSerpent(spec) {
     segs.push({ m, r, z: 1.1 - t * 2.6 });
   }
   const head = segs[0].m;
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.6), dark);
+  const jaw = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), dark);
+  jaw.scale.set(0.25, 0.06, 0.3);
   jaw.position.set(0, -0.5, 0.6);
   head.add(jaw);
   for (const s of [-1, 1]) {

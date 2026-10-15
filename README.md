@@ -28,6 +28,7 @@ Every key can be changed in Settings › Controls. The defaults are:
 | Jump · double-tap to fly | Space |
 | Sink while flying | X |
 | Primary attack · secondary | Left mouse · right mouse |
+| Dodge (move to choose direction) | Left Ctrl |
 | Techniques 1–3 · ultimate | Q R F · V |
 | Star Step blink (Stellar realm) | Left Alt |
 | Sword formation (Mind Control) | Z |
@@ -80,7 +81,45 @@ Your ring holds **Nix 尼克斯**, an ancient and very sarcastic intelligence. N
 - **Real star systems.** Planets follow inclined elliptical orbits. Systems have moons, asteroid belts, comets, nebulae and orbital stations you can land on.
 - **An endless galaxy.** Stars are generated from their position in space, so the galaxy never runs out. Every star in the sky is a real system you can warp to. Danger rises with distance from home, across five regions with their own Overlords.
 
+## Prism Training World
+
+Press **O** to enter the Virtual Universe, visit the **Simulator** kiosk, and choose **Enter training world**. Prism is a single crystal planet with cities, discoveries and space for combat, flight, building and taming experiments.
+
+Entry uses a warp corridor from the Virtual Universe, with the destination preparing in the background. The plaza stays animated until Prism is ready; no loading screen interrupts the transfer. Training controls are available with **F2** after arrival. Escape during transfer pauses on arrival. If the browser declines mouse capture after Escape, the pause screen stays available so you can click Resume.
+
+Use **F2** for training controls: choose your realm, stage, weapon, mastery and equipment; toggle invulnerability, infinite energy/spirit/currency, cooldowns and frozen enemies; spawn enemy packs or bosses; summon ships and vehicles; refill or reset to the hub. All weapons and skill ranks are unlocked, with techniques retaining their realm requirements. The Ring includes crafting parts, building kits and collars.
+
+Press **O** or **Return to Virtual Universe** to leave. Your physical body remains in the real world: enemies, projectiles and environmental hazards can still injure or kill it during training, including PvP and the entry warp. Training cheats only affect the simulation avatar. Cyan hit flashes indicate simulation damage; red warnings and a separate physical-body health/hull display indicate real danger. Press **L**, or click **Return to body**, to go straight back and defend yourself. Physical death severs the connection and applies the normal death/respawn consequences. Returning preserves your physical body's current health. Simulation rewards never transfer to the main save; real-world progress continues saving. Interstellar warp is disabled; flight and orbital travel remain available.
+
+Training controls also include a **PvP simulation** against a humanoid AI cultivator. Choose its weapon, Recruit/Adept/Master difficulty, and a matched or custom realm/stage. Fair duels temporarily disable training cheats, clear encounters and suspend turret support. Rounds have a three-second countdown, live rival health/energy, and win/loss tracking; lethal hits end the round without a respawn penalty. Settings changes cancel the round, and previous training modifiers return when it ends. This is local AI practice, not online multiplayer.
+
+## Planetary campaign
+
+Start Story mode, or choose **Begin the story** in the Story tab of an existing Free Play save. The original Terra missions remain in order. After the Beast Tide, **The Black Crown** reveals Vesper, the Worldbreaker: the planetary threat foreshadowed in the opening broadcasts. Prepare a second-realm character, then approach its objective outside Base City 07. Surviving the siege leads to **The Buried Sun** on Dune and **The Silent Choir** on Glacis, tracing a corrupted Concord signal through its engine and relay.
+
+Each original giant has its own model and attack mix. Vesper uses crown charges, sweeps, resonance rings and starfall; Serekh uses sand eruptions, bombardment and lunges; Ilyra uses aimed lances, rings and bombardment. All use separate encounter AI with committed targeting, readable windups, recovery damage bonuses and three health phases. Jump over ground waves, step out of lanes/marks, and punish recovery. Every fourth attack opens a ten-second World Rend channel: dealing 5.5% of maximum boss health interrupts it. Uninterrupted channels damage planetary integrity; three will destroy the planet. A seven-minute siege limit also applies. The timer starts when the confrontation begins, allowing preparation beforehand.
+
+During a siege, death, planetary core failure or abandoning the defensive line triggers an orbital destruction cinematic and a campaign defeat screen, rather than automatic respawn. **Retry from checkpoint** restores the saved character/resources before that confrontation; **Return to title** retains the failed attempt and its checkpoint. Destruction belongs to that failed timeline, not a permanently deleted planet/save. Normal Free Play deaths and training retain their existing rules. Saves from the former Act I ending continue into The Black Crown.
+
+For an isolated live-game WebGL inspection, run Vite on port 5191, open `/tools/planetary-preview.html`, or run `node tools/capture-terra.mjs --planetary`. The capture uses a temporary browser profile, fallback fonts and a separate test save. It exercises all three models, a tell, real player death, destruction, defeat/retry and victory progression; outputs are `artifacts/planetary-*.png`. This is functional/visual verification, not a hardware frame-rate or difficulty benchmark.
+
 ## Settings
+
+Base City 07's **South Concourse** is a composed block beside the arrival plaza: Meridian Noodles, Kite Armory & Repairs, South Court Reception and Botanica Apothecary. Shop windows reveal furnished ground floors; the reception passage connects to the rear lane, and an external stair leads to a planted terrace. Recessed windows, balcony rails, service equipment and shared brick/plaster/stone/wood maps replace the generic towers within this footprint. Interior fixture lighting is baked into vertex data, with no additional real-time lights. Detailed architecture swaps to a simple distant silhouette and unloads beyond 350 m.
+
+The concourse also has individual curtains/blinds, window planters, projecting shop signs, a neighbourhood noticeboard, roof parapets/ventilation and service-lane bins and deliveries. The complete nearby block uses 12 material batches and 54,000 triangles; bins have collision bounds and entrances, the rear passage and stairs remain clear.
+
+Across Terra, the other buildings come from deterministic recipes in `terra-architecture.js`, rather than a manually placed copy of the concourse. Each city has a seeded architectural character, palette, floor height, height distribution, roof treatment and (outside the capital) lot spacing. Neighbourhood and lot seeds mix six building families: brick residences, court apartments, stepped offices, workshops, garden housing and commercial buildings. Existing walk-in venues keep their service locations and clear doors. The countryside stays open.
+
+Shared small maps and batched skyline geometry provide distant buildings. Windows use cutout texture quads rather than geometry for every pane; close frames, curtains, balconies, planters, storefront cladding and fixtures stream in 96 m cells. At most four detailed architecture cells are kept (two on lower presets), one new cell is built per update, and detail unloads above street level. Roof setbacks have matching collision boxes. There are no extra real-time lights or per-building animation loops. Appearance varies without storing a unique texture/mesh asset for every building; additional nearby geometry still has a rendering cost.
+
+For a reproducible daylight WebGL inspection, run Vite on port 5191 and open `/tools/terra-preview.html`. With Chrome installed, `node tools/capture-terra.mjs` captures eight views under `artifacts/terra-*.png`, including another town, an outpost and an outer district; `CHROME_PATH` overrides the browser executable. This preview uses actual city geometry and materials, with inspection lighting; it is not a measurement of in-game GPU frame rate.
+
+Player ships have distinct hulls: a single-engine delta-wing Skyjet, compact twin-engine Corvette, larger patrol Frigate with a raised bridge and equipment bays, four-engine wedge Cruiser, and six-engine twin-habitat Star Ark. Static parts are batched by material; existing ship speeds, collision radii and landing clearances remain unchanged. A shared-scale geometry preview is available in `artifacts/ship-designs.png`.
+
+Terra's settlements have close-range street detail: tiled pedestrian paths, curbs and drains, benches, planted courts, transit shelters, directional signs and storefront canopies. Around Base City 07, start at the planted courts beside the arrival plaza and follow the avenues toward the market and shops. Pedestrians use the outer walking routes, pause and turn around; footsteps distinguish paving/interiors from softer ground. Street detail streams one 48 m cell per frame, keeps at most nine cells, uses shared sign/paving textures and unloads above the streets. Lower quality presets use a shorter detail range.
+
+Atlas Reach is a deep-space expedition system 180 light years from Solace. Use **Chart Atlas Reach** at a shipyard, then the normal warp controls. The Star Ark can make the direct jump; shorter-range ships need intermediate stars. Atlas is a 12,800 km crystal world, Khamsin is a 6,000 km desert world, and Behemoth is a 96,000 km gas giant with a landable moon. The landable bodies have expedition bases and nearby discoveries. Existing planet sizes and ship speeds are unchanged; larger worlds use deeper terrain quadtrees with the same per-chunk mesh size.
 
 - **Graphics.** Quality presets from Minimal to Ultra, render scale, dynamic resolution, terrain detail, tree and rock density, and city crowds.
 - **Visuals.** Field of view, bloom, speed blur, chromatic aberration, film grain, vignette, screen shake, head bob, damage numbers and HUD scale.
@@ -89,6 +128,8 @@ Your ring holds **Nix 尼克斯**, an ancient and very sarcastic intelligence. N
 - **Audio.** Master, music and effects volume.
 
 ## Code map
+
+Graphics use chamfered structural boxes, smooth organic normals, and baked facade detail. Thin lights keep simple geometry, props/NPCs retain instancing, and terrain resolution and post-processing pass counts stay within the existing quality presets. Film grain and chromatic aberration are subtle when enabled. `npm test` includes closed-mesh, collision-bound and representative scene budget checks; GPU frame times still require a browser playtest.
 
 | Folder | Contents |
 | --- | --- |

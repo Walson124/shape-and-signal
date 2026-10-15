@@ -576,7 +576,7 @@ export class Planet {
     const entry = this.details.sites.find((e) => e.site === site);
     if (!entry) return null;
     if (!entry.obj) {
-      entry.obj = buildSettlement(site, this.R, { crowd: (this.ctx.preset.crowd ?? 1) * (settings.get('crowds') ? 1 : 0) });
+      entry.obj = buildSettlement(site, this.R, this.settlementOptions());
       this.spin.add(entry.obj.group);
       this.refreshSettlements();
     }
@@ -593,6 +593,12 @@ export class Planet {
       this.refreshSettlements();
     }
     return e.obj;
+  }
+
+  settlementOptions() {
+    const crowd = this.ctx.preset.crowd ?? 1;
+    return { crowd: crowd * (settings.get('crowds') ? 1 : 0),
+      terra: this.ctx.starKey === 'home' && this.body.id === 'p2', streetRange: crowd <= 0.5 ? 48 : 80 };
   }
 
   refreshSettlements() {
@@ -694,7 +700,7 @@ export class Planet {
         const center = tB.copy(e.dir).multiplyScalar(this.R + e.site.height);
         const d = center.distanceTo(this.camLocal);
         if (!e.obj && d < 6500) {
-          e.obj = buildSettlement(e.site, this.R, { crowd: (this.ctx.preset.crowd ?? 1) * (settings.get('crowds') ? 1 : 0) });
+          e.obj = buildSettlement(e.site, this.R, this.settlementOptions());
           addCompiled(this.spin, e.obj.group);
           changed = true;
         } else if (e.obj && d > 9500) {

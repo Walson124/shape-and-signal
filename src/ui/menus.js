@@ -1,5 +1,5 @@
 import {
-  REALMS, STAGES, PILLS, REGIONS, BOSSES, SWORD_GRADES, SHIPS, TIPS, DEVOUR, SELL, RADARS,
+  REALMS, STAGES, MAX_REALM, PILLS, REGIONS, BOSSES, SWORD_GRADES, SHIPS, TIPS, DEVOUR, SELL, RADARS,
   priceFor, MANUAL_PRICE, masteryMult,
 } from '../game/data.js';
 import { PATHS, PATH_IDS, TECHS, REALM_PERKS, TREES, treeFor, canLearn, pointsFree, pointsEarned, activePath, ownedPaths, owns, knows } from '../game/paths.js';
@@ -7,6 +7,9 @@ import { MAX_BOUNTIES } from '../game/missions.js';
 import { LORE } from '../game/lore.js';
 import { ACT1 } from '../game/campaign.js';
 import { CHANGELOG } from './changelog.js';
+import { CORE_KEY, ATLAS_KEY } from '../world/galaxy.js';
+import { speciesForBody } from '../game/bestiary.js';
+import { DUEL_DIFFICULTIES } from '../game/duel.js';
 import { VEHICLES, VEHICLE_IDS } from '../game/vehicle.js';
 import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing, ringOf, capacity, slotsUsed, affordable, costText, partCount } from '../game/ring.js';
 import { settings, PRESETS } from '../core/settings.js';
@@ -34,12 +37,26 @@ export class Menus {
     return this.panelKind !== null;
   }
 
+  get pauseOpen() {
+    return !this.$('pause').classList.contains('hidden');
+  }
+
   get overlayOpen() {
     return this.panelOpen || !this.$('settings').classList.contains('hidden') || !this.$('modal').classList.contains('hidden');
   }
 
   bind() {
     const g = this.game;
+    this.$('training-controls').addEventListener('click', () => g.training.active && g.togglePanel('training'));
+    this.$('training-exit').addEventListener('click', () => { if (g.training.active && !g.training.busy) g.training.leave(); });
+    this.$('physical-body-return').addEventListener('click', () => { if (g.training.active) g.training.leave({ returnToBody: true }); });
+    this.$('panel-body').addEventListener('change', (e) => {
+      const key = e.target.dataset.training;
+      if (!key) return;
+      if (key === 'enemy') g.training.enemy = e.target.value;
+      else g.training.set(key, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
+      this.render();
+    });
     const snd = () => g.sound;
     document.addEventListener('mouseover', (e) => {
       if (e.target.closest && e.target.closest('.menu-item, .btn, .tab, .seg button, .path-card, .node')) snd().hover();
@@ -100,7 +117,21 @@ export class Menus {
         arena: () => g.startArena(),
         radar: () => g.buyRadar(),
         order: () => g.orderDelivery(a.dataset.item),
+        'target-atlas': () => g.targetExpedition(ATLAS_KEY),
+        'redirect-delivery': () => g.redirectDelivery(a.dataset.id),
         sim: () => g.startSim(),
+        'training-enter': () => g.training.enter(),
+        'training-leave': () => g.training.leave(),
+        'training-refill': () => g.training.refill(),
+        'training-reset': () => g.training.reset(),
+        'training-breakthrough': () => g.training.readyBreakthrough(),
+        'training-clear': () => g.training.clear(),
+        'training-spawn': () => g.training.spawn(),
+        'training-boss': () => g.training.spawn(true),
+        'training-duel': () => g.training.duel.start(),
+        'training-duel-stop': () => g.training.duel.finish('cancelled'),
+        'training-ship': () => g.training.ship(Number(a.dataset.tier)),
+        'training-vehicle': () => g.training.vehicle(a.dataset.id),
         'buy-vehicle': () => g.buyVehicle(a.dataset.id),
         'ring-up': () => g.upgradeRing(),
         'sell-parts': () => g.sellParts(),
@@ -404,7 +435,7 @@ export class Menus {
     if (!k) return;
     const venue = this.venueTabs();
     const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['ring', 'Ring'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
-    const tabs = [...venue, ...base.filter(([kk]) => !venue.some(([vk]) => vk === kk))];
+    const tabs = [...(this.game.training.active ? [['training', 'Training controls']] : []), ...venue, ...base.filter(([kk]) => !venue.some(([vk]) => vk === kk))];
     this.$('panel-tabs').innerHTML = tabs.map(([kind, label]) => `<button class="tab ${kind === k ? 'on' : ''}" data-kind="${kind}">${label}</button>`).join('');
     const r = {
       shipyard: () => this.renderShipyard(), cultivation: () => this.renderCultivation(), skills: () => this.renderSkills(), bounties: () => this.renderBounties(),
@@ -416,6 +447,7 @@ export class Menus {
       craft: () => this.renderCraft(),
       story: () => this.renderStory(),
       vshop: () => this.renderMall(), vsim: () => this.renderSim(), fame: () => this.renderFame(),
+      training: () => this.renderTraining(),
     }[k];
     this.$('panel-body').innerHTML = r ? r() : this.renderGuide();
   }
@@ -432,18 +464,23 @@ export class Menus {
     const rows = SHIPS.map((sh, i) => {
       const owned = i <= cur;
       const next = i === cur + 1;
-      const can = next && !(locked && i > 0) && state.coins >= sh.coins && state.ore >= sh.ore && state.essence >= sh.essence;
+      const replacement = i === cur;
+      const can = (replacement ? !this.game.rt?.inShip : next && !(locked && i > 0)) && state.coins >= sh.coins && state.ore >= sh.ore && state.essence >= sh.essence;
       return `<div class="item"><div><h4>${esc(sh.name)}<span class="cn">${sh.cn}</span></h4>
-        <p>Warp range ${sh.range} light years · cruise ${(sh.cruise / 1000).toFixed(0)} km/s · hull ×${sh.hull}</p></div>
+        <p>${esc(sh.desc)}</p><p>Warp range ${sh.range} light years · cruise ${(sh.cruise / 1000).toFixed(0)} km/s · hull ×${sh.hull}</p></div>
         <div><span class="price">${fmt(sh.coins)} ◈</span> <span class="price" style="color:var(--cy)">${fmt(sh.ore)} ⬢</span> <span class="price ess">${fmt(sh.essence)} ✦</span></div>
-        ${owned ? '<span class="tag done">OWNED</span>' : `<button class="btn small ${can ? 'primary' : ''}" data-action="build-ship" data-tier="${i}" ${can ? '' : 'disabled'}>${cur < 0 ? 'Build' : 'Upgrade'}</button>`}</div>`;
+        ${owned && !replacement ? '<span class="tag done">OWNED</span>' : `<button class="btn small ${can ? 'primary' : ''}" data-action="build-ship" data-tier="${i}" ${can ? '' : 'disabled'}>${replacement ? 'Build replacement' : cur < 0 ? 'Build' : 'Upgrade'}</button>`}</div>`;
     }).join('');
     const note = locked
       ? (state.ship ? 'Bigger hulls need the <b>Planetary</b> realm: a weaker body cannot survive the void even inside a hull.' : 'A <b>Skyjet</b> flies anywhere in the sky of a world. Starships and space flight need the <b>Planetary</b> realm: a weaker body cannot survive the void even inside a hull.')
       : state.ship
         ? `Your <b>${esc(SHIPS[state.ship.tier].name)}</b> is registered here. Upgrades are fitted on the spot.`
         : `Build a starship to cross the void between stars. Aim at any star with ${key('target')} and warp with ${key('engage')}.`;
-    return `<p class="panel-note">${note} You hold ${this.wallet()}.</p><div class="list">${rows}</div>`;
+    return `<p class="panel-note">${note} You hold ${this.wallet()}.</p>
+      ${state.ship ? '<p class="panel-note">Ship stranded? Build a replacement of your current model for the listed construction cost. It replaces your registered hull and is delivered here with full hull integrity.</p>' : ''}<div class="list">${rows}</div>
+      <div class="section-title">Deep-space expedition · Atlas Reach</div>
+      <p class="panel-note">180 light years from Solace: Atlas is a landable world 12,800 km across; Khamsin spans 6,000 km, and Behemoth is a 96,000 km gas giant. Expedition bases mark the landable worlds. The Star Ark can jump directly from Solace; shorter-range ships can travel through intermediate stars.</p>
+      <button class="btn small" data-action="target-atlas">Chart Atlas Reach</button>`;
   }
 
   techCard(id, slotKey, state) {
@@ -487,6 +524,7 @@ export class Menus {
         </div>
         <div class="misc-line">${owns(state, 'mind') ? `Flying swords: <b>${grade.name} ${grade.cn}</b>, ×${grade.mult} damage · ` : ''}Gene enhancement level <b>${state.gene || 0}</b> · Realm Insight <b style="color:#c08cff">${state.insight || 0}</b> · Radar <b>${(state.radar ?? -1) >= 0 ? RADARS[state.radar].name : 'none'}</b></div>
         <p class="panel-note">Each breakthrough needs a <b>Realm Insight</b>. Earn one by winning an obelisk trial, slaying an Overlord, clearing every fifth arena wave, or completing a Martial Hall breakthrough trial.</p>
+        ${this.renderBreakthrough()}
         <div class="section-title">Techniques</div>
         <div class="tech-list">${techs}</div>
         <div class="section-title">Realm powers</div>
@@ -532,6 +570,29 @@ export class Menus {
       : owned.includes(tab) ? `${esc(P.desc)} Techniques marked ◆ are learned here, then used with the ${esc(P.weapon.name)} in hand.`
       : `Buy the <b>${esc(P.weapon.name)}</b> at an Armory to open this tree. ${esc(P.desc)}`;
     return `<div class="tree-tabs">${tabs}</div><p class="panel-note">${intro} <b class="gold">${free}</b> skill point${free === 1 ? '' : 's'} free of ${pointsEarned(state)} earned (one per stage, five per breakthrough), shared by every tree. Reset them at any Martial Hall.</p><div class="tree">${cols}</div>`;
+  }
+
+  renderBreakthrough() {
+    const g = this.game, s = g.state;
+    if (s.realm >= MAX_REALM) return '<p class="panel-note gold">You have reached the summit of cultivation.</p>';
+    const next = REALMS[s.realm + 1];
+    const requirements = [
+      [s.stage === STAGES.length - 1, `Reach Peak stage (currently ${STAGES[s.stage].name})`],
+      [s.stage === STAGES.length - 1 && s.xp >= g.stats.xpNeed, `Fill Peak experience (${fmt(s.xp)} / ${fmt(g.stats.xpNeed)} at your current stage)`],
+      [(s.insight || 0) >= 1, `Obtain a Realm Insight (${s.insight || 0} / 1; consumed when the tribulation begins)`],
+    ];
+    if (s.realm === MAX_REALM - 1 && !g.training?.active) requirements.push([s.bosses.includes(CORE_KEY), 'Slay the Primordial Devourer']);
+    const completed = requirements.filter(([done]) => done).length;
+    const unlocks = REALM_PERKS.filter((p) => p.realm === s.realm + 1);
+    const status = g.rt.trib ? 'Tribulation in progress. Keep moving and survive.'
+      : g.breakthroughStatus().ready ? (g.rt.inShip ? 'Leave your ship to face the tribulation.' : `Ready. Close this panel and press ${key('breakthrough')} to face the tribulation.`)
+      : 'Complete the requirements to face the Heavenly Tribulation.';
+    return `<div class="section-title">Next breakthrough: ${esc(next.name)}</div>
+      <p class="panel-note"><b>${completed} / ${requirements.length}</b> requirements complete</p>
+      <ul>${requirements.map(([done, text]) => `<li class="${done ? 'gold' : ''}">${done ? 'Complete' : 'Needed'}: ${esc(text)}</li>`).join('')}</ul>
+      <p class="panel-note">${status}</p>
+      <p class="panel-note"><b>What changes:</b> ${esc(next.blurb)}</p>
+      ${unlocks.map((p) => `<p class="panel-note"><b>${esc(p.name)}:</b> ${esc(p.desc)}</p>`).join('')}`;
   }
 
   renderTrainer() {
@@ -783,10 +844,15 @@ export class Menus {
   renderMall() {
     const g = this.game, s = g.state;
     const eta = g.deliveryEta();
-    const pending = (s.deliveries || []).map((d) => `<li>${esc(d.label)} · ${Math.max(0, Math.ceil(d.due - s.playtime))} s</li>`).join('');
+    const pending = (s.deliveries || []).map((d) => {
+      const remaining = Math.max(0, Math.ceil(d.due - s.playtime));
+      const pod = g.pods.find(p => p.delivery === d);
+      const status = remaining > 0 ? `${remaining} s of active play remaining` : pod?.landed ? 'Landed · follow the yellow delivery marker' : pod ? 'Pod descending · follow the yellow delivery marker' : 'Ready · return to your body to receive';
+      return `<li>${esc(d.label)} · ${status}${remaining === 0 ? ` <button class="btn small" data-action="redirect-delivery" data-id="${esc(d.id)}">Redirect to me (free)</button>` : ''}</li>`;
+    }).join('');
     const rows = g.mallCatalog().map((c) => `<div class="item"><div><h4>${esc(c.name)}</h4><p>${esc(c.desc)}</p></div><span class="price">${fmt(c.price)} ◈</span><button class="btn small" data-action="order" data-item="${c.id}" ${s.coins >= c.price ? '' : 'disabled'}>Order</button></div>`).join('');
-    return `<p class="panel-note">Buy anything here and a drop pod delivers it to wherever your body is: city, wilds or deep space. Delivery to your current location takes about <b>${eta} s</b>. Prices include a 15% shipping fee. You hold ${this.wallet()}.</p>
-      ${pending ? `<div class="section-title">On the way</div><ul class="tips">${pending}</ul>` : ''}
+    return `<p class="panel-note">Delivery takes about <b>${eta} s of active play</b>. Ships receive cargo automatically and install scanners on arrival. On foot, follow the yellow delivery marker and interact with the pod to unpack it. Missed pods can be redirected here for free. Prices include a 15% shipping fee. You hold ${this.wallet()}.</p>
+      ${pending ? `<div class="section-title">Your deliveries</div><ul class="tips">${pending}</ul>` : ''}
       <div class="list">${rows}</div>`;
   }
 
@@ -794,7 +860,36 @@ export class Menus {
     const s = this.game.state;
     const best = s.simBest[`r${s.realm}`];
     return `<p class="panel-note">Holographic targets appear around the simulator. Hit all twelve with your primary attack as fast as you can. The first clear at each realm pays out; after that it's for the leaderboard.</p>
-      <div class="list"><div class="item"><div><h4>Target practice<span class="cn">靶场</span></h4><p>${best !== undefined ? `Your best at this realm: <b>${best.toFixed(2)} s</b>` : 'Not yet cleared at this realm.'}</p></div><button class="btn small primary" data-action="sim">Start</button></div></div>`;
+      <div class="list"><div class="item"><div><h4>Prism Training World</h4><p>A full sandbox on a crystal planet. Choose your realm, try every weapon, spawn enemies and bosses, build, tame, drive and fly. Your physical body stays vulnerable while connected. Simulation progress is temporary.</p></div><button class="btn small primary" data-action="training-enter">Enter training world</button></div>
+      <div class="item"><div><h4>Target practice<span class="cn">靶场</span></h4><p>${best !== undefined ? `Your best at this realm: <b>${best.toFixed(2)} s</b>` : 'Not yet cleared at this realm.'}</p></div><button class="btn small" data-action="sim">Start</button></div></div>`;
+  }
+
+  renderTraining() {
+    const g = this.game, t = g.training, o = t.options;
+    if (!t.active) return this.renderSim();
+    const select = (id, label, items) => `<label class="training-field"><span>${label}</span><select data-training="${id}">${items.map(([value, name]) => `<option value="${esc(String(value))}" ${String(id === 'enemy' ? t.enemy : o[id]) === String(value) ? 'selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
+    const number = (id, label, min, max) => `<label class="training-field"><span>${label}</span><input type="number" min="${min}" max="${max}" step="1" value="${o[id]}" data-training="${id}"></label>`;
+    const toggle = (id, label) => `<label class="training-toggle"><input type="checkbox" data-training="${id}" ${o[id] ? 'checked' : ''}> ${label}</label>`;
+    const species = g.system.planets[0] ? speciesForBody(g.system.planets[0].body) : [];
+    return `<p class="panel-note">Prism is yours to experiment with. Changes apply immediately. Your physical body remains in the real world and can be injured or killed, even with training invulnerability enabled. Cyan flashes mean simulation damage; red warnings and the physical-body bar mean real danger. Simulation rewards do not carry back. Reopen with ${key('panelTraining')}; ${key('virtual')} returns to the Virtual Universe.</p>
+      <div class="section-title">Your character</div><div class="training-grid">
+      ${select('realm', 'Realm', REALMS.map((r, i) => [i, r.name]))}${select('stage', 'Stage', STAGES.map((s, i) => [i, s.name]))}
+      ${select('weapon', 'Weapon', PATH_IDS.map((id) => [id, PATHS[id].weapon.name]))}${select('grade', 'Sword grade', SWORD_GRADES.map((s, i) => [i, s.name]))}
+      ${number('mastery', 'Technique mastery', 1, 20)}${number('armor', 'Armour level', 0, 5)}${number('temper', 'Weapon tempering', 0, 5)}</div>
+      <p class="panel-note">Every weapon and skill is learned. Techniques still respect realm requirements, so you can compare realistic builds. The Ring contains building kits, taming collars and crafting parts of every grade; vehicles and scanners are unlocked.</p>
+      <div class="training-toggles">${toggle('god', 'Invulnerable')}${toggle('infinite', 'Infinite energy, spirit and currency')}${toggle('cooldowns', 'No cooldowns')}${toggle('freeze', 'Freeze enemies / target dummies')}</div>
+      <div class="training-actions"><button class="btn small" data-action="training-refill">Refill health, resources and pills</button><button class="btn small" data-action="training-breakthrough">Prepare breakthrough</button><button class="btn small" data-action="training-reset">Reset to hub</button></div>
+      <div class="section-title">Combat range</div><div class="training-grid">${select('enemy', 'Species', species.map((s) => [s.id, s.name]))}${select('enemyRealm', 'Enemy realm', REALMS.map((r, i) => [i, r.name]))}${number('count', 'Enemy count', 1, 20)}${select('boss', 'Boss', BOSSES.map((b, i) => [i, b.name]))}</div>
+      <div class="training-actions"><button class="btn small primary" data-action="training-spawn">Spawn enemies</button><button class="btn small" data-action="training-boss">Spawn boss</button><button class="btn small danger" data-action="training-clear">Clear encounters</button></div>
+      <div class="section-title">PvP simulation · AI cultivator duel</div>
+      <p class="panel-note">Fight a humanoid rival who strafes, guards, dodges and uses telegraphed weapon attacks. Ranged opponents keep their distance; melee opponents close in. Higher-realm rivals can follow you into flight. This is local practice against AI.</p>
+      <div class="training-grid">${select('duelWeapon', 'Opponent weapon', PATH_IDS.map((id) => [id, PATHS[id].weapon.name]))}${select('duelDifficulty', 'Difficulty', Object.entries(DUEL_DIFFICULTIES).map(([id, d]) => [id, d.name]))}${select('duelRealm', 'Opponent realm (custom build)', REALMS.map((r, i) => [i, r.name]))}${select('duelStage', 'Opponent stage (custom build)', STAGES.map((s, i) => [i, s.name]))}</div>
+      <div class="training-toggles">${toggle('duelMirror', 'Match my realm, stage and upgrades')}${toggle('duelFair', 'Fair duel (disable training cheats for this round)')}</div>
+      <p class="panel-note">${esc(t.duel.result)} · Wins <b>${t.duel.wins}</b> · Losses <b>${t.duel.losses}</b>. Duels begin after a three-second countdown. Changing settings cancels the round. Your training modifiers are restored afterward.</p>
+      <div class="training-actions"><button class="btn small primary" data-action="training-duel">${t.duel.active ? 'Restart duel' : 'Start duel'}</button>${t.duel.active ? '<button class="btn small danger" data-action="training-duel-stop">Stop duel</button>' : ''}</div>
+      <div class="section-title">Ships and vehicles</div><div class="training-actions">${SHIPS.map((s, i) => `<button class="btn small" data-action="training-ship" data-tier="${i}">${esc(s.name)}</button>`).join('')}${VEHICLE_IDS.map((id) => `<button class="btn small" data-action="training-vehicle" data-id="${id}">${esc(VEHICLES[id].name)}</button>`).join('')}</div>
+      <p class="panel-note">Ships appear ahead of you. Board with ${key('interact')}. You can explore the planet and its orbit; interstellar warp is disabled in this simulation.</p>
+      <div class="training-actions"><button class="btn primary" data-action="training-leave">Return to Virtual Universe</button></div>`;
   }
 
   renderFame() {
@@ -821,10 +916,10 @@ export class Menus {
       const cur = i === c.mi;
       const step = cur ? m.steps[c.si] : null;
       const obj = step && step.text ? (typeof step.text === 'function' ? step.text() : step.text) : '';
-      return `<div class="item story ${done ? 'done' : cur ? 'focus' : 'locked'}"><div><h4>${done ? '✓ ' : ''}${esc(m.title)} <span class="cn">${m.cn}</span></h4><p>${done ? 'Complete.' : cur ? esc(obj || 'In progress…') : 'Locked.'}</p></div></div>`;
+      return `<div class="item story ${done ? 'done' : cur ? 'focus' : 'locked'}"><div><h4>${done ? '✓ ' : ''}Act ${m.act || 1} · ${esc(m.title)} <span class="cn">${m.cn}</span></h4><p>${done ? 'Complete.' : cur ? esc(obj || 'In progress…') : 'Locked.'}</p></div></div>`;
     }).join('');
-    const end = c.act1Done ? '<p class="panel-note gold">Act I complete. Act II is coming.</p>' : '';
-    return `<p class="panel-note">Act I · <b>The Walled City</b> <span class="cn">第一幕 · 城墙</span></p>${end}<div class="list">${rows}</div>`;
+    const end = c.campaignDone ? '<p class="panel-note gold">The planetary campaign is complete. The wider galaxy remains open.</p>' : '<p class="panel-note">Three planetary confrontations: defend Terra, investigate the buried engine on Dune, and silence the relay on Glacis. Defeat destroys the threatened planet in that attempt; retry restores a checkpoint.</p>';
+    return `<p class="panel-note"><b>The Walled City · The Buried Sun · The Silent Choir</b></p>${end}<div class="list">${rows}</div>`;
   }
 
   renderArchive() {
@@ -845,6 +940,7 @@ export class Menus {
       <li><b>Your homeworld.</b> You begin in Base City 07 on Terra. Terra has several walled base cities and outposts; beasts roam between them and grow stronger far from any city.</li>
       <li><b>Cities.</b> Walk into any building with a glowing door: exchanges, forges, pill shops, gene clinics, cultivation chambers, teahouses, noodle bars and apartments. The capital has an arena.</li>
       <li><b>Weapons.</b> You start with bare fists. Buy a saber, spear, throwing knives, bow, flying swords or a psionic focus at an <b>Armory</b>; each has its own skill tree of techniques (${key('panelSkills')}). Carry several and switch with ${key('weaponNext')}.</li>
+      <li><b>Dodge.</b> On the ground, press ${key('dodge')} while moving to evade in that direction; standing still dodges backward. Costs 18 energy, with brief protection and a 1.2-second cooldown. Watch your target for attack warnings.</li>
       <li><b>Radar.</b> Scroll the mouse wheel (or ${key('weaponNext')}) to your radar scanner. It finds ore veins and wrecks, and better radars from the Exchange find more.</li>
       <li><b>Realms change how you play.</b> Fly at War God, leave the planet at Planetary, blink at Stellar, and at higher realms weak beasts flee or simply die in your presence.</li>
       <li><b>Every planet is a world</b> with its own beasts. Look for ancient ruins, energy springs, ore deposits, beast nests and wrecks.</li>

@@ -5,6 +5,7 @@ import { glowTexture } from '../world/textures.js';
 import { rimMaterial } from '../world/models.js';
 import { buildCreature } from './creatures.js';
 import { pickSpecies } from './bestiary.js';
+import { buildPlanetaryModel } from './planetary-bosses.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tmpA = new THREE.Vector3();
@@ -596,6 +597,17 @@ export class BeastManager {
     return this.boss && this.boss.alive ? this.boss : null;
   }
 
+  spawnPlanetary(def, pos) {
+    const model = buildPlanetaryModel(def), hp = 60 * power(def.tier) * def.hp;
+    model.group.quaternion.setFromUnitVectors(UP, pos.clone().normalize());
+    model.group.position.copy(pos); addCompiled(this.scene, model.group, `planetary:${def.id}`);
+    const b = { uid: ++this.uid, type: 'boss', planetary: true, def, model, mesh: model.group, pos: model.group.position,
+      vel: new THREE.Vector3(), hp, maxHp: hp, dmg: 8 * power(def.tier) * def.dmg, tier: def.tier, radius: def.radius,
+      boss: true, alive: true, aggro: true, elite: false, name: def.name, cn: def.cn, home: pos.clone(),
+      flashT: 0, stunT: 0, markT: 0, lastHit: -99, xpMult: 1, coinMult: 1, phase: 0, tag: `planetary:${def.id}` };
+    this.beasts.push(b); this.boss = b; return b;
+  }
+
   damage(b, amount, time, knock) {
     if (!b.alive) return false;
     b.hp -= amount;
@@ -692,6 +704,7 @@ export class BeastManager {
     }
 
     for (const b of this.beasts) {
+      if (b.duelist || b.planetary) continue;
       if (b.static) {
         if (b.flashT > 0) b.flashT -= dt;
         continue;

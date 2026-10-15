@@ -23,6 +23,8 @@ export class Player {
     this.radius = 0.9;
     this.mode = 'ground';
     this.grounded = false;
+    this.groundGrace = 0;
+    this.jumpBuffer = 0;
     this.boosting = false;
     this.pose = 0;
     this.walkPhase = 0;
@@ -108,6 +110,8 @@ export class Player {
   placeAt(pos, look, up) {
     this.pos.copy(pos);
     this.vel.set(0, 0, 0);
+    this.grounded = false;
+    this.groundGrace = this.jumpBuffer = 0;
     const u = up ? up.clone() : new THREE.Vector3(0, 1, 0);
     tM.lookAt(pos, look, u);
     this.quat.setFromRotationMatrix(tM);
@@ -187,6 +191,8 @@ export class Player {
     this.boosting = env.boost && (move.x !== 0 || move.y !== 0 || move.z !== 0);
 
     if (this.mode === 'ground' && up) {
+      this.groundGrace = this.grounded ? 0.1 : Math.max(0, this.groundGrace - dt);
+      this.jumpBuffer = env.jump ? 0.12 : Math.max(0, this.jumpBuffer - dt);
       // horizontal intent along the tangent plane
       const fh = tC.copy(f).addScaledVector(up, -f.dot(up));
       if (fh.lengthSq() < 1e-6) fh.copy(this.localUp(tC)).negate().addScaledVector(up, -0);
@@ -198,13 +204,16 @@ export class Player {
       const vUp = this.vel.dot(up);
       const vH = this.vel.clone().addScaledVector(up, -vUp);
       vH.lerp(wish, 1 - Math.exp(-dt * (this.grounded ? 12 : 2.5)));
+      if (env.dodge) vH.copy(env.dodge.dir).projectOnPlane(up).normalize().multiplyScalar(env.dodge.speed);
       let vy = vUp - env.gravity * dt;
-      if (env.jump && this.grounded) {
+      if (!env.dodge && this.jumpBuffer > 0 && this.groundGrace > 0) {
         vy = env.jumpSpeed;
         this.grounded = false;
+        this.groundGrace = this.jumpBuffer = 0;
       }
       this.vel.copy(vH).addScaledVector(up, vy);
     } else {
+      this.groundGrace = this.jumpBuffer = 0;
       const u = up && this.mode === 'fly' ? up : this.localUp(tC);
       const wish = new THREE.Vector3().addScaledVector(f, move.z).addScaledVector(r, move.x).addScaledVector(u, move.y);
       if (wish.lengthSq() > 1) wish.normalize();
@@ -223,7 +232,7 @@ export class Player {
         const vn = this.vel.dot(up);
         if (vn < 0) this.vel.addScaledVector(up, -vn);
         this.grounded = true;
-      } else if (this.mode === 'ground' && D < min + 0.25) {
+      } else if (this.mode === 'ground' && D < min + 0.25 && this.vel.dot(up) <= 0) {
         this.grounded = true;
       }
     }

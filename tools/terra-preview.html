@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>Terra — South Concourse preview</title>
+<style>body{margin:0;background:#111;color:#eee;font:13px system-ui}canvas{display:block}nav{position:fixed;top:14px;left:14px;padding:12px;background:#132026dc;border:1px solid #526064;border-radius:6px}button{margin:3px;background:#263b43;border:1px solid #65818b;color:white;padding:7px;cursor:pointer}small{display:block;margin-top:5px;color:#ccd6d8}</style></head><body>
+<nav><b>Terra · Procedural districts</b><br><button data-view="lane">Arrival lane</button><button data-view="cafe">Meridian interior</button><button data-view="terrace">Roof terrace</button><button data-view="rear">Rear passage</button><button data-view="overview">Overview</button><button data-view="district">Outer district</button><button data-view="town">Another city</button><button data-view="outpost">Outpost</button><small>Actual game geometry and materials · daylight inspection</small></nav>
+<script type="module">
+import * as THREE from 'three';
+import { buildSettlement } from '/src/world/city.js';
+const renderer = new THREE.WebGLRenderer({antialias:true,logarithmicDepthBuffer:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);renderer.setSize(innerWidth,innerHeight);renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
+document.body.append(renderer.domElement);
+const scene = new THREE.Scene();scene.background=new THREE.Color(0x899da3);scene.fog=new THREE.Fog(0x899da3,90,360);
+const camera = new THREE.PerspectiveCamera(65,innerWidth/innerHeight,0.08,2000);
+let city;
+const sites={capital:{x:0,y:1,z:0,height:0,radius:520,size:'capital',name:'Base City 07'},town:{x:0.6,y:0.8,z:0,height:0,radius:300,size:'city',name:'Procedural town'},outpost:{x:-0.48,y:0.8,z:0.36,height:0,radius:170,size:'outpost',name:'Procedural outpost'}};
+function settlement(kind){if(city){scene.remove(city.group);city.dispose()}city=buildSettlement(sites[kind],18600,{terra:true,crowd:0.25});scene.add(city.group);}
+settlement('capital');
+const sun=new THREE.DirectionalLight(0xffefd9,2.7);sun.position.copy(city.toLocal(-50,100,-35));sun.target.position.copy(city.toLocal(46,0,-56));scene.add(sun,sun.target);
+scene.add(new THREE.HemisphereLight(0xb5c8d8,0x635b4e,0.7),new THREE.AmbientLight(0x6070a0,0.2));
+const groundGeo=new THREE.PlaneGeometry(1500,1500,128,128).rotateX(-Math.PI/2),gp=groundGeo.attributes.position;for(let i=0;i<gp.count;i++)gp.setY(i,city.drop(gp.getX(i),gp.getZ(i))-0.15);groundGeo.computeVertexNormals();
+const ground=new THREE.Mesh(groundGeo,new THREE.MeshStandardMaterial({color:0x62694d,roughness:1}));scene.add(ground);
+const views={lane:[20,1.75,-55,65,2,-56],cafe:[31,1.75,-64,27,1.4,-70],terrace:[68.5,5.3,-63.8,44,2,-53],rear:[40,1.75,-31,38,1.75,-46],overview:[7,27,-46,46,6,-56],district:[-129,1.75,-100,-129,6,-190],town:[-84,1.75,-105,-84,7,-185],outpost:[-24,1.75,-49,-70,5,-49]};
+let active='lane';
+function view(name){active=name in views?name:'lane';const kind=active==='town'?'town':active==='outpost'?'outpost':'capital';if(city.site!==sites[kind])settlement(kind);const [x,y,z,tx,ty,tz]=views[active];camera.up.copy(city.toLocal(x,10,z).sub(city.toLocal(x,0,z)).normalize());camera.position.copy(city.toLocal(x,y,z));camera.lookAt(city.toLocal(tx,ty,tz));sun.position.copy(city.toLocal(-50,100,-35));sun.target.position.copy(city.toLocal(46,0,-56));ground.position.copy(city.group.position);ground.quaternion.copy(city.group.quaternion);ground.position.addScaledVector(camera.up,-0.4);for(let i=0;i<10;i++)city.update(0.016,city.toLocal(x,y,z));scene.updateMatrixWorld(true);renderer.render(scene,camera);window.previewReady=true;}
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>view(b.dataset.view));
+window.setPreviewView=view;window.previewSummary=()=>({view:active,block:city.block?.stats,architecture:city.architecture.stats,styles:[...new Set(city.architecture.plans.map(p=>p.style))],streets:city.streets.stats,draws:renderer.info.render.calls,triangles:renderer.info.render.triangles});
+view(new URLSearchParams(location.search).get('view')||'lane');
+function frame(){renderer.render(scene,camera);requestAnimationFrame(frame)}frame();
+</script></body></html>

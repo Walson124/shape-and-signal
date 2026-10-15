@@ -5,6 +5,8 @@ import { speciesForBody } from './bestiary.js';
 import { LORE, RUIN_NAMES } from './lore.js';
 import { settings } from '../core/settings.js';
 import { codeLabel } from '../core/bindings.js';
+import { PlanetaryEncounter } from './planetary-encounter.js';
+import { PLANETARY_BOSSES } from './planetary-bosses.js';
 
 // Story mode. Act I: an ordinary kid in Base City 07 buys a first weapon, earns
 // a living hunting beasts, gets a radar and a Skyjet, then survives a convoy
@@ -31,7 +33,7 @@ export const ACT1 = [
       start: (c) => {
         const s = c.g.state;
         s.coins = Math.max(s.coins, 500);
-        c.g.cutscene.say([['You', 'Five hundred coins. Two years of saving. Enough for a real weapon.'], ['', 'Follow the gold marker to the Armory.']]);
+        c.g.cutscene.say([['You', 'Five hundred coins. Two years of saving. Enough for a real weapon.'], ['City Broadcast', 'Planetary watch: a world-eater signature has been detected beneath Terra. Keep evacuation routes clear.'], ['', 'Follow the gold marker to the Armory.']]);
         tip(c, `Follow the <b>gold objective marker</b>. Move with <kbd>W A S D</kbd>, sprint with ${key('sprint')}, jump with ${key('jump')}.`);
       } },
     { type: 'event', on: 'weapon', text: 'Buy a weapon (press E at the counter)', test: (c) => (c.g.state.weapons || []).length > 0,
@@ -164,7 +166,28 @@ export const ACT1 = [
     { type: 'waves', text: 'Hold the gate against the tide', waves: [['ironwolf', 7], ['bladehawk', 5, 'ironwolf', 4], ['thunderlizard', 4, 'shadowmantis', 4]] },
     { type: 'boss', text: 'Slay Ironjaw, the Tide King' },
     { type: 'cutscene', text: '', play: (c) => c.victoryScene() },
-  ], reward: { coins: 1000, point: 1, insight: 1 }, final: true },
+  ], reward: { coins: 1000, point: 1, insight: 1 } },
+  { id: 'worldbreaker', act: 1, title: 'The Black Crown', cn: '玄冕降临', steps: [
+    { type: 'check', text: 'Prepare for Vesper: break through to the second realm', test: c => c.g.state.realm >= 1,
+      start: c => c.g.cutscene.say([['Nix', 'Ironjaw was fleeing something. The Concord called it Vesper: a juvenile world-eater that feeds through a planet’s core.'], ['Instructor Hale', 'The evacuation fleet cannot carry everyone. Break through, prepare your equipment, and meet it outside the walls.']]) },
+    { type: 'reach', text: 'Confront Vesper outside Base City 07 — defeat means Terra is destroyed', where: c => c.planetary.arena('vesper'), radius: 280 },
+    { type: 'planetary', boss: 'vesper', text: 'Save Terra: slay Vesper and interrupt its World Rend' },
+    { type: 'event', on: 'planetary-briefing', text: 'Read the surviving Concord coordinates', test: () => true,
+      start: c => c.g.cutscene.say([['Nix', 'Terra lives. But Vesper was following a signal. Its core holds coordinates for a buried Concord engine on Dune.'], ['Instructor Hale', 'Find whoever woke it. We cannot survive another siege.']]) },
+  ], reward: { coins: 1800, point: 2, insight: 1 }, actEnd: 1 },
+  { id: 'buried-sun', act: 2, planet: 'p3', title: 'The Buried Sun', cn: '葬日之下', steps: [
+    { type: 'check', text: 'Fly to Dune — investigate the signal that called Vesper', test: c => c.g.star.key === 'home' && c.g.frame?.body.id === 'p3',
+      start: c => c.nix('Dune is our next destination. The buried engine is still transmitting. Follow the planetary navigation marker, then my ground coordinates. Recommended: realm 2 and upgraded equipment.') },
+    { type: 'reach', text: 'Approach the Concord excavation on Dune', where: c => c.planetary.arena('serekh'), radius: 280,
+      start: c => c.g.cutscene.say([['Nix', 'The engine has a guardian. Serekh feels movement through the sand. Watch for eruptions; its mouth opens after a lunge.'], ['Nix', 'Defeat here means Dune’s core will ignite. We need the engine intact to trace the source.']]) },
+    { type: 'planetary', boss: 'serekh', text: 'Defeat Serekh and sever the buried engine' },
+  ], reward: { coins: 3000, point: 2, insight: 1 }, actEnd: 2 },
+  { id: 'silent-choir', act: 3, planet: 'p5', title: 'The Silent Choir', cn: '寂霜终曲', steps: [
+    { type: 'check', text: 'Fly to Glacis — shut down the Concord relay', test: c => c.g.star.key === 'home' && c.g.frame?.body.id === 'p5',
+      start: c => c.g.cutscene.say([['Nix', 'Dune’s records point to Glacis. The Concord built a planetary defense network. Something has turned it into a dinner bell.'], ['Nix', 'Ilyra guards the last relay. Silence its choir before another world-eater answers. Recommended: realm 3.']]) },
+    { type: 'reach', text: 'Find the frozen relay on Glacis', where: c => c.planetary.arena('ilyra'), radius: 280 },
+    { type: 'planetary', boss: 'ilyra', text: 'Defeat Ilyra and silence the relay before Glacis fractures' },
+  ], reward: { coins: 5000, point: 3, insight: 1 }, final: true, actEnd: 3 },
 ];
 
 // The Aurean Concord at its height, raised for the opening cutscene over a
@@ -277,6 +300,7 @@ export class Campaign {
     this.el = document.getElementById('mission');
     this.busy = false;
     this.time = 0;
+    this.planetary = new PlanetaryEncounter(this);
   }
 
   get st() {
@@ -294,7 +318,7 @@ export class Campaign {
 
   // ------------------------------------------------------- locations --
   terra() { return this.g.homePlanet(); }
-  onTerra() { return this.g.frame && this.g.frame === this.terra(); }
+  onTerra() { return this.g.star.key === 'home' && this.g.frame?.body.id === 'p2'; }
   capital() { const t = this.terra(); return t.ensureSettlement(t.body.sites.city); }
   svc(kind) { const s = this.capital().services.find((x) => x.kind === kind); return s ? s.pos.clone() : this.capital().spawnLocal.clone(); }
   ruinCenter(i) {
@@ -421,6 +445,7 @@ export class Campaign {
     if (step.type === 'cutscene') this.pendingCut = true;
     if (step.type === 'waves') this.nextWave();
     if (step.type === 'boss') this.spawnBoss();
+    if (step.type === 'planetary') this.planetary.begin(step.boss);
     this.render();
     this.g.save();
   }
@@ -440,19 +465,20 @@ export class Campaign {
     if (rw.coins) s.coins += Math.round(rw.coins * Math.pow(2.2, s.realm));
     if (rw.point) s.bonusPoints = (s.bonusPoints || 0) + rw.point;
     if (rw.pills) for (const [k, n] of Object.entries(rw.pills)) s.pills[k] += n;
-    if (rw.insight) g.gainInsight('the battle for Base City 07');
+    if (rw.insight) g.gainInsight(m.act ? 'a planetary confrontation' : 'the battle for Base City 07');
     g.addXp(g.stats.xpNeed * 0.15);
     this.st.done.push(m.id);
     g.sound.reward();
     if (m.final) {
-      g.hud.banner('ACT I COMPLETE', 'The Walled City', '<span class="cn">第一幕 · 城墙</span>The story continues in Act II', '#ffe44d', 6);
-      this.st.act1Done = true;
+      g.hud.banner('CAMPAIGN COMPLETE', 'The signal is silent', 'Terra, Dune and Glacis endure. The wider galaxy remains open.', '#ffe44d', 6);
+      this.st.campaignDone = true;
       this.st.mi = ACT1.length;
       this.cleanup();
       this.render();
       g.save();
       return;
     }
+    if (m.actEnd) { if (m.actEnd === 1) this.st.act1Done = true; this.st.act = m.actEnd + 1; this.cleanup(); }
     g.hud.banner('MISSION COMPLETE', m.title, `<span class="cn">${m.cn}</span>`, '#ffc857', 3.5);
     this.st.mi++;
     this.st.si = 0;
@@ -472,6 +498,17 @@ export class Campaign {
   resume() {
     const step = this.step;
     if (!step) return this.render();
+    if (step.type === 'planetary') {
+      if (this.st.siegeFailure) {
+        this.planetary.def = PLANETARY_BOSSES[step.boss]; this.planetary.planet = this.planetary.planetFor(step.boss);
+        if (this.planetary.planet) { this.planetary.fail(this.st.siegeFailure); return; }
+      }
+      if (this.st.siegeCheckpoint) {
+        this.planetary.def = PLANETARY_BOSSES[step.boss]; this.planetary.planet = this.planetary.planetFor(step.boss);
+        if (this.planetary.planet) { this.planetary.retry(); return; }
+      }
+      this.spawned = false; return this.render();
+    }
     if (step.type === 'cutscene') return this.startStep();
     if (step.type === 'waves' || step.type === 'boss') {
       // start the fight over
@@ -482,6 +519,7 @@ export class Campaign {
   }
 
   rebase(m, q) {
+    this.planetary.rebase(m, q);
     const objs = [...Object.values(this.npcs).map((n) => n.group), ...this.turrets.map((t) => t.group), ...this.trucks];
     for (const o of objs) {
       o.position.applyMatrix4(m);
@@ -491,6 +529,7 @@ export class Campaign {
   }
 
   cleanup() {
+    this.planetary.dispose();
     for (const k of Object.keys(this.npcs)) this.removeNPC(k);
     for (const t of this.turrets) this.g.localRoot.remove(t.group);
     this.turrets = [];
@@ -501,6 +540,7 @@ export class Campaign {
   // ----------------------------------------------------------- events --
   // Returns true if the event was consumed (e.g. an interaction the story owns).
   event(kind, data) {
+    if (kind === 'kill' && this.planetary.onKill(data)) return true;
     const step = this.step;
     if (!step || this.busy || this.waiting || this.pendingCut) return false;
     if (kind === 'kill' && step.type === 'kill') {
@@ -536,13 +576,15 @@ export class Campaign {
   }
 
   update(dt) {
+    this.planetary.update(dt);
     this.time += dt;
     for (const n of Object.values(this.npcs)) n.anim(this.time);
     this.updateTurrets(dt);
     this.updateBoss(dt);
     const step = this.step;
     if (!step || this.busy || this.waiting || this.g.mode !== 'playing') return;
-    if (!this.onTerra()) return;
+    if (this.mission.planet ? this.g.star.key !== 'home' || this.g.frame?.body.id !== this.mission.planet : !this.onTerra()) return;
+    if (step.type === 'planetary' && this.planetary.status === 'idle' && !this.g.rt.inShip && !this.g.rt.inVehicle) this.planetary.begin(step.boss);
     const p = this.g.player.pos;
     if (this.pendingCut) {
       if (this.g.menus.overlayOpen || this.g.rt.inShip || this.g.rt.trib) return;
@@ -575,7 +617,9 @@ export class Campaign {
   // Waypoint for the HUD.
   target() {
     const step = this.step;
-    if (!step || this.busy || !this.onTerra()) return null;
+    if (!step || this.busy) return null;
+    if (this.mission.planet ? this.g.star.key !== 'home' || this.g.frame?.body.id !== this.mission.planet : !this.onTerra()) return null;
+    if (step.type === 'planetary') return this.planetary.target(step.boss);
     if (step.where) return step.where(this);
     if (step.type === 'kill' && step.tag) {
       const b = this.g.beasts.beasts.find((x) => x.alive && x.tag === step.tag);
@@ -605,10 +649,11 @@ export class Campaign {
     else if (step.type === 'waves') prog = `WAVE ${Math.min(this.st.wave, step.waves.length)}/${step.waves.length}`;
     else if (step.type === 'count') prog = `${this.st.p}/${step.count}`;
     else if (step.progress) prog = step.progress(this);
-    if (!this.onTerra()) text = 'Return to Terra to continue the story';
+    const rightPlanet = m.planet ? this.g.star.key === 'home' && this.g.frame?.body.id === m.planet : this.onTerra();
+    if (!rightPlanet) text = m.planet ? `Travel to ${m.planet === 'p3' ? 'Dune' : 'Glacis'} to continue the story` : 'Return to Terra to continue the story';
     const t = this.target();
     const dist = t ? Math.round(t.distanceTo(this.g.player.pos)) : null;
-    el.innerHTML = `<div class="mono dim">ACT I · ${m.title.toUpperCase()}</div><div class="m-obj">${text}</div><div class="mono m-meta">${prog}${prog && dist !== null ? ' · ' : ''}${dist !== null ? (dist >= 1000 ? `${(dist / 1000).toFixed(1)} KM` : `${dist} M`) : ''}</div>`;
+    el.innerHTML = `<div class="mono dim">ACT ${m.act || 1} · ${m.title.toUpperCase()}</div><div class="m-obj">${text}</div><div class="mono m-meta">${prog}${prog && dist !== null ? ' · ' : ''}${dist !== null ? (dist >= 1000 ? `${(dist / 1000).toFixed(1)} KM` : `${dist} M`) : ''}</div>`;
     el.classList.remove('hidden');
   }
 
@@ -926,7 +971,7 @@ export class Campaign {
         { at: 0.5, who: 'Instructor Hale', text: 'The tide is broken. Base City 07 stands because of you.' },
         { at: 4.2, who: 'Kade', text: '...Not bad, convoy rookie. Not bad at all.' },
         { at: 7.4, who: 'Nix', text: 'Feel that? Your meridians are begging to break through. Face the tribulation when you’re ready.' },
-        { at: 11.3, who: 'Nix', text: 'And then... Seren’s logs said the Devourer is at the heart of the galaxy. We’ll need wings. And a ship. And much bigger muscles.' },
+        { at: 11.3, who: 'Nix', text: 'Wait. Something larger is moving beneath the horizon. The tide wasn’t attacking us. It was running.' },
       ],
       events: [
         { at: 0, fn: () => g.sound.breakthrough() },

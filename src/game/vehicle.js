@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bevelBox, taperedHull } from '../world/geometry.js';
 
 // Ground vehicles: hover machines that ride the terrain (and skim water),
 // steer toward where you look, and smash through trees and beasts.
@@ -31,26 +32,23 @@ function buildModel(id, color) {
   const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
   const pad = (x, z, r) => { const m = add(new THREE.CylinderGeometry(r, r * 0.8, 0.16, 16), light, x, -0.55, z); pads.push(m); };
   if (id === 'bike') {
-    add(new THREE.BoxGeometry(0.62, 0.5, 2.3), paint, 0, 0, 0);
-    add(new THREE.BoxGeometry(0.5, 0.18, 0.9), dark, 0, 0.32, 0.25);
-    add(new THREE.BoxGeometry(0.5, 0.4, 0.6), paint, 0, 0.3, -0.85).rotation.x = -0.4;
+    add(taperedHull(0.62, 0.5, 2.3, 0.55), paint, 0, 0, 0);
+    add(bevelBox(0.5, 0.18, 0.9, 0.05, true), dark, 0, 0.32, 0.25);
+    add(taperedHull(0.5, 0.4, 0.6, 0.7), paint, 0, 0.3, -0.85).rotation.x = -0.4;
     add(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6), metal, 0, 0.62, -0.9).rotation.z = Math.PI / 2;
     add(new THREE.BoxGeometry(0.34, 0.06, 0.04), light, 0, 0.18, -1.17);
     add(new THREE.BoxGeometry(0.5, 0.08, 0.04), glow(0xff3030), 0, 0.12, 1.16);
     pad(0, -0.75, 0.42);
     pad(0, 0.75, 0.42);
   } else if (id === 'rover') {
-    add(new THREE.BoxGeometry(2.1, 1.0, 3.8), paint, 0, 0.1, 0);
-    add(new THREE.BoxGeometry(1.8, 0.8, 1.6), dark, 0, 0.9, -0.2);
-    add(new THREE.BoxGeometry(2.3, 0.35, 0.3), metal, 0, -0.05, -2.0);
+    add(taperedHull(2.1, 1.0, 3.8, 0.88), paint, 0, 0.1, 0);
+    add(taperedHull(1.8, 0.8, 1.6, 0.78), dark, 0, 0.9, -0.2);
+    add(bevelBox(2.3, 0.35, 0.3, 0.06, true), metal, 0, -0.05, -2.0);
     add(new THREE.BoxGeometry(1.4, 0.1, 0.05), light, 0, 0.35, -1.92);
     add(new THREE.BoxGeometry(1.6, 0.1, 0.05), glow(0xff3030), 0, 0.35, 1.92);
     for (const [x, z] of [[-0.85, -1.3], [0.85, -1.3], [-0.85, 1.3], [0.85, 1.3]]) pad(x, z, 0.5);
   } else {
-    const body = new THREE.BoxGeometry(1.7, 0.45, 3.6, 1, 1, 2);
-    const p = body.attributes.position;
-    for (let i = 0; i < p.count; i++) if (p.getZ(i) < -1) { p.setY(i, p.getY(i) * 0.4 - 0.08); p.setX(i, p.getX(i) * 0.7); }
-    body.computeVertexNormals();
+    const body = taperedHull(1.7, 0.45, 3.6, 0.6);
     add(body, paint, 0, 0, 0);
     add(new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), dark, 0, 0.2, 0.2).scale.set(1, 0.7, 1.6);
     add(new THREE.BoxGeometry(1.9, 0.06, 0.3), paint, 0, 0.45, 1.65);

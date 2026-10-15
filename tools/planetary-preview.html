@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="icon" href="data:,"><title>Planetary encounter inspection</title>
+<style>body{margin:0;background:#020308;color:white;font:13px system-ui}iframe{position:absolute;inset:0;width:100%;height:100%;border:0}nav{position:fixed;top:12px;left:12px;z-index:999;background:#10202cda;padding:10px;border:1px solid #8095a0}button{margin:3px;padding:6px;background:#203442;color:white;border:1px solid #8095a0}</style></head>
+<body><iframe src="/"></iframe><nav>Planetary campaign · actual game inspection<br><button>vesper</button><button>serekh</button><button>ilyra</button><button>tell</button><button>destruction</button><button>aftermath</button><button>retry</button><button>victory</button></nav>
+<script type="module">
+import * as THREE from 'three';
+import { ACT1 } from '/src/game/campaign.js';
+import { derive } from '/src/game/state.js';
+const frame=document.querySelector('iframe');let g,current;
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+async function setup(id){
+  g.campaign.cleanup();g.beasts.clear();g.combat.clear();g.menus.closeModal();
+  const mission=ACT1.findIndex(m=>m.steps.some(s=>s.boss===id));
+  g.state.campaign={started:true,mi:mission,si:2,done:[]};g.state.realm=2;g.state.nixAwake=true;g.stats=derive(g.state);g.rt=g.freshRuntime();g.player.setRealm(2);
+  const e=g.campaign.planetary,planet=e.planetFor(id);g.setFrame(planet,false);planet.buildDetails();
+  const centre=e.arena(id),up=centre.clone().normalize(),side=new THREE.Vector3(1,0,0).projectOnPlane(up).normalize();
+  const pos=centre.clone().addScaledVector(side,220).normalize();pos.multiplyScalar(planet.floorRadius(pos.x,pos.y,pos.z)+1.7);
+  g.player.placeAt(pos,centre,up);g.player.vel.set(0,0,0);g.mode='playing';g.input.locked=true;g.menus.showPause(false);g.hud.show(true);e.begin(id);
+  for(let i=0;i<30;i++)g.update(1/60);
+  await pause(500);current=id;
+}
+function renderBoss(){const e=g.campaign.planetary,up=e.up,side=new THREE.Vector3(1,0,0).projectOnPlane(up).normalize();g.camera.position.copy(e.boss.pos).addScaledVector(side,190).addScaledVector(up,45).addScaledVector(new THREE.Vector3().crossVectors(side,up),190);g.camera.quaternion.setFromRotationMatrix(new THREE.Matrix4().lookAt(g.camera.position,e.boss.pos,up));g.camera.updateMatrixWorld();g.scene.updateMatrixWorld(true);g.post.render(g.time);}
+window.setPreviewView=async name=>{
+  if(['vesper','serekh','ilyra'].includes(name)){await setup(name);g.hud.hideBanner();renderBoss();}
+  else if(name==='tell'){await setup('vesper');const e=g.campaign.planetary;e.brain.t=0;g.update(.05);renderBoss();}
+  else if(name==='destruction'){await setup('vesper');g.rt.invuln=0;g.hurtPlayer(g.stats.maxHp*100,g.player.pos,null,true);g.update(.05);g.cutscene.active.t=6.95;g.cutscene.update(.05);g.scene.updateMatrixWorld(true);g.post.render(g.time);current=name;}
+  else if(name==='aftermath'){if(current!=='destruction')await window.setPreviewView('destruction');g.cutscene.active.t=11.99;g.cutscene.update(.05);await pause(50);g.scene.updateMatrixWorld(true);g.post.render(g.time);current=name;}
+  else if(name==='retry'){if(current!=='aftermath')await window.setPreviewView('aftermath');g.menus.closeModal('retry');await pause(100);g.input.locked=true;g.menus.showPause(false);for(let i=0;i<5;i++)g.update(.016);await pause(300);renderBoss();current=name;}
+  else if(name==='victory'){await setup('vesper');g.rt.invuln=999;g.campaign.planetary.boss.hp*=.32;for(let i=0;i<160;i++)g.update(.05);const b=g.campaign.planetary.boss;g.hitBeast(b,b.maxHp*10,b.pos.clone(),'bolt');g.update(.05);if(g.campaign.planetary.status!=='idle'||!g.state.campaign.slain.includes('vesper')||g.state.bosses.includes('home'))throw new Error('Victory did not advance safely or granted a regional Overlord trophy');g.scene.updateMatrixWorld(true);g.post.render(g.time);current=name;}
+  window.previewReady=true;
+};
+window.previewSummary=()=>({view:current,status:g.campaign.planetary.status,mode:g.mode,boss:g.campaign.planetary.boss?.name,checkpoint:!!g.state.campaign.siegeCheckpoint,failed:!!g.state.campaign.siegeFailure,slain:g.state.campaign.slain||[]});
+for(const b of document.querySelectorAll('button'))b.onclick=()=>window.setPreviewView(b.textContent);
+for(let i=0;i<1200;i++){g=frame.contentWindow.game;if(g?.system&&g.mode==='title')break;await pause(100);}
+if(!g?.system)throw new Error('Game boot timed out');
+g.renderer.setAnimationLoop(null);g.input.lock=async()=>{g.input.locked=true;return true};await g.newGame('free');await window.setPreviewView('vesper');
+</script></body></html>

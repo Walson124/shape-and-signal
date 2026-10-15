@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bevelBox } from './geometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signTexture, glowTexture } from './textures.js';
 import { VENUES, interiorLayout, buildInterior, buildNPC } from './interiors.js';
@@ -50,7 +51,7 @@ export function buildDockStation(name, accentHex = 0x3ef2ff) {
   ring.position.y = 55;
   ring.rotation.x = Math.PI / 2;
   g.add(ring);
-  for (let k = 0; k < 4; k++) put(parts.dark, new THREE.BoxGeometry(46, 1.2, 1.2).translate(23, 0, 0), 0, 55, 0, (k / 4) * Math.PI * 2);
+  for (let k = 0; k < 4; k++) put(parts.dark, bevelBox(46, 1.2, 1.2).translate(23, 0, 0), 0, 55, 0, (k / 4) * Math.PI * 2);
 
   // landing pads
   const pads = [];
@@ -78,7 +79,7 @@ export function buildDockStation(name, accentHex = 0x3ef2ff) {
     };
     const wall = (lx, lz, w, d, y0, y1) => {
       const [cx, cz] = toW(lx, lz);
-      put(parts.hull, new THREE.BoxGeometry(w, y1 - y0, d), cx, (y0 + y1) / 2, cz, ry);
+      put(parts.hull, bevelBox(w, y1 - y0, d), cx, (y0 + y1) / 2, cz, ry);
       const along = Math.abs(Math.sin(ry)) > 0.7;
       const ex = along ? d / 2 : w / 2, ez = along ? w / 2 : d / 2;
       addBox(cx - ex, cx + ex, y0, y1, cz - ez, cz + ez);
@@ -88,7 +89,7 @@ export function buildDockStation(name, accentHex = 0x3ef2ff) {
     wall(W / 2 - T / 2, 0, T, D, 0, H);
     wall(0, 0, W + 0.6, D + 0.6, H, H + 0.6);
     const [fx, fz] = toW(0, -D / 2);
-    put(parts.neon, new THREE.BoxGeometry(W, 0.2, 0.2), fx, H + 0.7, fz, ry);
+    put(parts.neon, bevelBox(W, 0.2, 0.2), fx, H + 0.7, fz, ry);
     const inter = buildInterior(kind, W, D, H, kind.length * 1013, v.name);
     inter.group.position.set(bx, 0, bz);
     inter.group.rotation.y = ry;
@@ -115,7 +116,7 @@ export function buildDockStation(name, accentHex = 0x3ef2ff) {
   const reg = buildNPC(0x2a3040, 0xffe44d);
   reg.group.position.set(0, 0, 18);
   g.add(reg.group);
-  put(parts.dark, new THREE.BoxGeometry(3, 1.1, 1.1), 0, 0.55, 16.5);
+  put(parts.dark, bevelBox(3, 1.1, 1.1), 0, 0.55, 16.5);
   addBox(-1.5, 1.5, 0, 1.1, 15.9, 17.1);
   services.push({ kind: 'shipyard', name: `${name} Shipyard`, local: new THREE.Vector3(0, 1.6, 14.8), range: 4.5 });
 

@@ -229,6 +229,7 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .b-sub { margin-top: 6px; font-size: clamp(16px, 2vw, 22px); font-weight: 600; letter-spacing: 0.12em; text-shadow: 0 2px 8px #000; }
 .b-sub .cn { font-size: 1.15em; color: var(--gd); margin-right: 6px; }
 #banner.small { top: 16%; }
+#alert.planetary { top: 12%; max-width: min(680px, 88vw); box-sizing: border-box; font-size: 13px; line-height: 1.45; letter-spacing: 0.08em; text-align: center; color: #ffdc9e; background: #181d29e8; border: 1px solid #bf8d4d; clip-path: none; animation: none; }
 #banner.small .b-title { font-size: clamp(22px, 2.8vw, 34px); white-space: nowrap; }
 @keyframes bannerIn { from { opacity: 0; transform: translate(-50%, 16px); letter-spacing: 0.4em; filter: blur(6px); } }
 #fade { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
@@ -534,3 +535,26 @@ a.menu-item { text-decoration: none; }
 .menu-item.support .mi-label { color: #ff9ab8; }
 .menu-item.support:hover .mi-label { color: #ffc0d4; }
 #title-menu .mi-label { white-space: nowrap; }
+/* Virtual Universe training controls */
+#training-hud { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 15; display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: rgba(8, 6, 24, .9); border: 1px solid var(--cy); color: var(--cy); font-size: 12px; white-space: nowrap; }
+#training-hud.hidden { display: none; }
+#training-hud { max-width: calc(100vw - 32px); width: max-content; flex-wrap: wrap; justify-content: center; white-space: normal; }
+#training-hud span { color: var(--dim); }
+.training-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.training-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--cy); }
+.training-field select, .training-field input { width: 100%; padding: 9px; background: #101322; color: #eef5ff; border: 1px solid #343c56; border-radius: 4px; }
+.training-toggles, .training-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.training-toggle { font-size: 13px; }
+#physical-body-status { position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 8px 12px; color: #ffa0aa; border: 1px solid #80404c; background: rgba(24, 5, 12, .9); font-size: 12px; pointer-events: none; z-index: 18; }
+#physical-body-status.hidden { display: none; }
+#physical-body-return { pointer-events: auto; }
+#physical-body-status.alert { color: #ff637a; border-color: #ff4466; animation: vuAlert .6s ease-in-out infinite alternate; }
+.physical-hp { width: 150px; height: 6px; background: #40202a; }
+.physical-hp i { display: block; height: 100%; background: #ff637a; transition: width .15s; }
+.virtual-hit { position: fixed; inset: 0; opacity: 0; pointer-events: none; display: flex; justify-content: center; align-items: flex-start; padding-top: 100px; z-index: 44; font-family: var(--mono); font-size: 13px; letter-spacing: .12em; }
+#simulation-hit { color: #3ef2ff; box-shadow: inset 0 0 70px 12px rgba(62, 242, 255, .35); }
+#physical-hit { color: #ff637a; box-shadow: inset 0 0 90px 18px rgba(255, 50, 85, .55); padding-top: 140px; }
+.virtual-hit span { padding: 8px 14px; background: rgba(4, 6, 16, .9); border: 1px solid currentColor; }
+#simulation-hit.hit-flash { animation: virtualHit .4s ease-out; }
+#physical-hit.hit-flash { animation: virtualHit 1.2s ease-out; }
+@keyframes virtualHit { 0%, 15% { opacity: 1; } 100% { opacity: 0; } }

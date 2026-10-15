@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { smoothSurface } from './geometry.js';
 import { NOISE_GLSL } from '../core/glsl.js';
 import { withLogDepth } from '../core/logdepth.js';
 import { mulberry32 } from '../core/rng.js';
@@ -41,9 +42,9 @@ class AsteroidField {
       v.multiplyScalar(n);
       p.setXYZ(i, v.x, v.y, v.z);
     }
-    geo.computeVertexNormals();
+    const surface = smoothSurface(geo);
     this.max = 700;
-    this.mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.93, flatShading: true, envMapIntensity: 0.3 }), this.max);
+    this.mesh = new THREE.InstancedMesh(surface, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.93, envMapIntensity: 0.3 }), this.max);
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
     root.add(this.mesh);

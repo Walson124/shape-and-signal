@@ -183,8 +183,8 @@ export class PostFX {
     const u = this.final.uniforms;
     const fx = this.fx;
     u.time.value = time;
-    u.aberration.value = settings.get('aberration') ? 0.0028 : 0;
-    u.grain.value = settings.get('grain') ? 0.04 : 0;
+    u.aberration.value = settings.get('aberration') ? 0.0007 : 0;
+    u.grain.value = settings.get('grain') ? 0.012 : 0;
     u.vignette.value = settings.get('vignette') ? 0.45 : 0.08;
     this.bloom.enabled = settings.get('bloom') !== false;
     u.speed.value = settings.get('speedBlur') ? fx.speed : 0;

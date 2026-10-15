@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bevelBox } from './geometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signTexture } from './textures.js';
 
@@ -66,7 +67,7 @@ const NPC_GEO = (() => {
     new THREE.CapsuleGeometry(0.09, 0.62, 3, 6).translate(0.12, 0.42, 0),
   ];
   const g = mergeGeometries(parts.map((p) => p.toNonIndexed()));
-  g.computeVertexNormals();
+  // Preserve the capsule/sphere normals through batching.
   return g;
 })();
 export const npcGeometry = () => NPC_GEO;
@@ -75,7 +76,7 @@ export function buildNPC(color, accent) {
   const g = new THREE.Group();
   const body = new THREE.Mesh(NPC_GEO, new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.2 }));
   g.add(body);
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.05), glowMat(accent, 2.6));
+  const visor = new THREE.Mesh(bevelBox(0.28, 0.05, 0.05), glowMat(accent, 2.6));
   visor.position.set(0, 1.74, 0.15);
   g.add(visor);
   const arms = [-1, 1].map((s) => {
@@ -141,17 +142,17 @@ export function buildInterior(kind, w, d, H, seed, label) {
   const floorGeo = new THREE.PlaneGeometry(w - 1.2, d - 1.2).rotateX(-Math.PI / 2);
   floorGeo.attributes.uv.array.forEach((_, i, a) => { a[i] *= i % 2 ? d / 4 : w / 4; });
   add(floorGeo, m.floor, 0, 0.06, 0);
-  for (let i = -1; i <= 1; i++) add(new THREE.BoxGeometry(w * 0.7, 0.08, 0.5), glowMat(0xfff4e0, 1.1), 0, H - 0.35, i * d * 0.25);
+  for (let i = -1; i <= 1; i++) add(bevelBox(w * 0.7, 0.08, 0.5), glowMat(0xfff4e0, 1.1), 0, H - 0.35, i * d * 0.25);
   // trim lights along the walls
   for (const s of [-1, 1]) {
-    add(new THREE.BoxGeometry(0.06, 0.06, d - 1.6), glowMat(v.color, 2), s * (w / 2 - 0.68), 0.25, 0);
-    add(new THREE.BoxGeometry(0.06, 0.06, d - 1.6), glowMat(v.color, 1.6), s * (w / 2 - 0.68), H - 0.8, 0);
+    add(bevelBox(0.06, 0.06, d - 1.6), glowMat(v.color, 2), s * (w / 2 - 0.68), 0.25, 0);
+    add(bevelBox(0.06, 0.06, d - 1.6), glowMat(v.color, 1.6), s * (w / 2 - 0.68), H - 0.8, 0);
   }
   // counter + holo screen
   const c = lay.counter;
   if (kind !== 'lobby' && kind !== 'chamber') {
-    add(new THREE.BoxGeometry(c.w, c.h, c.d), m.dark, c.x, c.h / 2, c.z);
-    add(new THREE.BoxGeometry(c.w, 0.05, c.d + 0.1), glowMat(v.color, 1.8), c.x, c.h + 0.03, c.z);
+    add(bevelBox(c.w, c.h, c.d), m.dark, c.x, c.h / 2, c.z);
+    add(bevelBox(c.w, 0.05, c.d + 0.1), glowMat(v.color, 1.8), c.x, c.h + 0.03, c.z);
     const scr = add(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ color: new THREE.Color(v.color).multiplyScalar(1.4), transparent: true, opacity: 0.55, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }), c.x - c.w * 0.25, c.h + 0.8, c.z + 0.1, Math.PI);
     own.push(scr.material);
   }
@@ -168,9 +169,9 @@ export function buildInterior(kind, w, d, H, seed, label) {
     const itemCol = kind === 'pills' ? 0x5dffa8 : kind === 'forge' ? 0x3ef2ff : 0xffe44d;
     for (const s of [-1, 1]) {
       const x = s * (w / 2 - 1.2);
-      add(new THREE.BoxGeometry(1, 2.6, d * 0.5), m.metal, x, 1.3, 0);
+      add(bevelBox(1, 2.6, d * 0.5), m.metal, x, 1.3, 0);
       for (let k = 0; k < 4; k++) for (let j = 0; j < 3; j++) {
-        const item = kind === 'forge' ? new THREE.BoxGeometry(0.06, 0.06, 0.9) : new THREE.SphereGeometry(0.12, 8, 6);
+        const item = kind === 'forge' ? bevelBox(0.06, 0.06, 0.9) : new THREE.SphereGeometry(0.12, 8, 6);
         add(item, glowMat(itemCol, 1.4 + r() * 1.2), x - s * 0.55, 0.6 + j * 0.7, -d * 0.2 + k * (d * 0.13));
       }
     }
@@ -192,7 +193,7 @@ export function buildInterior(kind, w, d, H, seed, label) {
     for (let k = 0; k < 4; k++) add(new THREE.SphereGeometry(0.35, 10, 8), glowMat(0xff4a3a, 2), -w / 3 + k * (w / 4.5), H - 1.6, 0);
   } else if (kind === 'clinic') {
     for (const s of [-1, 1]) {
-      add(new THREE.BoxGeometry(1.6, 1.0, 2.6), m.metal, s * (w / 2 - 2), 0.5, -d / 8);
+      add(bevelBox(1.6, 1.0, 2.6), m.metal, s * (w / 2 - 2), 0.5, -d / 8);
       add(new THREE.CapsuleGeometry(0.75, 1.2, 4, 10).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3c7d).multiplyScalar(0.8), transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }), s * (w / 2 - 2), 1.4, -d / 8);
     }
     add(new THREE.TorusGeometry(1.2, 0.05, 6, 32), glowMat(0xff3c7d, 2.4), 0, 2.4, 0).rotation.x = Math.PI / 2;
@@ -202,16 +203,16 @@ export function buildInterior(kind, w, d, H, seed, label) {
     add(new THREE.CylinderGeometry(0.25, 0.25, H, 10, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xb98cff).multiplyScalar(1.6), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), 0, H / 2, 0);
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * Math.PI * 2;
-      add(new THREE.BoxGeometry(0.9, 0.08, 0.9), m.cloth, Math.cos(a) * (w / 3), 0.1, Math.sin(a) * (d / 3));
+      add(bevelBox(0.9, 0.08, 0.9), m.cloth, Math.cos(a) * (w / 3), 0.1, Math.sin(a) * (d / 3));
     }
   } else if (kind === 'home') {
-    add(new THREE.BoxGeometry(2.2, 0.5, 3.2), m.cloth, -w / 2 + 2.2, 0.25, d / 4);
-    add(new THREE.BoxGeometry(2.2, 0.2, 0.8), m.metal, -w / 2 + 2.2, 0.6, d / 4 + 1.2);
-    add(new THREE.BoxGeometry(1.6, 0.8, 0.8), m.wood, w / 2 - 2, 0.4, d / 4);
+    add(bevelBox(2.2, 0.5, 3.2), m.cloth, -w / 2 + 2.2, 0.25, d / 4);
+    add(bevelBox(2.2, 0.2, 0.8), m.metal, -w / 2 + 2.2, 0.6, d / 4 + 1.2);
+    add(bevelBox(1.6, 0.8, 0.8), m.wood, w / 2 - 2, 0.4, d / 4);
   } else if (kind === 'lobby') {
-    add(new THREE.BoxGeometry(0.7, 2.2, 0.7), m.metal, w / 2 - 1.5, 1.1, d / 2 - 1.5);
-    for (let k = 0; k < 2; k++) add(new THREE.BoxGeometry(1.8, 2.6, 0.1), glowMat(0x8fb8ff, 0.9), -w / 4 + k * (w / 2), 1.3, d / 2 - 0.65);
-    add(new THREE.BoxGeometry(2.6, 0.45, 0.9), m.cloth, 0, 0.23, 0);
+    add(bevelBox(0.7, 2.2, 0.7), m.metal, w / 2 - 1.5, 1.1, d / 2 - 1.5);
+    for (let k = 0; k < 2; k++) add(bevelBox(1.8, 2.6, 0.1), glowMat(0x8fb8ff, 0.9), -w / 4 + k * (w / 2), 1.3, d / 2 - 0.65);
+    add(bevelBox(2.6, 0.45, 0.9), m.cloth, 0, 0.23, 0);
   }
   // plants
   for (let k = 0; k < 2; k++) {

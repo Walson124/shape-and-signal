@@ -18,6 +18,8 @@ export class Input {
     this.onKey = null;
     this.capture = null;
     this.time = 0;
+    this.wantLock = false;
+    this.lockPending = null;
 
     const press = (code) => {
       if (!this.keys.has(code)) {
@@ -43,7 +45,7 @@ export class Input {
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'AltLeft', 'AltRight'].includes(e.code)) e.preventDefault();
       if (this.locked && (e.ctrlKey || e.code.startsWith('Control'))) e.preventDefault();
       press(e.code);
-      if (this.onKey) this.onKey(e.code, e);
+      if (!e.repeat && this.onKey) this.onKey(e.code, e);
     });
     window.addEventListener('keyup', (e) => release(e.code));
     window.addEventListener('blur', () => {
@@ -76,6 +78,7 @@ export class Input {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
+      if (this.locked && !this.wantLock) { document.exitPointerLock(); return; }
       if (!this.locked) for (let b = 0; b < 5; b++) release(`Mouse${b}`);
       if (this.onLockChange) this.onLockChange(this.locked);
     });
@@ -121,24 +124,37 @@ export class Input {
   }
 
   lock() {
-    if (this.locked) return;
-    try {
-      const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
-      if (p && p.catch) {
-        p.catch(() => {
-          try {
-            const q = this.canvas.requestPointerLock();
-            if (q && q.catch) q.catch(() => {});
-          } catch { /* ignore */ }
-        });
+    this.wantLock = true;
+    if (this.locked) return Promise.resolve(true);
+    if (this.lockPending) return this.lockPending;
+    this.lockPending = (async () => {
+      try {
+        try {
+          await this.canvas.requestPointerLock({ unadjustedMovement: true });
+        } catch (error) {
+          if (!this.wantLock || error?.name !== 'NotSupportedError') return false;
+          await this.canvas.requestPointerLock();
+        }
+        return this.wantLock && document.pointerLockElement === this.canvas;
+      } catch {
+        return false;
       }
-    } catch {
-      /* the pause screen asks the player to click */
-    }
+    })();
+    this.lockPending.finally(() => { this.lockPending = null; });
+    return this.lockPending;
   }
 
   unlock() {
+    this.wantLock = false;
     if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  clear() {
+    this.keys.clear();
+    this.pressed.clear();
+    this.released.clear();
+    this.downAt.clear();
+    this.dx = this.dy = this.wheel = 0;
   }
 
   consumeMouse() {

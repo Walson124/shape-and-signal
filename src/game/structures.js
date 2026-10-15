@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bevelBox } from '../world/geometry.js';
 
 // Things you build from your ring and set down in the world: a tent to rest
 // and respawn in, a turret that guards it, a totem that speeds cultivation.
@@ -26,7 +27,7 @@ export function buildStructure(type) {
     const head = new THREE.Group();
     head.position.y = 1.5;
     g.add(head);
-    const box = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.2), metal);
+    const box = new THREE.Mesh(bevelBox(1.2, 0.7, 1.2), metal);
     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.8, 8).rotateX(Math.PI / 2).translate(0, 0, -1), m(new THREE.MeshStandardMaterial({ color: 0x1a1e26, metalness: 0.8 })));
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), m(glow(0x3ef2ff, 3)));
     eye.position.set(0, 0.1, -0.62);

@@ -9,6 +9,7 @@ export const ACTIONS = [
   { id: 'down', label: 'Sink while flying', group: 'Movement', def: 'KeyX' },
   { id: 'sprint', label: 'Sprint / boost', group: 'Movement', def: 'ShiftLeft' },
   { id: 'fire', label: 'Primary attack', group: 'Combat', def: 'Mouse0' },
+  { id: 'dodge', label: 'Dodge (move to choose direction)', group: 'Combat', def: 'ControlLeft' },
   { id: 'focus', label: 'Secondary (guard · aim · steer swords · mind grip)', group: 'Combat', def: 'Mouse2' },
   { id: 'skill1', label: 'Technique 1', group: 'Combat', def: 'KeyQ' },
   { id: 'skill2', label: 'Technique 2', group: 'Combat', def: 'KeyR' },
@@ -26,6 +27,7 @@ export const ACTIONS = [
   { id: 'interact', label: 'Interact · board ship · hold to search', group: 'World', def: 'KeyE' },
   { id: 'target', label: 'Target a marker or star', group: 'World', def: 'KeyT' },
   { id: 'virtual', label: 'Enter / leave the Virtual Universe', group: 'World', def: 'KeyO' },
+  { id: 'returnBody', label: 'Return to physical body (from virtual / training)', group: 'World', def: 'KeyL' },
   { id: 'engage', label: 'Cruise · warp', group: 'World', def: 'KeyG' },
   { id: 'camera', label: 'First / third person', group: 'Interface', def: 'KeyP' },
   { id: 'panelCult', label: 'Cultivation panel', group: 'Interface', def: 'KeyK' },
@@ -33,6 +35,7 @@ export const ACTIONS = [
   { id: 'panelBounty', label: 'Bounties', group: 'Interface', def: 'KeyJ' },
   { id: 'panelRing', label: 'Space ring', group: 'Interface', def: 'KeyI' },
   { id: 'panelGuide', label: 'Guide', group: 'Interface', def: 'KeyH' },
+  { id: 'panelTraining', label: 'Training controls (in simulation)', group: 'Interface', def: 'F2' },
   { id: 'mute', label: 'Mute sound', group: 'Interface', def: 'KeyN' },
 ];
 
