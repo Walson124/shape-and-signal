@@ -48,6 +48,9 @@ export class PlanetaryEncounter {
     g.beasts.clear(); g.combat.clear();
     this.boss = g.beasts.spawnPlanetary(this.def, this.centre.clone().addScaledVector(this.up, this.def.lift));
     this.brain = new PlanetaryBrain(this.def); this.status = 'fighting'; this.abandon = 0; this.hit = false;
+    // it wakes with a roar and gives you a few seconds to take it in before the first attack
+    this.brain.t = 6;
+    g.combat.shockwave(this.boss.pos.clone(), 220, this.def.accent, 1.6); g.sound.thunder(); g.rt.shake = Math.max(g.rt.shake, 0.9);
     g.hud.el?.alert?.classList.add('planetary');
     g.hud.banner('PLANETARY THREAT', this.def.name, `${this.def.cn} · ${this.def.planet} will fall if you lose`, '#ffb752', 5);
     g.cutscene.say([['Nix', 'Watch its tells. Commit after it attacks. When the core opens, interrupt the World Rend.']]);
@@ -148,7 +151,9 @@ export class PlanetaryEncounter {
       }
       if (attack.shape === 'ring') for (const m of this.telegraphs) m.scale.setScalar(Math.max(0.1, attack.reach * progress / 50));
       if (!this.hit && attackHits(attack, this.origin, this.direction, g.player.pos, this.up, progress, this.marks)) {
-        this.hit = true; g.hurtPlayer(b.dmg * (this.brain.phase === 2 ? 1.2 : 1), b.pos);
+        // a hit hurts, but never takes more than about a fifth to a quarter of your life
+        const cap = g.stats.maxHp * [0.18, 0.22, 0.26][this.brain.phase];
+        this.hit = true; g.hurtPlayer(Math.min(b.dmg * (this.brain.phase === 2 ? 1.2 : 1), cap), b.pos);
       }
     }
     b.stunT = 0; b.held = false;
@@ -206,5 +211,5 @@ export class PlanetaryEncounter {
     for (const mark of this.marks) mark.applyMatrix4(m);
     for (const mesh of this.telegraphs) { mesh.position.applyMatrix4(m); mesh.quaternion.premultiply(q); }
   }
-  dispose() { this.status = 'idle'; this.clearTells(); this.clearDestruction(); this.boss = null; this.g.hud.el?.alert?.classList.remove('planetary'); }
+  dispose() { this.status = 'idle'; this.clearTells(); this.clearDestruction(); this.boss = null; this.g.hud.alert?.(null); this.g.hud.el?.alert?.classList.remove('planetary'); }
 }

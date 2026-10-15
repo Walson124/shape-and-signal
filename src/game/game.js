@@ -583,7 +583,8 @@ export class Game {
         ['Many city buildings are open. Walk in through any glowing door to shop, train, take jobs or fight in the arena.', 'yl'],
         ['Visit the <b>Martial Hall</b> and <b>Exchange</b> in the city with <kbd>E</kbd> for bounties, pills and the sword forge.', 'yl'],
       ];
-      tips.forEach(([t, k], i) => setTimeout(() => this.inGame && this.hud.notify(t, k), 900 + i * 3400));
+      // the welcome tips belong to the real city, not the training world or a boss fight
+      tips.forEach(([t, k], i) => setTimeout(() => this.inGame && !this.training?.active && !this.hud.quiet && this.hud.notify(t, k), 900 + i * 3400));
       const home = this.homePlanet();
       const cityName = home && home.body.sites.city ? home.body.sites.city.name : 'Base City 07';
       this.hud.banner('SYSTEM ONLINE', cityName, `<span class="cn">基地市</span>${esc(home ? home.body.name : '')} · ${esc(this.star.name)} System`, '#3ef2ff', 4);
@@ -826,6 +827,15 @@ export class Game {
   update(dt) {
     const s = this.state, rt = this.rt, p = this.player, inp = this.input;
     const alive = this.mode === 'playing';
+    const siege = this.campaign.planetary.active && !rt.inShip && !rt.inVehicle;
+    if (siege !== !!this.siegeCam) {
+      this.siegeCam = siege;
+      if (siege) { this.siegePrev = { camMode: this.camMode, zoom: this.zoom }; this.camMode = 'third'; this.zoom = 2.8; }
+      else if (this.siegePrev) { this.camMode = this.siegePrev.camMode; this.zoom = this.siegePrev.zoom; this.siegePrev = null; }
+      this.applyCamMode();
+    }
+    // no tutorial tips in the middle of a boss fight
+    this.hud.quiet = siege || !!this.beasts.liveBoss;
     // logged into the Virtual Universe your body takes no orders, but it still lives
     const body = alive || this.mode === 'virtual';
     let st = this.stats;

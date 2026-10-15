@@ -56,6 +56,7 @@ export class Cutscene {
   showSub(who, text) {
     const col = SPEAKER_COLORS[who] || '#9fe6ff';
     this.sub.innerHTML = who ? `<b style="color:${col}">${who}</b>${text}` : `<i>${text}</i>`;
+    this.sub.classList.toggle('ingame', !this.bars.classList.contains('on'));
     this.sub.classList.remove('hidden');
   }
 

@@ -21,7 +21,7 @@ function facadeTextures() {
   const ctx = c.getContext('2d');
   const ex = e.getContext('2d');
   const r = mulberry32(99);
-  ctx.fillStyle = '#4a5462';
+  ctx.fillStyle = '#5a5650';
   ctx.fillRect(0, 0, s, s);
   ex.fillStyle = '#000';
   ex.fillRect(0, 0, s, s);
@@ -30,34 +30,36 @@ function facadeTextures() {
       const px = x * 32 + 5, py = y * 32 + 7;
       // Baked panel relief and glass reflections: the same two 256px maps,
       // with no normal-map sampler or additional material batch.
-      const panel = 66 + Math.floor(r() * 15);
-      ctx.fillStyle = `rgb(${panel},${panel + 9},${panel + 20})`;
+      // weathered concrete in the same family as the Terra brick blocks
+      const panel = 78 + Math.floor(r() * 14);
+      ctx.fillStyle = `rgb(${panel + 8},${panel + 3},${panel - 4})`;
       ctx.fillRect(x * 32, y * 32, 32, 32);
-      ctx.fillStyle = '#697788';
+      ctx.fillStyle = '#8a8378';
       ctx.fillRect(px - 1, py - 1, 24, 1);
       ctx.fillRect(px - 1, py, 1, 18);
-      ctx.fillStyle = '#252d39';
+      ctx.fillStyle = '#3a352f';
       ctx.fillRect(px, py + 18, 23, 2);
-      ctx.fillStyle = '#1a2230';
+      ctx.fillStyle = '#1b1e22';
       ctx.fillRect(px, py, 22, 18);
-      ctx.fillStyle = '#2d4156';
+      ctx.fillStyle = '#353c44';
       ctx.fillRect(px + 1, py + 1, 20, 5);
-      ctx.fillStyle = '#223246';
+      ctx.fillStyle = '#272c33';
       ctx.fillRect(px + 1, py + 6, 20, 5);
-      if (r() < 0.38) {
-        const warm = r() < 0.72;
-        const a = 0.5 + r() * 0.5;
-        ex.fillStyle = warm ? `rgba(255,${190 + Math.floor(r() * 50)},${120 + Math.floor(r() * 40)},${a})` : r() < 0.5 ? `rgba(120,230,255,${a})` : `rgba(255,90,170,${a})`;
+      // lived-in window light: mostly warm lamps, a few cool office panels, no neon
+      if (r() < 0.3) {
+        const warm = r() < 0.8;
+        const a = 0.35 + r() * 0.45;
+        ex.fillStyle = warm ? `rgba(255,${176 + Math.floor(r() * 44)},${104 + Math.floor(r() * 40)},${a})` : `rgba(214,226,236,${a * 0.8})`;
         ex.fillRect(px + 1, py + 1, 20, 16);
       }
-      ctx.fillStyle = '#414b59';
+      ctx.fillStyle = '#4a463f';
       ctx.fillRect(px + 10, py, 2, 18);
       ex.fillStyle = '#000';
       ex.fillRect(px + 10, py, 2, 18);
       ex.fillRect(px + 1, py + 11, 20, 1);
     }
   }
-  ctx.fillStyle = '#5c6676';
+  ctx.fillStyle = '#6e685e';
   for (let y = 0; y < 8; y++) ctx.fillRect(0, y * 32, s, 3);
   const map = new THREE.CanvasTexture(c);
   map.colorSpace = THREE.SRGBColorSpace;
@@ -124,7 +126,7 @@ export function buildSettlement(site, R, opts = {}) {
   };
 
   const { map, emap } = facadeTextures();
-  const towerMat = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 1.15, roughness: 0.5, metalness: 0.45, envMapIntensity: 0.8 });
+  const towerMat = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.95, roughness: 0.62, metalness: 0.25, envMapIntensity: 0.7 });
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.6, metalness: 0.6 });
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x6a707c, roughness: 0.7, metalness: 0.35 });
   const streetMat = new THREE.MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.85, metalness: 0.1 });

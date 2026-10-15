@@ -516,6 +516,8 @@ export class HUD {
   }
 
   notify(text, kind = '') {
+    // during a boss fight, key tutorials wait; warnings still get through
+    if (this.quiet && kind !== 'red' && text.includes('<kbd>')) return;
     const d = document.createElement('div');
     d.className = `feed-item ${kind}`;
     d.innerHTML = `<span class="tag">[${FEED_TAGS[kind] || 'SYS'}]</span>${text}`;

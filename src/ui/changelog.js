@@ -1,6 +1,19 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-15', version: '0.10',
+    title: 'Fairer sieges',
+    items: [
+      'Planet-scale bosses wake with a roar and give you a few seconds before they attack, and their first attacks wind up slower.',
+      'A single boss hit can no longer take more than about a fifth of your life (a little more in later phases).',
+      'The camera pulls back during a siege so the boss and its warning markings fit on screen.',
+      'Tutorial tips stay quiet during boss fights, and the planet timer sits below the boss bar.',
+      'Story lines during play sit above the skill bar instead of covering it.',
+      'Training world: the body status moved to the corner and the training bar no longer covers the top panels.',
+      'City towers have warmer, lived-in window light; neon is kept for signs and trim.',
+    ],
+  },
+  {
     date: '2026-10-14', version: '0.9.1',
     title: 'Digging paused',
     items: [

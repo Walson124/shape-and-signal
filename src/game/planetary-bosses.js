@@ -50,7 +50,8 @@ export class PlanetaryBrain {
     if (this.t <= 0) {
       if (this.state === 'recovery') {
         const id = this.choose(distance), spec = ATTACKS[id];
-        this.attack = { ...spec, id, wind: spec.wind * (id === 'devour' ? 1 : 1 - this.phase * 0.08) };
+        // the first two attacks wind up a little slower so the player can learn the tells
+        this.attack = { ...spec, id, wind: spec.wind * (id === 'devour' ? 1 : 1 - this.phase * 0.08) * (this.turn < 2 && id !== 'devour' ? 1.3 : 1) };
         this.state = 'windup'; this.t = this.attack.wind; this.rendHp = hp; this.turn++;
         this.recent.push(id); if (this.recent.length > 2) this.recent.shift();
         this.history.push(id); if (this.history.length > 24) this.history.shift();
