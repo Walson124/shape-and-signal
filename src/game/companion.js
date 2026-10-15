@@ -7,127 +7,127 @@ import { codeLabel } from '../core/bindings.js';
 
 const L = {
   intro: [
-    ['Oh good, a pulse. Hello! I am Nix. I have been asleep in this ring for, conservatively, forever. You are... small.', 'Don\'t worry, I\'ll make you less small. Eventually. Possibly.'],
+    ['Oh. A pulse. Hello. I\'m Nix, the ring on your finger. I used to belong to someone who could fold stars. Now I have you.', 'That\'s not an insult. It\'s a starting point. A very low one.'],
   ],
   resume: [
-    'Back already? I was in the middle of a very important nap.',
-    'You\'re alive. I had a small wager with myself that you wouldn\'t be. I lost. I\'m thrilled.',
-    'Welcome back. I reorganised your inventory by smell while you were gone. Kidding. I don\'t have a nose. Yet.',
-    'Ah, my favourite meat-based companion returns.',
+    'You\'re back. I counted the seconds. Not because I missed you. I just like counting.',
+    'There you are. The beasts have been unsupervised. They\'ve gotten confident.',
+    'Welcome back. Your body is exactly where you left it, which is the best thing I can say about it.',
+    'Oh good, you remembered me. Most people who put on a strange ring and then leave don\'t come back.',
   ],
   idle: [
-    'Are we... standing here? Is this a strategy? Teach me.',
-    'Fun fact: cultivating is faster than standing still. Source: me, the smartest thing within a light year.',
-    'I can hear your bones getting older.',
-    'If you\'re waiting for the beasts to come to you, they will. That\'s the problem.',
-    'I once watched a mountain erode. It was more eventful than this.',
+    'We\'re standing still. Are we waiting for something, or is this a nap with your eyes open?',
+    'If you\'re not moving, at least cultivate. Standing around doesn\'t make you stronger. I\'ve checked.',
+    'Somewhere, a beast is getting stronger while you admire this view.',
+    'I watched a glacier cross a continent once. It had more urgency than this.',
   ],
   banter: [
-    'I used to belong to someone who could split moons. No pressure.',
-    'Your posture while fighting is, and I say this lovingly, a crime.',
-    'Remember: if it has more teeth than you, run. If it has fewer teeth, also consider running.',
-    'I\'ve calculated your odds of becoming a Universe Master. I\'ll tell you when you\'re emotionally ready.',
-    'Did you know the old civilisation on this planet had flying cities? They also had a very bad week.',
-    'Your sense of direction is impressive. Impressively bad.',
-    'Cultivation tip: energy is denser near springs, stars and nebulae. Also near me, spiritually.',
-    'I\'m not saying I miss my old body. I\'m saying I miss having elbows.',
-    'You hum when you walk. Did you know that? Now you do.',
-    'Some rings hold treasure. You got me. Lucky you.',
+    'My last owner split a moon to settle an argument. They won. Obviously.',
+    'Rule one of the wilds: if it\'s bigger than you, run. Rule two: most things are bigger than you.',
+    'I\'ve run the numbers on you becoming a Universe Master. I\'ll share them when you\'re emotionally ready. Maybe never.',
+    'The old empire that built those ruins had flying cities. Then they had one really bad week.',
+    'Cultivation is simple: gather energy, survive, repeat. It\'s the surviving part people get wrong.',
+    'You talk to yourself when you think nobody\'s listening. I\'m always listening. For the record.',
+    'I\'ve been a ring for nine thousand years. You\'d think I\'d be patient. You\'d be wrong.',
+    'Fun fact: springs, stars and nebulae are thick with energy. Cities are not. Cities are thick with noodles.',
+    'Every great cultivator started weak. Most of them stayed that way. You might be different. Might.',
+    'I don\'t sleep. I just stop paying attention to you. It\'s restful.',
   ],
   hurt: [
-    'You\'re leaking. That\'s the red stuff. Keep it inside.',
-    'Your life signs are doing a very interesting dance. Stop it.',
-    'Low health! Pill, retreat, or a heroic death. I vote pill.',
-    'If you die I\'m stuck in a ring in the dirt again. Think of ME.',
+    'You\'re badly hurt. Pill, retreat, or a very brave death. I strongly recommend the pill.',
+    'Your life signs just did something I didn\'t like. Back off and heal.',
+    'Low health. If you die out here, I\'m back in the dirt for another thousand years. Think of me.',
+    'That\'s a lot of your blood on the outside. Heal up before the next hit.',
   ],
   strongBeast: [
-    'That {beast} is a grade above you. Running away is a legitimate martial art.',
-    'Warning: {beast}. It is stronger than you. Most things are, but especially that.',
-    '{beast} incoming, and it outclasses you. I\'ll write a lovely eulogy.',
+    'That {beast} outclasses you. Running is a martial art too. A very old one.',
+    'Careful. That {beast} is stronger than you. Fight it near cover or don\'t fight it at all.',
+    '{beast}. Bad matchup. Dodge its big hits or leave. Those are the options.',
   ],
   kill: [
-    'Neat. Messy, but neat.',
-    'One less mouth in the wilds.',
-    'Textbook. A very short, badly written textbook.',
-    'You know, I almost felt that one.',
-    'Their essence is yours now. Try not to waste it on noodles.',
+    'Clean. Mostly.',
+    'One fewer mouth in the wilds.',
+    'Its essence is yours now. Don\'t spend it all on noodles.',
+    'Good. Do that again, but faster.',
+    'Not bad. I\'ve seen worse. I\'ve also seen much better, but not recently.',
   ],
   streak: [
-    'Five down! Are you showing off? You\'re showing off.',
-    'Look at you, a one-person beast tide in reverse.',
-    'That was genuinely good. Don\'t let it go to your head. There\'s not much room up there.',
+    'Five in a row. You\'re getting good at this, and I\'m not sure how I feel about it.',
+    'That\'s a streak. The wilds are going to start telling stories about you.',
+    'Five down. Don\'t let it go to your head. There isn\'t much room up there.',
   ],
   stageUp: [
-    'Your meridians just went "pop". That\'s good. Mostly.',
-    'A new stage! I\'d throw confetti but I lack hands.',
-    'Stronger. Slightly. Microscopically. I\'m proud anyway.',
+    'Your meridians just opened a little wider. You\'re stronger. Feel it?',
+    'A new stage. Slightly less fragile. I\'m proud of you, in a very measured way.',
+    'Stronger. Not strong. Stronger. It\'s a start.',
   ],
   bottleneck: [
-    'You\'ve hit a bottleneck. Raw energy won\'t push you through now; you need a Realm Insight. Win an obelisk trial, slay an Overlord, clear five arena waves, or ask the Martial Hall for a breakthrough trial.',
+    'You\'ve hit a wall. Energy alone won\'t carry you past it now; you need a Realm Insight. Win an obelisk trial, slay an Overlord, clear five arena waves, or ask the Martial Hall for a breakthrough trial.',
   ],
   btReady: [
-    'You\'re at the peak and you have the insight. Press {breakthrough} and let the heavens test you. Keep moving when the lightning comes.',
+    'You\'re at the peak and you have the insight. Press {breakthrough} when you\'re ready. The heavens will throw lightning at you. Keep moving and you\'ll live.',
   ],
-  trib: ['Lightning! Move! Moving is the whole trick!', 'The heavens hate you personally. Dodge!'],
+  trib: ['Lightning! Keep moving! Standing still is how you die here!', 'The heavens are testing you. Dodge, don\'t stand there!'],
   breakthrough: [
-    'You did it! I\'m not crying. I don\'t have eyes. Shut up.',
-    'A new realm. The universe just got a little bit smaller for you.',
-    'And the cosmos noticed. Congratulations, you\'re officially interesting.',
+    'You did it. A new realm. I\'d cry, but I\'m jewellery.',
+    'Breakthrough. The universe just got a little smaller for you.',
+    'The heavens noticed you. That\'s good. Mostly.',
   ],
-  firstFly: ['You can fly now. Double-tap {jump}. Please don\'t hit a building on your first try. Or do; I\'m recording.'],
-  firstSpace: ['We\'re in space. Your lungs are irrelevant now. How does it feel to be cosmically upgraded?'],
+  firstFly: ['You can fly now. Double-tap {jump}. Try not to hit a building on your first try. I\'ll be watching. Closely.'],
+  firstSpace: ['We\'re in space. Your lungs don\'t matter up here anymore. How does it feel to outgrow a planet?'],
   death: [
     'Well. That happened.',
-    'You died. On the bright side, you got better at it.',
+    'You died. I\'ve put you back together. Try the part where you don\'t.',
     'Let\'s call that a tactical lie-down.',
   ],
-  respawn: ['Body reassembled. Mostly the right way round.', 'You\'re back. Try the part where you don\'t die.'],
+  respawn: ['Body rebuilt. All the parts are back, roughly where they go.', 'You\'re back. Let\'s skip the dying part next time.'],
   discover: {
-    ruin: ['Ruins of the old civilisation. They built well. They died anyway. Hold {interact} to search; there might be something left.'],
-    spring: ['An energy spring! Sit in the light and cultivate. This is the good stuff.'],
-    ore: ['Star metal. Smash it. Shipyards love it, and you\'ll want a ship. Trust me, walking across a galaxy is overrated.'],
-    nest: ['A beast nest. Get close and they\'ll come pouring out. That\'s either a warning or an invitation.'],
-    wreck: ['A wreck. Salvage is ethical if the owners are long dead. Hold {interact}.'],
-    lair: ['Something very large lives here. I suggest you be much stronger before you say hello.'],
-    obelisk: ['A trial obelisk. Beat its guardians and you\'ll gain real insight. Touch it with {interact} when you\'re ready.'],
-    camp: ['A hunters\' camp. Traders, a fire, gossip. Civilisation in miniature.'],
+    ruin: ['Ruins of the old empire. They built to last; they didn\'t. Hold {interact} to search. Something might be left.'],
+    spring: ['An energy spring. Stand in the light and cultivate. This is the good stuff.'],
+    ore: ['Star metal. Break it open. Shipyards want it, and you\'re going to want a ship.'],
+    nest: ['A beast nest. Get close and they\'ll pour out. That\'s a warning, or a buffet, depending on your mood.'],
+    wreck: ['A wreck. The owners won\'t miss it. Hold {interact} to salvage.'],
+    lair: ['Something huge lives here. Get much stronger before you knock.'],
+    obelisk: ['A trial obelisk. Beat its guardians and you\'ll earn real insight. Touch it with {interact} when you\'re ready.'],
+    camp: ['A hunters\' camp. Traders, a fire, gossip. Civilisation, in a very small dose.'],
   },
   venue: {
-    exchange: ['The Exchange. Sell your rocks, buy your pills. Capitalism, but with cultivators.'],
-    forge: ['The forge. Better blades, fewer embarrassments.'],
-    pills: ['Pills! Mostly herbs and optimism.'],
-    clinic: ['Gene clinic. They\'ll rewrite your body a little. You could use the edits.'],
-    chamber: ['A gravity chamber. Rent it, sit down, cultivate. It\'s like a spring you pay for.'],
-    bar: ['A teahouse. Buy a round and the hunters will talk. Hunters love to talk.'],
-    food: ['Noodles. I can\'t eat, but I can judge your order.'],
-    home: ['Apartments. Rent one and you\'ll wake up here instead of somewhere embarrassing.'],
+    exchange: ['The Exchange. Sell what you\'ve found, buy what you need. Haggling is beneath me, but feel free.'],
+    forge: ['The forge. Better blades, fewer embarrassing fights.'],
+    pills: ['Pill pavilion. Heal pills, energy pills. Buy a few before you go back out.'],
+    clinic: ['Gene clinic. They\'ll rewrite your body a little. I have notes, if they want them.'],
+    chamber: ['A gravity chamber. Pay to cultivate faster. Like an energy spring with a receipt.'],
+    bar: ['A teahouse. Buy a round and the hunters will tell you where the good stuff is.'],
+    food: ['A noodle bar. A full stomach helps you recover. Probably. I\'ve never had one.'],
+    home: ['Apartments. Rent one and you\'ll wake up here after a bad day, instead of in a ditch.'],
     hall: ['The Martial Hall. Bounties, trainers, and people who think they\'re tougher than you.'],
-    arena: ['The arena. Violence as entertainment. My favourite genre.'],
+    arena: ['The arena. Fight in waves, win prizes, get cheered. My favourite kind of violence: the organised kind.'],
+    dealer: ['The vehicle dealer. Four wheels, or none. Either way, faster than your legs.'],
   },
-  night: ['Night falls. The beasts get bolder. So, apparently, do you.', 'It\'s dark. Very dramatic. Watch your back.'],
-  dawn: ['Morning. The sun is up and so, miraculously, are you.'],
-  wilds: ['We\'re outside the walls. The further from a city, the nastier the beasts. Just so you know.'],
-  dangerRising: ['The beasts out here are tougher. Your confidence is admirable and medically unwise.'],
+  night: ['Night. The beasts get bolder. Stay near the lights if you\'re not feeling bold yourself.', 'It\'s dark out. Watch your back. I\'ll watch the rest.'],
+  dawn: ['Morning. You survived the night. Well done, honestly.'],
+  wilds: ['We\'re past the walls. The further from the city, the nastier the beasts. Just so you know.'],
+  dangerRising: ['The beasts out here are a grade tougher. Your confidence is lovely. Your health bar disagrees.'],
   ping: {
-    none: ['Nothing. Either this area is empty or my scanner is insulted by your budget.'],
-    some: ['Got it. {n} signal{s}: {what}. They\'re on your compass now.'],
+    none: ['Nothing. Either this area is empty, or your radar is too cheap to tell.'],
+    some: ['Got it: {n} signal{s}, {what}. They\'re on your compass.'],
   },
-  radarHint: ['Wrecks and treasure are hard to spot by eye. Scroll to your radar and let it sweep. Better radars at the Exchange find more.'],
-  shop: ['Lovely purchase. Very sensible. I only screamed a little.', 'Money well spent. Probably.'],
-  ship: ['A ship! Finally, a body almost as impressive as mine used to be.'],
-  warp: ['Warp drive engaged. Hold onto your organs.'],
-  arrive: ['New system. New beasts, new mistakes. Exciting!'],
-  station: ['A station! Air, commerce, terrible coffee. Civilisation.'],
-  vuIntro: ['Welcome to the Virtual Universe. Everyone who matters is plugged in here. Your body is still out there, by the way. Unguarded. Just a thought.'],
-  delivery: ['Delivery ordered. The shipping fee is criminal, by the way. I checked.', 'Ordered. It\'ll fall out of the sky near you. Literally.'],
-  podIncoming: ['Incoming pod! Stand clear, or don\'t. It\'d be a funny way to go.'],
-  arenaWin: ['The crowd loves you. I\'m warming up to you too. Slowly.'],
-  trialWin: ['The obelisk yields. That insight is yours now; I could feel it click.'],
-  meditateLong: ['You\'ve been sitting a long time. Are you cultivating or napping? No judgement. Some judgement.'],
+  radarHint: ['Wrecks and treasure are hard to see by eye. Scroll to your radar and let it sweep. Better radars at the Exchange see further.'],
+  shop: ['Good purchase. Sensible, even. I\'m a little surprised.', 'Money well spent. Probably.'],
+  ship: ['A ship. Finally, a body almost as impressive as mine used to be.'],
+  warp: ['Warp drive engaged. Hold on to something. Anything.'],
+  arrive: ['New system. New beasts, new mistakes. Let\'s go find them.'],
+  station: ['A station. Air, trade, and terrible coffee. Civilisation.'],
+  vuIntro: ['Welcome to the Virtual Universe, where everyone who matters is plugged in. Your real body is still out there, by the way. Unguarded. Just a thought.'],
+  delivery: ['Ordered. It\'ll drop out of the sky near you. Literally.', 'Delivery on its way. The shipping fee is a crime, by the way.'],
+  podIncoming: ['Pod incoming! Stand clear. Being crushed by your own shopping would be a very silly way to go.'],
+  arenaWin: ['The crowd loves you. I\'m coming around to you myself. Slowly.'],
+  trialWin: ['The obelisk yields. That insight is yours now. I felt it click into place.'],
+  meditateLong: ['You\'ve been sitting a while. Cultivating, or napping? No judgement. Some judgement.'],
   path: {
-    mind: ['Steer the swords with {focus}. Think of them as very pointy pets.'],
-    blade: ['Tap {focus} just before a hit lands to parry. Get it right and they stagger. Get it wrong and, well, you\'ll know.'],
-    psychic: ['Hold {focus} on a beast to lift it with your mind. Then let go. Physics does the rest.'],
+    mind: ['Steer your swords with {focus}. Think of them as very sharp, very obedient pets.'],
+    blade: ['Press {focus} right before a hit lands to parry. Time it well and they stagger. Time it badly and, well, you\'ll find out.'],
+    psychic: ['Hold {focus} on a beast to lift it. Then let go. Physics does the rest.'],
   },
 };
 
@@ -141,6 +141,7 @@ export class Companion {
     this.queue = [];
     this.current = null;
     this.cool = {};
+    this.bags = {};
     this.time = 0;
     this.banterT = 120 + Math.random() * 120;
     this.idleT = 0;
@@ -182,7 +183,15 @@ export class Companion {
     for (const part of name.split('.')) pool = pool && pool[part];
     if (!pool || !pool.length) return false;
     this.cool[name] = now;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
+    // draw from a shuffled bag so a line never comes round again until the others have
+    let bag = this.bags[name];
+    if (!bag || !bag.length) {
+      bag = this.bags[name] = pool.map((_, k) => k).sort(() => Math.random() - 0.5);
+      if (bag.length > 1 && bag[bag.length - 1] === this.bags[name + ':last']) bag.unshift(bag.pop());
+    }
+    const idx = bag.pop();
+    this.bags[name + ':last'] = idx;
+    const pick = pool[idx];
     const lines = Array.isArray(pick) ? pick : [pick];
     lines.forEach((ln, i) => this.say(this.fill(ln, vars), i === 0 ? priority : 0));
     return true;

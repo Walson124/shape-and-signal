@@ -444,7 +444,11 @@ export class Menus {
     if (!k) return;
     const venue = this.venueTabs();
     const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['ring', 'Ring'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
-    const tabs = [...(this.game.training.active ? [['training', 'Training controls']] : []), ...venue, ...base.filter(([kk]) => !venue.some(([vk]) => vk === kk))];
+    // inside a shop or hall only its own counters show (plus the ring, to see what you carry);
+    // the general panels come back when you open one with its key
+    const atVenue = venue.some(([vk]) => vk === k);
+    const rest = atVenue ? base.filter(([kk]) => kk === 'ring') : base;
+    const tabs = [...(this.game.training.active ? [['training', 'Training controls']] : []), ...venue, ...rest.filter(([kk]) => !venue.some(([vk]) => vk === kk))];
     this.$('panel-tabs').innerHTML = tabs.map(([kind, label]) => `<button class="tab ${kind === k ? 'on' : ''}" data-kind="${kind}">${label}</button>`).join('');
     const r = {
       shipyard: () => this.renderShipyard(), cultivation: () => this.renderCultivation(), skills: () => this.renderSkills(), bounties: () => this.renderBounties(),

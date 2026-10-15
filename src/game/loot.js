@@ -40,7 +40,8 @@ export class Loot {
     }
   }
 
-  update(dt, player, magnet, onCollect) {
+  // canTake(it) says whether there's room for it; a drop with no room stays where it lies
+  update(dt, player, magnet, onCollect, canTake = null) {
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
       it.life -= dt;
@@ -51,7 +52,9 @@ export class Loot {
       }
       const to = player.pos.clone().sub(it.g.position);
       const d = to.length();
-      if (it.refused && d > 6) it.refused = false;
+      if (canTake) it.refused = !canTake(it);
+      else if (it.refused && d > 6) it.refused = false;
+      if (it.refused) it.pulled = false;
       if ((d < magnet || it.pulled) && !it.refused) {
         it.pulled = true;
         const pull = to.divideScalar(Math.max(d, 0.01)).multiplyScalar(Math.min(900, 120 + (magnet / Math.max(d, 1)) * 60));

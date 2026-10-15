@@ -34,9 +34,10 @@ function weaponModel(fighter, weapon, color) {
     : weapon === 'spear' ? new THREE.CylinderGeometry(0.035, 0.035, 2.2, 6)
     : new THREE.BoxGeometry(0.1, weapon === 'knife' ? 0.45 : 1.4, 0.035);
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(0, -1.0, -0.3);
+  // held in the right hand, pointing forward and up
+  mesh.position.set(0, -0.06, weapon === 'bow' ? -0.05 : -0.3);
   mesh.rotation.x = -0.7;
-  fighter.armR.add(mesh);
+  (fighter.handR || fighter.armR).add(mesh);
   if (weapon === 'mind') {
     for (let i = 0; i < 3; i++) {
       const sword = new THREE.Mesh(geometry.clone(), material.clone());

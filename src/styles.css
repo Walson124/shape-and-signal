@@ -435,6 +435,8 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 /* ---- Nix, the ring companion */
 #nix { position: fixed; left: 14px; bottom: 150px; width: 330px; display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; background: linear-gradient(135deg, rgba(20, 8, 36, 0.86), rgba(8, 6, 18, 0.78)); border: 1px solid rgba(185, 140, 255, 0.45); clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); transition: opacity 0.4s; zoom: var(--hud-scale, 1); }
 #nix.fade { opacity: 0; }
+/* narrower screens lift the stats panel; Nix speaks from just above it, never over it */
+@media (max-width: 1279px) { #nix { bottom: 182px; } }
 .nix-ring { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid #b98cff; box-shadow: 0 0 10px #b98cff, inset 0 0 8px #b98cff; display: grid; place-items: center; animation: nixSpin 6s linear infinite; }
 .nix-ring i { width: 10px; height: 10px; border-radius: 50%; background: #e8d8ff; box-shadow: 0 0 10px #d0b0ff; animation: nixBlink 3.2s steps(1) infinite; }
 @keyframes nixSpin { to { transform: rotate(360deg); } }

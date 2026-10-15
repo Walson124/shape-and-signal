@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { glowTexture } from '../world/textures.js';
 import { REALMS } from './data.js';
+import { buildHumanoid, HIP_HEIGHT } from './humanoid.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
@@ -8,6 +9,9 @@ const tA = new THREE.Vector3();
 const tB = new THREE.Vector3();
 const tC = new THREE.Vector3();
 const tQ = new THREE.Quaternion();
+const tD = new THREE.Vector3();
+const tE = new THREE.Vector3();
+const tN = new THREE.Matrix4();
 const tM = new THREE.Matrix4();
 export const EYE = 1.7;
 
@@ -34,52 +38,15 @@ export class Player {
 
     this.root = new THREE.Group();
     root.add(this.root);
-    this.figure = new THREE.Group();
-    this.root.add(this.figure);
-    const suit = new THREE.MeshStandardMaterial({ color: 0x1b2236, metalness: 0.55, roughness: 0.38 });
-    const skin = new THREE.MeshStandardMaterial({ color: 0xe8c3a0, roughness: 0.6 });
-    const hair = new THREE.MeshStandardMaterial({ color: 0x14141c, roughness: 0.7 });
     this.accent = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.9, 6, 12), suit);
-    torso.position.y = 0.55;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 12), skin);
-    head.position.y = 1.55;
-    const hairM = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
-    hairM.position.y = 1.6;
-    hairM.rotation.x = 0.25;
-    const belt = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.05, 6, 20), this.accent);
-    belt.rotation.x = Math.PI / 2;
-    belt.position.y = 0.2;
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.05), this.accent);
-    chest.position.set(0, 0.85, -0.42);
-    this.figure.add(torso, head, hairM, belt, chest);
-    const limb = (len, r) => new THREE.CapsuleGeometry(r, len, 4, 8);
-    const mkArm = (side) => {
-      const g = new THREE.Group();
-      g.position.set(0.55 * side, 1.05, 0);
-      const m = new THREE.Mesh(limb(0.8, 0.13), suit);
-      m.position.y = -0.5;
-      const band = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.03, 6, 12), this.accent);
-      band.rotation.x = Math.PI / 2;
-      band.position.y = -0.8;
-      g.add(m, band);
-      this.figure.add(g);
-      return g;
-    };
-    const mkLeg = (side) => {
-      const g = new THREE.Group();
-      g.position.set(0.22 * side, 0.0, 0);
-      const m = new THREE.Mesh(limb(1.0, 0.16), suit);
-      m.position.y = -0.62;
-      g.add(m);
-      this.figure.add(g);
-      return g;
-    };
-    this.armL = mkArm(-1);
-    this.armR = mkArm(1);
-    this.legL = mkLeg(-1);
-    this.legR = mkLeg(1);
-    this.figure.scale.setScalar(0.85);
+    const body = buildHumanoid({ accent: this.accent });
+    this.figure = body.figure;
+    this.root.add(this.figure);
+    // shoulder and hip joints keep their old names; elbows, knees and the hand are new
+    this.armL = body.armL.shoulder; this.armR = body.armR.shoulder;
+    this.elbowL = body.armL.elbow; this.elbowR = body.armR.elbow; this.handR = body.armR.hand;
+    this.legL = body.legL.hip; this.legR = body.legR.hip;
+    this.kneeL = body.legL.knee; this.kneeR = body.legR.knee;
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.4 }));
     this.aura.scale.setScalar(5);
     this.root.add(this.aura);
@@ -121,6 +88,13 @@ export class Player {
   syncRoot() {
     this.root.position.copy(this.pos);
     this.root.quaternion.copy(this.quat);
+    if (this.mode === 'ground' || this.pose > 0.5) {
+      const f = this.forward(tD).projectOnPlane(this.up);
+      if (f.lengthSq() > 1e-6) {
+        tN.lookAt(tE.set(0, 0, 0), f.normalize(), this.up);
+        this.root.quaternion.setFromRotationMatrix(tN);
+      }
+    }
   }
 
   // Rotate so the local up matches `up` while keeping the view direction.
@@ -167,14 +141,16 @@ export class Player {
     this.root.position.copy(this.pos);
     this.root.quaternion.setFromRotationMatrix(look);
     this.root.rotateZ(v.lean * 0.8);
-    this.figure.position.y = -1.62;
+    this.figure.position.y = -1.62 + 0.55;
     this.figure.rotation.x = 0.18;
-    this.armR.rotation.x = 1.25;
-    this.armL.rotation.x = 1.25;
+    this.armR.rotation.x = 0.95;
+    this.armL.rotation.x = 0.95;
+    this.elbowL.rotation.x = this.elbowR.rotation.x = 0.45;
     this.legL.rotation.x = 1.35;
     this.legR.rotation.x = 1.35;
     this.legL.rotation.z = -0.28;
     this.legR.rotation.z = 0.28;
+    this.kneeL.rotation.x = this.kneeR.rotation.x = -1.5;
     this.aura.material.opacity = 0.12;
     this.shield.material.opacity = 0;
   }
@@ -247,15 +223,28 @@ export class Player {
     const st = this.stand;
     const t = env.time;
     if (this.mode === 'ground' && this.grounded) this.walkPhase += speed * dt * 1.3;
-    const swing = Math.sin(this.walkPhase) * Math.min(1, speed / 6) * 0.7 * st;
-    this.figure.position.y = THREE.MathUtils.lerp(-0.2, -1.55, Math.max(st, p)) + p * 0.35;
-    this.figure.rotation.x = THREE.MathUtils.lerp(THREE.MathUtils.lerp(-Math.PI / 2 + 0.15, 0, st), 0, p);
-    this.armR.rotation.x = THREE.MathUtils.lerp(THREE.MathUtils.lerp(Math.PI - 0.15, swing, st), 0.5, p);
-    this.armL.rotation.x = THREE.MathUtils.lerp(THREE.MathUtils.lerp(0.25, -swing, st), 0.5, p);
-    this.legL.rotation.x = THREE.MathUtils.lerp(THREE.MathUtils.lerp(0.08 + Math.sin(t * 3) * 0.06, -swing, st), 1.5, p);
-    this.legR.rotation.x = THREE.MathUtils.lerp(THREE.MathUtils.lerp(-0.05 - Math.sin(t * 3) * 0.06, swing, st), 1.5, p);
-    this.legL.rotation.z = THREE.MathUtils.lerp(0, -0.9, p);
-    this.legR.rotation.z = THREE.MathUtils.lerp(0, 0.9, p);
+    const gait = Math.min(1, speed / 6) * st;
+    const sw = Math.sin(this.walkPhase), cw = Math.cos(this.walkPhase);
+    const swing = sw * (0.42 + 0.18 * Math.min(1, speed / 14)) * gait;
+    const L = THREE.MathUtils.lerp;
+    // standing: hips at full leg height, a little lower mid-stride; sitting: hips on the ground
+    const standY = -EYE + HIP_HEIGHT - Math.abs(Math.cos(this.walkPhase)) * 0.03 * gait;
+    this.figure.position.y = L(L(-0.45, standY, st), -EYE + 0.13, p);
+    this.figure.rotation.x = L(L(-Math.PI / 2 + 0.15, 0, st), 0, p);
+    // arms swing against the legs, elbows bend more on the forward swing
+    this.armR.rotation.x = L(L(Math.PI - 0.15, swing, st), 0.35, p);
+    this.armL.rotation.x = L(L(0.25, -swing, st), 0.35, p);
+    this.armR.rotation.z = L(L(0, 0.08, st), 0.15, p);
+    this.armL.rotation.z = L(L(0, -0.08, st), -0.15, p);
+    this.elbowR.rotation.x = L(L(0.05, 0.18 + Math.max(0, swing) * 0.7, st), 1.05, p);
+    this.elbowL.rotation.x = L(L(0.25, 0.18 + Math.max(0, -swing) * 0.7, st), 1.05, p);
+    // legs: the trailing leg's knee folds as it lifts; cross-legged when sitting
+    this.legL.rotation.x = L(L(0.08 + Math.sin(t * 3) * 0.06, -swing, st), 1.45, p);
+    this.legR.rotation.x = L(L(-0.05 - Math.sin(t * 3) * 0.06, swing, st), 1.45, p);
+    this.legL.rotation.z = L(0, -1.0, p);
+    this.legR.rotation.z = L(0, 1.0, p);
+    this.kneeL.rotation.x = L(L(-0.25, -(0.08 + Math.max(0, -cw) * 1.05) * gait - 0.04, st), -2.5, p);
+    this.kneeR.rotation.x = L(L(-0.15, -(0.08 + Math.max(0, cw) * 1.05) * gait - 0.04, st), -2.5, p);
     this.syncRoot();
     this.aura.material.opacity = 0.18 + 0.08 * Math.sin(t * 3) + 0.3 * p;
     this.shield.material.opacity = env.shield ? 0.35 + 0.15 * Math.sin(t * 12) : 0;

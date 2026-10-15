@@ -34,7 +34,7 @@ import { BeastManager } from './beasts.js';
 import { Player, EYE } from './player.js';
 import { Ship } from './ship.js';
 import { Vehicle, VEHICLES } from './vehicle.js';
-import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing, ringOf, capacity, slotsUsed, addItem, removeItem, count, partFor, pay, affordable } from './ring.js';
+import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing, ringOf, capacity, slotsUsed, canFit, addItem, removeItem, count, partFor, pay, affordable } from './ring.js';
 import { Structures, buildStructure } from './structures.js';
 import { Pets, petDef } from './pets.js';
 import { FEATURES } from './features.js';
@@ -1015,7 +1015,7 @@ export class Game {
         s.essence += it.amount;
         this.dmgNum(p.pos.clone().addScaledVector(camFwd, 6), `+${fmt(it.amount)} ✦`, 'xp');
       }
-    });
+    }, (it) => it.kind !== 'part' || canFit(s, it.data.id, ITEMS[it.data.id] ? ITEMS[it.data.id].slots : 1));
     this.particles.update(dt);
     this.dust.update(this.camera.position, rt.inShip && this.shipObj ? this.shipObj.vel : p.vel, 0);
     this.updatePlanetFeatures();
@@ -2339,7 +2339,7 @@ export class Game {
       if (vk === 'hall' && needs && ![...s.offers, ...s.bounties].some((b) => b.type === 'insight')) s.offers.unshift(insightTrial(s));
       const panel = {
         station: 'shop', hall: 'bounties', shipyard: 'shipyard', exchange: 'shop', pills: 'shop', forge: 'forge',
-        clinic: 'clinic', chamber: 'chamber', bar: 'bar', food: 'food', home: 'home', arena: 'arena', camp: 'shop', lore: 'archive',
+        clinic: 'clinic', chamber: 'chamber', bar: 'bar', food: 'food', home: 'home', arena: 'arena', camp: 'shop', lore: 'archive', dealer: 'dealer',
       }[vk] || 'shop';
       this.menus.openPanel(panel);
       this.input.unlock();

@@ -1,6 +1,16 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-15', version: '0.10.1',
+    title: 'A real body',
+    items: [
+      'Your character is now a full person: proper proportions, elbows and knees, hands, boots, a face and hair, in a jacket and trousers. They walk, sit and ride naturally and stay upright when you look up or down.',
+      'When your ring is full, drops stay where they fell instead of chasing you around.',
+      'Shops open straight onto what they sell (the Vehicle Dealer opens on its vehicles), and inside a shop only that shop\'s tabs and your ring show.',
+      'Nix has new lines: sharper, more useful, and no repeats until the rest have been said. Nix also no longer covers your health bars on smaller screens.',
+    ],
+  },
+  {
     date: '2026-10-15', version: '0.10',
     title: 'Fairer sieges',
     items: [
