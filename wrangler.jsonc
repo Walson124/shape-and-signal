@@ -1,0 +1,18 @@
+{
+  // Cloudflare Worker: serves dist/ and emails player feedback from /api/feedback.
+  // FEEDBACK_TO (where feedback goes) is a secret set in the Cloudflare dashboard.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "starsea",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "send_email": [
+    { "name": "FEEDBACK_EMAIL" }
+  ],
+  "vars": {
+    "FEEDBACK_FROM": "feedback@starsea.dev"
+  }
+}
