@@ -575,3 +575,21 @@ a.menu-item { text-decoration: none; }
   #boss-bar, #trib-bar { width: max(300px, calc(100vw - 650px)); }
   #alert.planetary { max-width: max(300px, calc(100vw - 650px)); font-size: 12px; }
 }
+
+/* ---- star map */
+.starmap { display: block; width: 100%; max-height: 58vh; margin: 0 0 14px; background: radial-gradient(ellipse at center, #10142a 0%, #060814 75%); border: 1px solid var(--line); }
+.starmap text { font-family: var(--mono); font-size: 11px; fill: #cfe6ff; paint-order: stroke; stroke: #060814; stroke-width: 3px; pointer-events: none; }
+.starmap .sm-sub { font-size: 9px; fill: var(--cy); letter-spacing: 0.1em; }
+.starmap .sm-core { font-size: 10px; fill: #b89cff; }
+.sm-range { fill: rgba(62, 242, 255, 0.04); stroke: rgba(62, 242, 255, 0.45); stroke-dasharray: 5 5; }
+.sm-jump { stroke: rgba(160, 190, 255, 0.4); stroke-width: 1.2; }
+.sm-route { fill: none; stroke: var(--gd); stroke-width: 2; stroke-dasharray: 7 4; }
+.sm-star { cursor: pointer; }
+.sm-hit { fill: transparent; }
+.sm-star:hover .sm-hit { fill: rgba(255, 255, 255, 0.08); }
+.sm-near text { display: none; }
+.sm-ring { fill: none; stroke: var(--gd); stroke-width: 1.6; }
+.sm-home text { fill: var(--gd); }
+.sm-pulse { fill: none; stroke: var(--cy); stroke-width: 1.4; animation: smPulse 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.sm-nav .sm-hit { fill: rgba(255, 200, 87, 0.12); stroke: var(--gd); stroke-width: 1.2; }
+@keyframes smPulse { 0% { opacity: 1; transform: scale(0.5); } 100% { opacity: 0; transform: scale(1.6); } }

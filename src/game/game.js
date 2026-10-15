@@ -24,6 +24,7 @@ import { clamp } from '../core/rng.js';
 import { SkyBaker } from '../world/sky.js';
 import { StarSystem } from '../world/system.js';
 import { getStar, starsNear, HOME_KEY, CORE_KEY } from '../world/galaxy.js';
+import { recordJump } from './starmap.js';
 import { texPool } from '../world/texpool.js';
 import { LensFlare } from '../world/flare.js';
 import { SpaceDust } from '../world/dust.js';
@@ -689,6 +690,7 @@ export class Game {
     else if (k('panelBounty')) this.togglePanel('bounties');
     else if (k('panelGuide')) this.togglePanel('guide');
     else if (k('panelRing')) this.togglePanel('ring');
+    else if (k('panelMap')) this.togglePanel('map');
     else if (k('mute')) this.hud.notify(this.sound.toggleMute() ? 'Sound muted.' : 'Sound on.');
   }
 
@@ -4233,11 +4235,15 @@ export class Game {
     this.sound.lock();
   }
 
-  targetExpedition(key) {
+  targetExpedition(key, fromMap = false) {
     if (this.training.active) return this.denied('Return to your physical body to chart an expedition.');
     const star = getStar(key);
     const dist = star.pos.distanceTo(this.star.pos);
     if (dist < 0.01) return this.hud.notify('You are already in this system. Target one of its planet markers.', 'yl');
+    if (fromMap && this.rt.nav && this.rt.nav.kind === 'star' && this.rt.nav.star.key === key) {
+      this.rt.nav = null;
+      return this.hud.notify('Target cleared.');
+    }
     this.rt.nav = { kind: 'star', star, dist, label: star.name };
     this.rt.warpCharge = 0;
     this.rt.cruise = false;
@@ -4391,6 +4397,8 @@ export class Game {
   arriveInSystem(sys, from) {
     const p = this.player;
     this.installSystem(sys);
+    // remember the jump so the star map can draw the route you took
+    recordJump(this.state, from.key, this.star.key);
     const dir = from.pos.clone().sub(this.star.pos);
     if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
     dir.y *= 0.2;

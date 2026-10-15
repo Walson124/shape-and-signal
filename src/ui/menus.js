@@ -7,7 +7,8 @@ import { MAX_BOUNTIES } from '../game/missions.js';
 import { LORE } from '../game/lore.js';
 import { ACT1 } from '../game/campaign.js';
 import { CHANGELOG } from './changelog.js';
-import { CORE_KEY, ATLAS_KEY } from '../world/galaxy.js';
+import { CORE_KEY, ATLAS_KEY, HOME_KEY, CORE_POS, getStar } from '../world/galaxy.js';
+import { findRoute } from '../game/starmap.js';
 import { speciesForBody } from '../game/bestiary.js';
 import { DUEL_DIFFICULTIES } from '../game/duel.js';
 import { VEHICLES, VEHICLE_IDS } from '../game/vehicle.js';
@@ -118,6 +119,7 @@ export class Menus {
         radar: () => g.buyRadar(),
         order: () => g.orderDelivery(a.dataset.item),
         'target-atlas': () => g.targetExpedition(ATLAS_KEY),
+        'map-target': () => g.targetExpedition(a.dataset.key, true),
         'redirect-delivery': () => g.redirectDelivery(a.dataset.id),
         sim: () => g.startSim(),
         'training-enter': () => g.training.enter(),
@@ -443,7 +445,7 @@ export class Menus {
     const k = this.panelKind;
     if (!k) return;
     const venue = this.venueTabs();
-    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['ring', 'Ring'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
+    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['ring', 'Ring'], ['map', 'Star map'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
     // inside a shop or hall only its own counters show (plus the ring, to see what you carry);
     // the general panels come back when you open one with its key
     const atVenue = venue.some(([vk]) => vk === k);
@@ -459,6 +461,7 @@ export class Menus {
       ring: () => this.renderRing(),
       craft: () => this.renderCraft(),
       story: () => this.renderStory(),
+      map: () => this.renderMap(),
       vshop: () => this.renderMall(), vsim: () => this.renderSim(), fame: () => this.renderFame(),
       training: () => this.renderTraining(),
     }[k];
@@ -915,6 +918,90 @@ export class Menus {
       ['Archive logs', `${(s.lore || []).length}/${LORE.length}`], ['Systems visited', s.visited.length], ['Places discovered', s.discovered.length], ['Time played', `${Math.floor(mins / 60)}h ${mins % 60}m`],
     ];
     return `<p class="panel-note">Your record in the Virtual Universe. One day, other cultivators will be listed here beside you.</p><div class="help-grid">${rows.map(([k, v]) => `<div><span>${esc(k)}</span><span><b>${esc(String(v))}</b></span></div>`).join('')}</div>`;
+  }
+
+  // The star map: every system you've visited, the jumps between them, home,
+  // your ship's reach, and a route home through systems you know.
+  renderMap() {
+    const g = this.game, s = g.state, cur = g.star;
+    const range = s.ship ? SHIPS[s.ship.tier].range : 0;
+    const homeKey = (s.home && s.home.star) || HOME_KEY;
+    const homeName = s.home && s.home.site ? `${s.home.site}` : 'Base City 07, Terra';
+    // only real galaxy stars (the training world's simulated system isn't on the map)
+    const keys = [...new Set([...s.visited, homeKey, cur.key])].filter((key) => getStar(key).key === key);
+    const known = keys.map(getStar);
+    const knownSet = new Set(keys);
+    const nearby = range ? (g.nearStars || []).filter((n) => n.dist <= range && !knownSet.has(n.star.key)).slice(0, 30).map((n) => n.star) : [];
+    const route = range ? findRoute(known, cur.key, homeKey, range) : null;
+    const nav = g.rt.nav && g.rt.nav.kind === 'star' ? g.rt.nav.star.key : null;
+    // top-down projection (the galaxy is a disc), fitted to the view
+    const W = 900, H = 330, pad = 40;
+    const pts = [...known, ...nearby];
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const st of pts) { x0 = Math.min(x0, st.pos.x); x1 = Math.max(x1, st.pos.x); z0 = Math.min(z0, st.pos.z); z1 = Math.max(z1, st.pos.z); }
+    if (range) { x0 = Math.min(x0, cur.pos.x - range); x1 = Math.max(x1, cur.pos.x + range); z0 = Math.min(z0, cur.pos.z - range); z1 = Math.max(z1, cur.pos.z + range); }
+    const span = Math.max(30, x1 - x0, (z1 - z0) * (W - 2 * pad) / (H - 2 * pad));
+    const k = (W - 2 * pad) / span;
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const P = (st) => [W / 2 + (st.pos.x - cx) * k, H / 2 + (st.pos.z - cz) * k];
+    const f1 = (v) => v.toFixed(1);
+    const col = (st) => (REGIONS[st.region] || REGIONS[0]).sky[3];
+    const svg = [];
+    if (range) {
+      const [px, py] = P(cur);
+      svg.push(`<circle cx="${f1(px)}" cy="${f1(py)}" r="${f1(range * k)}" class="sm-range"/>`);
+    }
+    for (const [a, b] of s.jumps || []) {
+      if (!knownSet.has(a) || !knownSet.has(b)) continue;
+      const [ax, ay] = P(getStar(a)), [bx, by] = P(getStar(b));
+      svg.push(`<line x1="${f1(ax)}" y1="${f1(ay)}" x2="${f1(bx)}" y2="${f1(by)}" class="sm-jump"/>`);
+    }
+    if (route && route.length) {
+      const line = [cur, ...route].map((st) => P(st).map(f1).join(',')).join(' ');
+      svg.push(`<polyline points="${line}" class="sm-route"/>`);
+    }
+    for (const st of nearby) {
+      const [px, py] = P(st);
+      svg.push(`<g class="sm-star sm-near${st.key === nav ? ' sm-nav' : ''}" data-action="map-target" data-key="${esc(st.key)}"><circle cx="${f1(px)}" cy="${f1(py)}" r="7" class="sm-hit"/><circle cx="${f1(px)}" cy="${f1(py)}" r="2.2" fill="${col(st)}"/><title>${esc(st.name)} · unvisited</title></g>`);
+    }
+    for (const st of known) {
+      const [px, py] = P(st);
+      const home = st.key === homeKey, here = st.key === cur.key;
+      const label = `${esc(st.name)}${home ? ' · HOME' : ''}`;
+      svg.push(`<g class="sm-star${home ? ' sm-home' : ''}${here ? ' sm-here' : ''}${st.key === nav ? ' sm-nav' : ''}" data-action="map-target" data-key="${esc(st.key)}">
+        <circle cx="${f1(px)}" cy="${f1(py)}" r="12" class="sm-hit"/>
+        ${here ? `<circle cx="${f1(px)}" cy="${f1(py)}" r="10" class="sm-pulse"/>` : ''}
+        ${home ? `<circle cx="${f1(px)}" cy="${f1(py)}" r="8" class="sm-ring"/>` : ''}
+        <circle cx="${f1(px)}" cy="${f1(py)}" r="4.5" fill="${col(st)}"/>
+        <text x="${f1(px + 9)}" y="${f1(py - 8)}">${label}</text>
+        ${here ? `<text x="${f1(px + 9)}" y="${f1(py + 14)}" class="sm-sub">YOU ARE HERE</text>` : ''}
+      </g>`);
+    }
+    // which way the galactic core lies, at the edge of the map
+    const cd = CORE_POS.clone().sub(cur.pos);
+    if (!knownSet.has(CORE_KEY) && cd.lengthSq() > 1) {
+      const a = Math.atan2(cd.z, cd.x), ex = W / 2 + Math.cos(a) * (W / 2 - 24), ey = H / 2 + Math.sin(a) * (H / 2 - 18);
+      svg.push(`<text x="${f1(ex)}" y="${f1(ey)}" class="sm-core" text-anchor="middle">◆ core</text>`);
+    }
+    // home: in range, a route through known systems, or no way yet
+    const homeStar = getStar(homeKey);
+    const homeDist = homeStar.pos.distanceTo(cur.pos);
+    let homeLine, homeBtn = '';
+    if (homeKey === cur.key) homeLine = 'You\'re in your home system.';
+    else if (!range) homeLine = `${f1(homeDist)} light years away. You need a starship to warp.`;
+    else if (route && route.length === 1) { homeLine = `${f1(homeDist)} light years away, within your ${range} ly range.`; homeBtn = `<button class="btn small primary" data-action="map-target" data-key="${esc(homeKey)}">Set course home</button>`; }
+    else if (route) { homeLine = `${f1(homeDist)} light years away: ${route.length} jumps via ${route.slice(0, -1).map((st) => `<b>${esc(st.name)}</b>`).join(' → ')}.`; homeBtn = `<button class="btn small primary" data-action="map-target" data-key="${esc(route[0].key)}">Set course: ${esc(route[0].name)}</button>`; }
+    else homeLine = `${f1(homeDist)} light years away. No chain of known systems reaches it with your ${range} ly range: explore systems in between, or get a longer-range ship.`;
+    const rows = known.filter((st) => st.key !== cur.key).map((st) => ({ st, d: st.pos.distanceTo(cur.pos) })).sort((a, b) => a.d - b.d).map(({ st, d }) => {
+      const reach = range && d <= range;
+      return `<div class="item"><div><h4 style="color:${col(st)}">${esc(st.name)}${st.key === homeKey ? ' <span class="tag">HOME</span>' : ''}</h4><p>${esc((REGIONS[st.region] || REGIONS[0]).name)} · ${f1(d)} ly${reach ? '' : range ? ' · out of range' : ''}</p></div><span></span>
+        <button class="btn small ${st.key === nav ? 'gold' : ''}" data-action="map-target" data-key="${esc(st.key)}">${st.key === nav ? 'Targeted' : 'Set course'}</button></div>`;
+    }).join('');
+    return `<p class="panel-note">Systems you've visited, the jumps you've made, and home. Click a star to set it as your warp target, then press <kbd>${esc(codeLabel(settings.key('engage')))}</kbd> in your ship. ${range ? `Your ship reaches <b>${range} ly</b> (dashed circle); faint dots are unvisited stars in range.` : 'You have no starship yet.'}</p>
+      <svg class="starmap" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${svg.join('')}</svg>
+      <div class="section-title">Home · ${esc(homeName)}</div>
+      <div class="item"><div><h4>${esc(homeStar.name)}</h4><p>${homeLine}</p></div><span></span>${homeBtn || '<span></span>'}</div>
+      ${rows ? `<div class="section-title">Visited systems</div><div class="list">${rows}</div>` : ''}`;
   }
 
   renderStory() {

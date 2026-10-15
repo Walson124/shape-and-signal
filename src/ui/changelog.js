@@ -1,6 +1,15 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-15', version: '0.10.2',
+    title: 'Star map',
+    items: [
+      'Press M for the star map: every system you\'ve visited, the jumps between them, home, and how far your ship can reach.',
+      'Click any star on the map to make it your warp target, then press G in your ship.',
+      'Lost? The map plans a route home through systems you know and sets course for the first jump.',
+    ],
+  },
+  {
     date: '2026-10-15', version: '0.10.1',
     title: 'A real body',
     items: [
