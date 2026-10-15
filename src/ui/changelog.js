@@ -1,6 +1,13 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-15', version: '0.10.3',
+    title: 'Feedback',
+    items: [
+      'Send feedback from inside the game: Feedback on the title screen and pause menu. Report a bug, suggest an idea, or just say hi.',
+    ],
+  },
+  {
     date: '2026-10-15', version: '0.10.2',
     title: 'Star map',
     items: [

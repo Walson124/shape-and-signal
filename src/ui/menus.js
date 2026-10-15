@@ -7,6 +7,7 @@ import { MAX_BOUNTIES } from '../game/missions.js';
 import { LORE } from '../game/lore.js';
 import { ACT1 } from '../game/campaign.js';
 import { CHANGELOG } from './changelog.js';
+import { openFeedback } from './feedback.js';
 import { CORE_KEY, ATLAS_KEY, HOME_KEY, CORE_POS, getStar } from '../world/galaxy.js';
 import { findRoute } from '../game/starmap.js';
 import { speciesForBody } from '../game/bestiary.js';
@@ -74,6 +75,7 @@ export class Menus {
       else if (act === 'settings') this.openSettings('title');
       else if (act === 'controls') { this.settingsTab = 'controls'; this.openSettings('title'); }
       else if (act === 'credits') this.showCredits();
+      else if (act === 'feedback') openFeedback(this, g);
     });
     this.$('pause').addEventListener('click', (e) => {
       const b = e.target.closest('[data-act]');
@@ -83,6 +85,7 @@ export class Menus {
       if (act === 'resume') g.resume();
       else if (act === 'settings') this.openSettings('pause');
       else if (act === 'controls') { this.settingsTab = 'controls'; this.openSettings('pause'); }
+      else if (act === 'feedback') openFeedback(this, g);
       else if (act === 'quit') g.quitToTitle();
     });
     this.$('panel-close').addEventListener('click', () => g.closePanel());

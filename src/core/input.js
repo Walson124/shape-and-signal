@@ -41,7 +41,7 @@ export class Input {
         cb(e.code === 'Escape' ? null : e.code);
         return;
       }
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'AltLeft', 'AltRight'].includes(e.code)) e.preventDefault();
       if (this.locked && (e.ctrlKey || e.code.startsWith('Control'))) e.preventDefault();
       press(e.code);

@@ -593,3 +593,12 @@ a.menu-item { text-decoration: none; }
 .sm-pulse { fill: none; stroke: var(--cy); stroke-width: 1.4; animation: smPulse 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
 .sm-nav .sm-hit { fill: rgba(255, 200, 87, 0.12); stroke: var(--gd); stroke-width: 1.2; }
 @keyframes smPulse { 0% { opacity: 1; transform: scale(0.5); } 100% { opacity: 0; transform: scale(1.6); } }
+
+/* ---- feedback form */
+.fb-form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.fb-form .panel-note { margin: 0; }
+.fb-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cy); }
+.fb-field select, .fb-field input, .fb-field textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; background: #101322; color: #eef5ff; border: 1px solid #343c56; border-radius: 4px; font: 15px/1.4 Rajdhani, sans-serif; text-transform: none; letter-spacing: 0; }
+.fb-field textarea { resize: vertical; min-height: 84px; max-height: 40vh; }
+.fb-field select:focus, .fb-field input:focus, .fb-field textarea:focus { outline: none; border-color: var(--cy); }
+.fb-trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
