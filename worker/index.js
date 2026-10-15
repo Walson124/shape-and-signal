@@ -11,7 +11,9 @@ const json = (status, body) => new Response(JSON.stringify(body), { status, head
 
 async function feedback(request, env) {
   if (request.method !== 'POST') return json(405, { error: 'POST only.' });
-  if (!env.FEEDBACK_EMAIL || !env.FEEDBACK_TO || !env.FEEDBACK_FROM) return json(503, { error: 'Feedback is not set up on this server.' });
+  // name what's missing (setting names only, never their values) so a bad deploy is easy to fix
+  const missing = ['FEEDBACK_EMAIL', 'FEEDBACK_TO', 'FEEDBACK_FROM'].filter((k) => !env[k]);
+  if (missing.length) return json(503, { error: `Feedback is not set up on this server (missing ${missing.join(', ')}).` });
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const now = Date.now();
   const times = (recent.get(ip) || []).filter((t) => now - t < WINDOW);
