@@ -2,9 +2,13 @@
 export const CHANGELOG = [
   {
     date: '2026-10-16', version: '0.11',
-    title: 'A realistic character',
+    title: 'A cultivator in a combat suit',
     items: [
-      'Your character is now a realistic, fully modelled person: real skin, eyes, hair and clothes, with a proper skeleton, so walking, sitting, flying and riding look natural.',
+      'Your character is now a fully modelled cultivator in a fitted combat suit whose piping glows in your realm colour, brighter with every realm.',
+      'Real animation: idle, walking, jogging and sprinting blend with your speed; jumps, landings, dodge rolls, hits and death all have their own moves.',
+      'Punches, sword swings, spells and arrows play on your upper body, so you can attack on the run.',
+      'Flight has a hover, a stretched-out cruise and a fist-forward dash, and you lean and bank into turns.',
+      'First person shows your own suited arms and hands, following every fist, grip, cast and the radar.',
     ],
   },
   {

@@ -1362,6 +1362,7 @@ export class Game {
       boost,
       accel: rt.cruise ? 1.6 : 2.6,
       meditating: rt.meditating,
+      swimming,
       time: this.time,
       shield: rt.shieldT > 0,
       hidden: !alive || this.camMode === 'first',
@@ -1810,6 +1811,7 @@ export class Game {
       if (this.training?.active) this.hud.simulationHit();
       else { this.post.fx.damage = Math.min(1, this.post.fx.damage + 0.6); if (this.mode === 'virtual') this.hud.physicalHit(); }
       this.viewmodel.hit();
+      this.player.act(amount > this.stats.maxHp * 0.2 ? 'knockback' : 'hit');
       this.sound.hurt();
       this.dmgNum(this.player.pos.clone().addScaledVector(this.player.forward(tA), 4), `-${fmt(amount)}`, 'player');
       rt.cruise = false;
@@ -1837,6 +1839,7 @@ export class Game {
       this.hud.notify('Your body was killed while you were logged in to the Virtual Universe.', 'red');
     }
     this.dismount();
+    this.player.fall();
     const s = this.state, rt = this.rt;
     rt.hp = 0;
     this.mode = 'dead';
@@ -1871,6 +1874,7 @@ export class Game {
   }
 
   respawn() {
+    this.player.revive();
     this.rt = this.freshRuntime();
     this.rt.invuln = 3;
     this.arts.reset();

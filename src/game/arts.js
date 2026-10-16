@@ -9,6 +9,14 @@ const Y = new THREE.Vector3(0, 1, 0);
 
 // Martial arts: every path's attacks and techniques, realm perks, and the
 // damage / defence modifiers they impose. Owned by Game.
+// the body move each technique plays on the player model
+const MOVE_KIND = {
+  rush: 'heavy', quake: 'heavy', meteor: 'spell', iron: 'buff', lunge: 'heavy', whirl: 'heavy', javelin: 'arrow', dragon: 'heavy',
+  fan: 'knife', venom: 'buff', shadow: 'heavy', rain: 'spell', multishot: 'arrow', snare: 'arrow', blast: 'arrow', starfall: 'spell',
+  volley: 'spell', prison: 'spell', barrier: 'buff', storm: 'spell', dash: 'heavy', crescent: 'heavy', will: 'buff', heaven: 'heavy',
+  lance: 'spell', shock: 'spell', terror: 'spell', annihilate: 'spell',
+};
+
 export class Arts {
   constructor(game) {
     this.g = game;
@@ -187,6 +195,13 @@ export class Arts {
 
   primary(id, ctx) {
     const rt = this.g.rt;
+    const before = rt.cooldowns[id] || 0, energy = rt.energy;
+    this.primaryMove(id, ctx);
+    if ((rt.cooldowns[id] || 0) > before || rt.energy < energy) this.g.player.act?.(id);
+  }
+
+  primaryMove(id, ctx) {
+    const rt = this.g.rt;
     if (id === 'bolt') { if (rt.energy >= TECHS.bolt.cost) this.bolt(ctx); }
     else if (id === 'saber') this.saber(ctx);
     else if (id === 'spike') this.spike(ctx);
@@ -197,6 +212,14 @@ export class Arts {
   }
 
   cast(id, ctx) {
+    if (!id) return;
+    const rt = this.g.rt;
+    const before = rt.cooldowns[id] || 0;
+    this.castMove(id, ctx);
+    if ((rt.cooldowns[id] || 0) > before) this.g.player.act?.(MOVE_KIND[id] || 'spell');
+  }
+
+  castMove(id, ctx) {
     if (!id) return;
     const fn = {
       rush: () => this.rush(ctx), quake: () => this.quake(), iron: () => this.ironBody(), meteor: () => this.meteor(ctx),

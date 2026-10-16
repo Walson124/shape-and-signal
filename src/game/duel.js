@@ -271,4 +271,4 @@ export class TrainingDuel {
   }
 }
 
-function pAttack(fighter) { fighter.armR.rotation.x = -1.7; }
+function pAttack(fighter) { fighter.armR.rotation.x = -1.7; fighter.act?.('punch'); }

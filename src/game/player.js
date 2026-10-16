@@ -50,14 +50,15 @@ export class Player {
     this.kneeL = body.legL.knee; this.kneeR = body.legR.knee;
     this.joints = { armL: this.armL, armR: this.armR, elbowL: this.elbowL, elbowR: this.elbowR, legL: this.legL, legR: this.legR, kneeL: this.kneeL, kneeR: this.kneeR };
     this.hipHeight = HIP_HEIGHT;
-    // the realistic skinned model replaces the simple shapes once it has loaded;
-    // the shapes' joint groups keep driving the pose (and still hold anything put in a hand)
+    // the skinned, animated model replaces the simple shapes once it has loaded
+    // (the shapes' hand group still holds anything a duel fighter carries)
     const shapes = [];
     this.figure.traverse((o) => { if (o.isMesh) shapes.push(o); });
     loadPlayerModel().then((source) => {
       if (!source) return;
       this.skin = new SkinnedFigure(source, this.figure);
       this.hipHeight = this.skin.hipHeight;
+      this.skin.setGlow(this.accent.color);
       for (const m of shapes) m.visible = false;
     });
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.4 }));
@@ -74,6 +75,8 @@ export class Player {
     this.trailColor.copy(c).multiplyScalar(0.9);
     this.aura.material.color.copy(c).multiplyScalar(0.8);
     this.accent.color.copy(c).multiplyScalar(1.5);
+    // the suit's piping burns brighter with each realm
+    this.skin?.setGlow(this.accent.color, 1.4 + realm * 0.25);
     // the aura swells with each realm
     this.aura.scale.setScalar(5 + realm * 2.2);
   }
@@ -164,7 +167,12 @@ export class Player {
     this.legL.rotation.z = -0.28;
     this.legR.rotation.z = 0.28;
     this.kneeL.rotation.x = this.kneeR.rotation.x = -1.5;
-    this.skin?.apply(this.joints);
+    if (this.skin) {
+      this.skin.setBase({ drive: 1 });
+      this.skin.update(dt);
+      this.figure.rotation.set(0, 0, 0);
+      this.figure.position.y = -1.07 - this.skin.pelvisY();
+    }
     this.aura.material.opacity = 0.12;
     this.shield.material.opacity = 0;
   }
@@ -259,7 +267,7 @@ export class Player {
     this.legR.rotation.z = L(0, 1.0, p);
     this.kneeL.rotation.x = L(L(-0.25, -(0.08 + Math.max(0, -cw) * 1.05) * gait - 0.04, st), -2.5, p);
     this.kneeR.rotation.x = L(L(-0.15, -(0.08 + Math.max(0, cw) * 1.05) * gait - 0.04, st), -2.5, p);
-    this.skin?.apply(this.joints);
+    if (this.skin) this.animate(dt, env, speed, f);
     this.syncRoot();
     this.aura.material.opacity = 0.18 + 0.08 * Math.sin(t * 3) + 0.3 * p;
     this.shield.material.opacity = env.shield ? 0.35 + 0.15 * Math.sin(t * 12) : 0;
@@ -273,6 +281,98 @@ export class Player {
       }
     }
   }
+
+  // Pick and blend the skinned model's animations from how the body is moving,
+  // and lean and bank the whole figure in flight.
+  animate(dt, env, speed, fwd) {
+    const sk = this.skin;
+    const up = env.up;
+    const vUp = up ? this.vel.dot(up) : 0;
+    const hs = up ? Math.sqrt(Math.max(0, speed * speed - vUp * vUp)) : speed;
+    const ss = THREE.MathUtils.smoothstep;
+    const clamp = THREE.MathUtils.clamp;
+    const base = {}, rates = {};
+    let tilt = 0, bankWant = 0;
+    const airborne = this.mode === 'ground' && !this.grounded && this.groundGrace <= 0;
+    if (airborne) this.airT = (this.airT || 0) + dt;
+    if (env.dodge && !this.wasDodging && this.mode === 'ground') sk.play('roll', { speed: 2.2 });
+    this.wasDodging = !!env.dodge;
+    if (env.meditating) base.meditate = 1;
+    else if (env.swimming) {
+      if (hs > 1.2) { base.swim = 1; rates.swim = clamp(hs / 3, 0.7, 1.8); } else base.swim_idle = 1;
+    } else if (this.mode === 'ground') {
+      if (airborne) base.fall = 1;
+      else {
+        if (this.airT > 0.35 && sk.has('land')) sk.play('land', { speed: 2.2 });
+        this.airT = 0;
+        // idle, walk, jog and sprint crossfade by speed, each played at a rate that keeps the feet planted
+        const w = {
+          idle: 1 - ss(hs, 0.2, 1.0),
+          walk: ss(hs, 0.2, 1.0) * (1 - ss(hs, 2.6, 4.2)),
+          jog: ss(hs, 2.6, 4.2) * (1 - ss(hs, 7, 9.5)),
+          sprint: ss(hs, 7, 9.5),
+        };
+        Object.assign(base, w);
+        rates.walk = clamp(hs / 1.6, 0.6, 1.6);
+        rates.jog = clamp(hs / 5.2, 0.7, 1.7);
+        rates.sprint = clamp(hs / 10, 0.8, 2.2);
+      }
+    } else {
+      // flight: hover when slow, stretch out to cruise, a fist forward at full speed
+      const k = ss(hs, 3, 22);
+      const d = this.boosting ? ss(hs, 25, 60) : ss(hs, 120, 400);
+      base.fly_hover = 1 - k;
+      base.fly_cruise = k * (1 - d);
+      base.fly_dash = k * d;
+      tilt = k * (Math.PI / 2 - 0.2);
+      // bank into turns
+      const h = tD.copy(fwd);
+      if (up) h.projectOnPlane(up);
+      if (this.prevFwd && h.lengthSq() > 1e-6) {
+        h.normalize();
+        const turn = Math.atan2(tE.crossVectors(this.prevFwd, h).dot(up || this.localUp(tE.clone())), this.prevFwd.dot(h));
+        bankWant = clamp(-turn / Math.max(dt, 1e-3) * 0.35, -0.8, 0.8) * k;
+      }
+      this.prevFwd = (this.prevFwd || new THREE.Vector3()).copy(h.lengthSq() > 1e-6 ? h.normalize() : h);
+    }
+    sk.setBase(base, rates);
+    sk.update(dt);
+    const e = 1 - Math.exp(-dt * 5);
+    this.tilt = (this.tilt || 0) + (tilt - (this.tilt || 0)) * e;
+    this.bank = (this.bank || 0) + (bankWant - (this.bank || 0)) * (1 - Math.exp(-dt * 3));
+    const f = this.tilt / (Math.PI / 2);
+    this.figure.position.y = THREE.MathUtils.lerp(-EYE + this.hipHeight, -0.45, f);
+    // lean forward, then roll about the body's own length (the axis the flight runs along)
+    this.figure.rotation.set(-this.tilt, this.bank, 0, 'XYZ');
+  }
+
+  // A move the game just made: an attack, a technique, a hit taken.
+  act(kind) {
+    const sk = this.skin;
+    if (!sk) return;
+    const moves = {
+      punch: [['punch_jab', 1.5], ['punch_cross', 1.4], ['punch_hook', 1.3]],
+      saber: [['sword_a', 1.3], ['sword_b', 1.3]],
+      thrust: [['sword_b', 1.4], ['punch_cross', 1.4]],
+      knife: [['punch_jab', 1.7], ['sword_a', 1.6]],
+      arrow: [['shoot', 1.6]],
+      bolt: [['cast', 1.6]],
+      spike: [['cast', 1.5]],
+      heavy: [['sword_heavy', 1.5]],
+      spell: [['cast', 1.3]],
+      buff: [['consume', 1.6]],
+      hit: [['hit', 1.4]],
+      knockback: [['knockback', 1.5]],
+    }[kind];
+    if (!moves) return;
+    const [name, speed] = moves[(this.combo = (this.combo || 0) + 1) % moves.length];
+    // a stagger or a heavy move takes the whole body; attacks only the upper body
+    sk.play(name, { speed, full: kind === 'knockback' || (kind === 'heavy' && this.mode === 'ground' && this.grounded) });
+  }
+
+  fall() { this.skin?.play('death', { full: true, hold: true, speed: 1.2 }); }
+
+  revive() { this.skin?.stop(); }
 
   setVisible(v) {
     this.root.visible = v;

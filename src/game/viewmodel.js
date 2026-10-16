@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { circuitTexture, glowTexture, hullTextures } from '../world/textures.js';
+import { loadPlayerModel } from './player-model.js';
+import { FirstPersonArms } from './fp-arms.js';
 
 // Hand poses for the right hand (the left hand is mirrored).
 // pos: wrist position in view space, rot: euler of the forearm, curl: index..pinky, thumb.
@@ -140,6 +142,9 @@ class Hand {
       return s;
     });
 
+    // the rig's own shapes; hidden once the suited arms take over (weapons and glows stay)
+    this.shell = [];
+    this.root.traverse((o) => { if (o.isMesh) this.shell.push(o); });
     this.cur = { pos: new THREE.Vector3(...POSES.idle.pos), rot: new THREE.Vector3(...POSES.idle.rot), curl: [...POSES.idle.curl], thumb: POSES.idle.thumb };
     this.pose = 'idle';
     this.kick = 0;
@@ -206,6 +211,14 @@ export class ViewModel {
     this.right = new Hand(this.mats, false);
     this.left = new Hand(this.mats, true);
     this.scene.add(this.right.root, this.left.root);
+    // the player's own suited arms follow the hand rig once the model has loaded
+    loadPlayerModel().then((source) => {
+      if (!source) return;
+      this.arms = new FirstPersonArms(source, this.scene);
+      this.arms.setGlow(this.color, 2);
+      this.arms.setVisible(this.right.root.visible);
+      for (const m of [...this.right.shell, ...this.left.shell]) m.visible = false;
+    });
     // energy saber for the Blade path, held in the right fist
     this.saber = new THREE.Group();
     this.saberMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.6, 0.6) });
@@ -317,6 +330,7 @@ export class ViewModel {
     this.mats.circuit.emissive.copy(this.color);
     this.right.setColor(this.color);
     this.left.setColor(this.color);
+    this.arms?.setGlow(this.color, 2);
     this.threadMat.color.copy(this.color).multiplyScalar(1.6);
   }
 
@@ -328,6 +342,7 @@ export class ViewModel {
   setVisible(v) {
     this.right.root.visible = v;
     this.left.root.visible = v;
+    this.arms?.setVisible(v);
     if (!v) this.threadMat.opacity = 0;
   }
 
@@ -437,6 +452,7 @@ export class ViewModel {
     const tipOn = lp === 'sword' ? 1 : 0;
     for (const t of l.tipGlows) t.material.opacity += (tipOn - t.material.opacity) * Math.min(1, dt * 10);
 
+    this.arms?.update(r, l);
     // light the arms like the world
     this.sun.position.copy(s.sunDirView).multiplyScalar(5);
     this.sun.color.copy(s.sunColor);

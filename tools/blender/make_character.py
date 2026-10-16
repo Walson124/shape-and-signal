@@ -18,6 +18,9 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--out", required=True)
 ap.add_argument("--preview", default="")
 ap.add_argument("--tex", type=int, default=1024, help="largest texture size in the export")
+ap.add_argument("--ual1", default="", help="Quaternius Universal Animation Library (CC0): AL_Standard.fbx (Unreal Engine folder)")
+ap.add_argument("--ual2", default="", help="Quaternius Universal Animation Library 2 (CC0): UAL2_Standard.glb")
+ap.add_argument("--poses", default="", help="comma-separated action:frame list to render in the preview")
 args = ap.parse_args(argv)
 
 addon_utils.enable("bl_ext.blender_org.mpfb", default_set=True)
@@ -31,9 +34,9 @@ human = HumanService._create_default_human_info_dict()
 human.update({
     "name": "player",
     "phenotype": {
-        "gender": 1.0, "age": 0.5, "muscle": 0.62, "weight": 0.48, "proportions": 0.6, "height": 0.55,
+        "gender": 1.0, "age": 0.44, "muscle": 0.74, "weight": 0.42, "proportions": 0.92, "height": 0.62,
         "cupsize": 0.5, "firmness": 0.5,
-        "race": {"asian": 0.75, "caucasian": 0.2, "african": 0.05},
+        "race": {"asian": 0.85, "caucasian": 0.15, "african": 0.0},
     },
     "rig": "game_engine",
     "proxy": "male_generic/male_generic.proxy",
@@ -43,8 +46,9 @@ human.update({
     "eyes_material_type": "MAKESKIN",
     "eyebrows": "eyebrow001/eyebrow001.mhclo",
     "eyelashes": "eyelashes01/eyelashes01.mhclo",
-    "hair": "short02/short02.mhclo",
-    "clothes": ["male_casualsuit01/male_casualsuit01.mhclo", "shoes06/shoes06.mhclo"],
+    "hair": "short04/short04.mhclo",
+    # the combat suit is painted onto the body (see suit_textures); only boots go on top
+    "clothes": ["shoes03/shoes03.mhclo"],
     "clothes_material_type": "MAKESKIN",
     "alternative_materials": {},
 })
@@ -100,8 +104,257 @@ def simplify(obj):
         slot.material = mat
 
 
+# ---- the combat suit: MakeHuman's "special suit" skin, recoloured graphite, on this character's
+# own face and neck, with its piping split out as a glow map the game tints with the realm colour
+def head_uv_mask(obj, size):
+    """Pixels of the skin texture used by the head (faces weighted mostly to the head bone)."""
+    import numpy as np
+    w, h = size
+    me = obj.data
+    me.calc_loop_triangles()
+    gi = obj.vertex_groups["head"].index
+    def head_w(v):
+        return next((g.weight for g in me.vertices[v].groups if g.group == gi), 0.0)
+    uv = me.uv_layers.active.data
+    m = np.zeros((h, w), dtype=np.float32)
+    for t in me.loop_triangles:
+        if sum(head_w(v) for v in t.vertices) / 3 < 0.5:
+            continue
+        p = np.array([[uv[l].uv[0] * w, uv[l].uv[1] * h] for l in t.loops])
+        x0, y0 = np.floor(p.min(0)).astype(int) - 2
+        x1, y1 = np.ceil(p.max(0)).astype(int) + 2
+        x0, y0, x1, y1 = max(x0, 0), max(y0, 0), min(x1, w - 1), min(y1, h - 1)
+        if x1 < x0 or y1 < y0:
+            continue
+        ys, xs = np.mgrid[y0:y1 + 1, x0:x1 + 1]
+        a, b, c = p
+        d = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
+        if abs(d) < 1e-9:
+            continue
+        l1 = ((b[1] - c[1]) * (xs - c[0]) + (c[0] - b[0]) * (ys - c[1])) / d
+        l2 = ((c[1] - a[1]) * (xs - c[0]) + (a[0] - c[0]) * (ys - c[1])) / d
+        inside = (l1 >= -0.02) & (l2 >= -0.02) & (1 - l1 - l2 >= -0.02)
+        m[y0:y1 + 1, x0:x1 + 1][inside] = 1
+    return m
+
+
+def suit_textures(body):
+    import numpy as np
+    from bl_ext.blender_org.mpfb.services.assetservice import AssetService
+    skins = os.path.dirname(os.path.dirname(AssetService.find_asset_absolute_path(human["skin_mhmat"], "skins")))
+    def load(rel):
+        img = bpy.data.images.load(os.path.join(skins, rel))
+        w, h = img.size
+        return np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4), (w, h)
+    own, size = load("young_asian_male/young_lightskinned_male_diffuse3.png")
+    plain, _ = load("young_caucasian_male/young_lightskinned_male_diffuse.png")
+    suit, _ = load("young_caucasian_male_special_suit/young_caucasian_male_special_suit.png")
+    # where the suit differs from the plain skin it was painted over, it's suit
+    diff = np.abs(suit[..., :3] - plain[..., :3]).max(axis=2)
+    mask = (diff > 0.12).astype(np.float32)
+    # drop the specks where the painted suit's face differs slightly from the plain skin
+    # (shrink the mask, then grow it back: small islands vanish, the suit itself survives)
+    def spread(m, n, op):
+        for _ in range(n):
+            m = op.reduce([m, np.roll(m, 1, 0), np.roll(m, -1, 0), np.roll(m, 1, 1), np.roll(m, -1, 1)])
+        return m
+    mask = spread(spread(mask, 10, np.minimum), 10, np.maximum)
+    # and never on the head
+    mask *= 1 - spread(head_uv_mask(body, size), 3, np.maximum)
+    # soften the edge a little (box blur)
+    for _ in range(2):
+        mask = (mask + np.roll(mask, 1, 0) + np.roll(mask, -1, 0) + np.roll(mask, 1, 1) + np.roll(mask, -1, 1)) / 5
+    mask = np.clip((mask - 0.3) * 2.5, 0, 1)[..., None]
+    rgb = suit[..., :3]
+    mx, mn = rgb.max(axis=2), rgb.min(axis=2)
+    sat = np.where(mx > 1e-4, (mx - mn) / np.maximum(mx, 1e-4), 0)
+    # the orange piping: bright, saturated, red above blue
+    lines = ((sat > 0.45) & (mx > 0.35) & (rgb[..., 0] > rgb[..., 2] * 1.6)).astype(np.float32) * mask[..., 0]
+    lum = rgb @ np.array([0.3, 0.55, 0.15], dtype=np.float32)
+    # graphite with a cool sheen, keeping the folds and seams of the painted suit
+    graphite = np.stack([0.035 + lum * 0.28, 0.04 + lum * 0.31, 0.05 + lum * 0.38], axis=2)
+    graphite = graphite * (1 - lines[..., None]) + np.array([0.55, 0.62, 0.7], dtype=np.float32) * lines[..., None]
+    out = own.copy()
+    out[..., :3] = own[..., :3] * (1 - mask) + graphite * mask
+    glow = np.zeros_like(own)
+    glow[..., :3] = lines[..., None]
+    glow[..., 3] = 1
+    def make(name, arr):
+        img = bpy.data.images.new(name, size[0], size[1], alpha=False)
+        img.pixels.foreach_set(arr.ravel())
+        img.pack()
+        return img
+    return make("suit_color", out), make("suit_glow", glow)
+
+
+body = next(o for o in meshes if o.name.endswith(os.path.basename(human["proxy"]).split(".")[0]))
+SUIT, GLOW = suit_textures(body)
 for o in meshes:
     simplify(o)
+# the body wears the suit: colour plus a glow map on the piping
+for slot in body.material_slots:
+    nt = slot.material.node_tree
+    bsdf = nt.nodes.get("Principled BSDF")
+    tex = next((n for n in nt.nodes if n.type == "TEX_IMAGE"), None) or nt.nodes.new("ShaderNodeTexImage")
+    tex.image = SUIT
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    glow = nt.nodes.new("ShaderNodeTexImage")
+    glow.image = GLOW
+    nt.links.new(glow.outputs["Color"], bsdf.inputs["Emission Color"])
+    bsdf.inputs["Emission Strength"].default_value = 1.0
+    bsdf.inputs["Roughness"].default_value = 0.42
+    bsdf.inputs["Metallic"].default_value = 0.15
+    slot.material.name = "suit"
+    for img in (SUIT, GLOW):
+        if max(img.size) > args.tex:
+            img.scale(args.tex, args.tex)
+
+# ---- animations: retarget the clips the game uses, and build the poses no library has
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import math  # noqa: E402
+import retarget as RT  # noqa: E402
+
+UE_BONES = ["pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
+            "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r", "thigh_l", "calf_l", "foot_l", "ball_l", "thigh_r", "calf_r", "foot_r", "ball_r"]
+for side in ("l", "r"):
+    for fing in ("index", "middle", "ring", "pinky", "thumb"):
+        UE_BONES += [f"{fing}_0{i}_{side}" for i in (1, 2, 3)]
+MAPPING = {b: b for b in UE_BONES}
+MAPPING["Head"] = "head"
+
+tgt = RT.Target(rig)
+made = []
+
+
+def import_source(path):
+    before = set(bpy.data.objects)
+    acts_before = set(bpy.data.actions)
+    if path.lower().endswith(".fbx"):
+        bpy.ops.import_scene.fbx(filepath=path)
+    else:
+        bpy.ops.import_scene.gltf(filepath=path)
+    new = [o for o in bpy.data.objects if o not in before]
+    arm = next(o for o in new if o.type == "ARMATURE")
+    return arm, new, [a for a in bpy.data.actions if a not in acts_before]
+
+
+def clip_name(full):
+    return full.split("|")[-1]
+
+
+sources = []
+if args.ual1:
+    arm, objs, acts = import_source(args.ual1)
+    sources.append((arm, objs, acts, {
+        "Idle_Loop": "idle", "Walk_Loop": "walk", "Jog_Fwd_Loop": "jog", "Sprint_Loop": "sprint",
+        "Jump_Start": "jump_start", "Jump_Loop": "fall", "Jump_Land": "land",
+        "Punch_Jab": "punch_jab", "Punch_Cross": "punch_cross", "Sword_Attack": "sword_heavy", "Sword_Idle": "sword_idle",
+        "Spell_Simple_Shoot": "cast", "Spell_Simple_Idle_Loop": "cast_idle", "Roll": "roll",
+        "Hit_Chest": "hit", "Death01": "death", "Driving_Loop": "drive", "Swim_Fwd_Loop": "swim", "Swim_Idle_Loop": "swim_idle",
+        "Pistol_Shoot": "shoot",
+    }))
+if args.ual2:
+    arm, objs, acts = import_source(args.ual2)
+    sources.append((arm, objs, acts, {
+        "Idle_FoldArms_Loop": "idle_folded", "Melee_Hook": "punch_hook", "Sword_Regular_A": "sword_a", "Sword_Regular_B": "sword_b",
+        "Sword_Regular_C": "sword_c", "Sword_Block": "guard", "NinjaJump_Start": "leap", "NinjaJump_Idle_Loop": "air",
+        "NinjaJump_Land": "leap_land", "Hit_Knockback": "knockback", "Consume": "consume", "OverhandThrow": "throw",
+    }))
+for arm, objs, acts, wanted in sources:
+    by_clip = {clip_name(a.name): a.name for a in acts}
+    made += RT.retarget(arm, tgt, {by_clip[k]: v for k, v in wanted.items() if k in by_clip}, MAPPING)
+
+
+# poses built from limb directions (Blender axes: +x the character's left, -y forward, +z up)
+def fist(side, amount=1.0):
+    """Finger curl for a closed fist on one hand."""
+    out = {}
+    for fing in ("index", "middle", "ring", "pinky"):
+        for i, a in ((1, 1.2), (2, 1.5), (3, 1.0)):
+            out[f"{fing}_0{i}_{side}"] = a * amount
+    out[f"thumb_02_{side}"] = 0.5 * amount
+    out[f"thumb_03_{side}"] = 0.6 * amount
+    return out
+
+
+def mirror(d):
+    out = {}
+    for k, v in d.items():
+        out[k] = v
+        if k.endswith("_l"):
+            out[k[:-2] + "_r"] = (-v[0], v[1], v[2])
+    return out
+
+
+def looped(name, frames_n, build):
+    frames = [build(i / frames_n * 2 * math.pi) for i in range(frames_n + 1)]
+    made.append(RT.write_action(rig, name, frames, bpy.context.scene.render.fps))
+
+
+# cross-legged meditation: hips on the ground, hands resting on the knees, a slow breath
+def meditate(t):
+    b = 0.02 * math.sin(t)
+    return RT.pose_from_directions(tgt, mirror({
+        "thigh_l": (0.78, -0.58, -0.12), "calf_l": (-0.86, -0.3, -0.08), "foot_l": (-0.5, -0.1, -0.85),
+        "upperarm_l": (0.28, -0.2, -0.94), "lowerarm_l": (0.22, -0.78, -0.58),
+        "spine_03": (0, 0.04 - b, 1), "neck_01": (0, -0.05, 1), "head": (0, -0.08, 1),
+    }), pelvis_drop=0.76 - b * 0.5)
+
+
+# hovering: legs hang loose, one knee a little more bent, arms relaxed and slightly out
+def hover(t):
+    s = math.sin(t)
+    d = {
+        "thigh_l": (0.06, -0.12 - 0.04 * s, -1), "calf_l": (0.02, 0.18 + 0.05 * s, -1), "foot_l": (0, -0.25, -1),
+        "thigh_r": (-0.06, -0.28 + 0.04 * s, -1), "calf_r": (-0.02, 0.4 - 0.05 * s, -1), "foot_r": (0, -0.1, -1),
+        "upperarm_l": (0.42 + 0.04 * s, 0.02, -1), "lowerarm_l": (0.3, -0.3, -1),
+        "upperarm_r": (-0.42 - 0.04 * s, 0.02, -1), "lowerarm_r": (-0.3, -0.3, -1),
+        "head": (0, -0.04, 1),
+    }
+    return RT.pose_from_directions(tgt, d)
+
+
+# cruising flight (the game tips the whole body forward): arms swept back, legs together, head up
+def cruise(t):
+    s = math.sin(t)
+    return RT.pose_from_directions(tgt, mirror({
+        "upperarm_l": (0.22, 0.2, -1), "lowerarm_l": (0.12, 0.32, -1),
+        "thigh_l": (0.05, 0.04 + 0.03 * s, -1), "calf_l": (0.02, 0.16 - 0.03 * s, -1), "foot_l": (0, 0.6, -1),
+        "spine_03": (0, 0.1, 1), "neck_01": (0, 0.45, 1), "head": (0, 1.0, 0.85),
+    }))
+
+
+# full speed: one fist driving ahead, the other arm back, body stretched out
+def dash(t):
+    s = math.sin(t * 2)
+    return RT.pose_from_directions(tgt, {
+        "upperarm_r": (-0.12, -0.18, 1), "lowerarm_r": (-0.04, -0.12, 1),
+        "upperarm_l": (0.22, 0.24, -1), "lowerarm_l": (0.12, 0.34, -1),
+        "thigh_l": (0.06, 0.05, -1), "calf_l": (0.02, 0.2 + 0.03 * s, -1), "foot_l": (0, 0.7, -1),
+        "thigh_r": (-0.04, 0.0, -1), "calf_r": (-0.02, 0.08 - 0.03 * s, -1), "foot_r": (0, 0.7, -1),
+        "spine_03": (0, 0.12, 1), "neck_01": (0, 0.5, 1), "head": (0, 1.1, 0.8),
+    }, curl={**fist("r"), **fist("l", 0.45)})
+
+
+looped("meditate", 96, meditate)
+looped("fly_hover", 72, hover)
+looped("fly_cruise", 48, cruise)
+looped("fly_dash", 24, dash)
+
+# the libraries' own rigs, meshes and clips don't ship
+for arm, objs, acts, wanted in sources:
+    for o in objs:
+        bpy.data.objects.remove(o, do_unlink=True)
+    for a in acts:
+        bpy.data.actions.remove(a)
+# bind every clip to the character once: the exporter only takes actions with a slot for this rig
+rig.animation_data_create()
+for act in made:
+    rig.animation_data.action = act
+    if hasattr(rig.animation_data, "action_slot") and getattr(act, "slots", None) and len(act.slots):
+        rig.animation_data.action_slot = act.slots[0]
+rig.animation_data.action = None
+print("ACTIONS", [a.name for a in made])
 
 # the full-resolution body is only used to fit the proxy and clothes; it doesn't ship
 export = [rig] + [o for o in meshes if o != basemesh]
@@ -133,13 +386,28 @@ def preview(path):
     import math
     from mathutils import Vector
     top = max((o.matrix_world @ Vector(c)).z for o in meshes if o != basemesh for c in o.bound_box)
-    for name, ang in (("front", 0), ("side", math.pi / 2), ("face", 0)):
+    shots = [("front", 0, None, 0), ("side", math.pi / 2, None, 0), ("face", 0, None, 0)]
+    for item in filter(None, args.poses.split(",")):
+        an, fr = item.split(":")
+        shots += [(f"{an}-{fr}", math.pi / 2.6, an, int(fr))]
+    rig.animation_data_create()
+    for name, ang, an, fr in shots:
+        rig.animation_data.action = bpy.data.actions.get(an) if an else None
+        act = rig.animation_data.action
+        if act is not None and hasattr(rig.animation_data, "action_slot") and getattr(act, "slots", None) and len(act.slots):
+            rig.animation_data.action_slot = act.slots[0]
+        if not an:
+            for pb in rig.pose.bones:
+                pb.rotation_quaternion = (1, 0, 0, 0)
+                pb.location = (0, 0, 0)
+        scene.frame_set(fr or 1)
         d = 1.6 if name == "face" else 5.2
         z = top - 0.12 if name == "face" else top * 0.52
         cam.location = (math.sin(ang) * -d, -math.cos(ang) * d, z)
         cam.rotation_euler = (math.pi / 2, 0, -ang)
         scene.render.filepath = os.path.join(path, f"char-{name}.png")
         bpy.ops.render.render(write_still=True)
+    rig.animation_data.action = None
     print("HEIGHT", round(top, 3))
 
 
@@ -149,7 +417,8 @@ if args.preview:
 os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
 bpy.ops.export_scene.gltf(
     filepath=args.out, export_format="GLB", use_selection=True,
-    export_skins=True, export_animations=False, export_morph=False,
+    export_skins=True, export_animations=bool(made), export_animation_mode="ACTIONS", export_morph=False,
+    export_force_sampling=True, export_optimize_animation_size=True, export_frame_step=1,
     export_image_format="WEBP", export_yup=True, export_apply=True,
 )
 print("EXPORTED", args.out, os.path.getsize(args.out))
