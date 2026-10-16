@@ -1,6 +1,13 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-16', version: '0.11.2',
+    title: 'New starships',
+    items: [
+      'All five starships are rebuilt with proper hulls: the Skyjet is a sleek delta-wing fighter, the Corvette a twin-drive escort with canards, and the Frigate, Cruiser and Star Ark have armoured, faceted hulls with lit windows, vents and detailed engines.',
+    ],
+  },
+  {
     date: '2026-10-16', version: '0.11.1',
     title: 'Story fixes',
     items: [

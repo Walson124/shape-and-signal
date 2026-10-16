@@ -2,6 +2,20 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bevelBox, taperedHull } from './geometry.js';
 import { glowTexture, hullTextures } from './textures.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+// The Blender-built ships (tools/blender/make_ships.py), loaded once. Each ship
+// starts as the code-built model below and swaps to its modelled version when
+// this arrives.
+let modelled = null;
+function loadShips() {
+  if (typeof document === 'undefined') return Promise.resolve(null);
+  if (!modelled) {
+    const url = `${import.meta.env?.BASE_URL ?? './'}models/ships.glb`;
+    modelled = new GLTFLoader().loadAsync(url).then((g) => g.scene).catch((e) => { console.warn('ship models failed to load', e); return null; });
+  }
+  return modelled;
+}
 
 const NAMES = ['Skyjet', 'Corvette', 'Frigate', 'Cruiser', 'Star Ark'];
 
@@ -141,10 +155,12 @@ export function buildPlayerShip(tier, accentHex) {
   });
   group.scale.setScalar(1 + tier * 0.18);
   group.userData.shipDesign = { name: NAMES[tier], engines: flames.length };
+  let lastThrust = 0;
   const result = {
     group, gear,
     setThrust(value) {
       const v = THREE.MathUtils.clamp(value, 0, 1);
+      lastThrust = v;
       for (const f of flames) f.scale.setScalar((2.2 + v * 5.5) * f.userData.radius);
       exhaustMat.opacity = 0.4 + v * 0.6;
     },
@@ -156,5 +172,39 @@ export function buildPlayerShip(tier, accentHex) {
     },
   };
   result.setThrust(0);
+  let disposed = false;
+  const dispose = result.dispose;
+  result.dispose = () => { disposed = true; dispose(); };
+  // swap in the modelled ship: same materials (panelled hull, accent trim), same engines and gear
+  loadShips().then((scene) => {
+    const src = scene && !disposed && scene.getObjectByName(`ship${tier}`);
+    if (!src) return;
+    const own = group.children.filter((o) => o.isMesh);
+    const oldGear = [...gear.children];
+    const hull = materials.hull.clone();
+    hull.map = materials.hull.map.clone(); hull.map.repeat.set(5, 5); hull.map.wrapS = hull.map.wrapT = THREE.RepeatWrapping; hull.map.needsUpdate = true;
+    hull.roughnessMap = materials.hull.roughnessMap.clone(); hull.roughnessMap.repeat.set(5, 5); hull.roughnessMap.wrapS = hull.roughnessMap.wrapT = THREE.RepeatWrapping; hull.roughnessMap.needsUpdate = true;
+    const mats = { hull, dark: materials.dark, glass: materials.glass, neon: materials.neon };
+    const copy = src.clone(true);
+    copy.traverse((o) => {
+      if (!o.isMesh) return;
+      const kind = o.material.name;
+      if (mats[kind]) o.material = mats[kind];
+      else o.material = o.material.clone();
+    });
+    const gearSrc = copy.getObjectByName(`ship${tier}_gear`);
+    if (gearSrc) { gearSrc.removeFromParent(); for (const m of oldGear) m.visible = false; gear.add(gearSrc); }
+    const engines = [];
+    const num = (o) => Number(/_engine_(d+)$/.exec(o.name)?.[1] ?? -1);
+    copy.traverse((o) => { if (num(o) >= 0) engines.push(o); });
+    engines.sort((a, b) => num(a) - num(b));
+    engines.forEach((e, i) => { if (flames[i]) { flames[i].position.copy(e.position); flames[i].userData.radius = e.userData.radius ?? flames[i].userData.radius; } });
+    for (const m of own) m.visible = false;
+    copy.position.set(0, 0, 0);
+    group.add(copy);
+    result.setThrust(lastThrust);
+    const disposeCopy = result.dispose;
+    result.dispose = () => { disposeCopy(); hull.map.dispose(); hull.roughnessMap.dispose(); hull.dispose(); };
+  });
   return result;
 }
