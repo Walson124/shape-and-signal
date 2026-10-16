@@ -31,7 +31,7 @@ export function preloadBeasts() { for (const p of AVAILABLE) load(p); }
 
 // Far from the scene origin GPU skinning in world space loses precision; skin relative to the mesh.
 const tM = new THREE.Matrix4(), tInv = new THREE.Matrix4();
-function relativeSkinning(mesh) {
+export function relativeSkinning(mesh) {
   const bind = mesh.bindMatrix.clone();
   mesh.bindMode = THREE.DetachedBindMode;
   mesh.bindMatrix.identity();

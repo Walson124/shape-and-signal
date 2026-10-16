@@ -1721,11 +1721,12 @@ export class Game {
 
   hitBeast(b, dmg, pos, kind, knock) {
     if (!b.alive) return;
+    // a titan is struck through its body parts
+    if (b.type === 'titanpart') return this.hitTitan(b, dmg, pos, kind);
     const backstab = kind !== 'poison' && kind !== 'pressure' && this.arts.consumeBackstab();
     const crit = backstab || (kind !== 'pressure' && kind !== 'poison' && Math.random() < this.stats.crit + this.arts.critBonus(kind));
     const temper = kind === 'turret' || kind === 'pet' || kind === 'pressure' || kind === 'ram' ? 0 : ((this.state.gear && this.state.gear.temper[activePath(this.state)]) || 0);
     let amount = dmg * (backstab ? 3 : crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(b, kind) * (1 + 0.15 * temper);
-    if (b.planetary && this.campaign.planetary.boss === b) amount *= this.campaign.planetary.brain.vulnerability;
     if (b.duelist) {
       amount = this.training.duel.reduceIncoming(amount, kind);
       if (amount <= 0) { this.dmgNum(pos, this.training.duel.countdown > 0 ? 'GET READY' : 'EVADE', 'xp'); return; }
@@ -1738,6 +1739,20 @@ export class Game {
     const killed = this.beasts.damage(b, amount, this.time, knock);
     this.arts.onHit(b, kind, killed);
     if (!killed && !b.static && kind !== 'poison' && kind !== 'pressure') this.wound(b, pos, amount);
+    if (kind !== 'poison') this.hud.hitmarker(killed);
+  }
+
+  hitTitan(part, dmg, pos, kind) {
+    const titan = part.owner, boss = titan.boss;
+    if (!boss.alive) return;
+    const crit = kind !== 'pressure' && kind !== 'poison' && Math.random() < this.stats.crit + this.arts.critBonus(kind);
+    const temper = (this.state.gear && this.state.gear.temper[activePath(this.state)]) || 0;
+    let amount = dmg * (crit ? 2 : 1) * (0.9 + Math.random() * 0.2) * this.arts.damageMult(boss, kind) * (1 + 0.15 * temper);
+    amount = titan.hitPart(part, amount);
+    this.dmgNum(pos, fmt(amount), part.weak && !part.broken ? 'crit' : crit ? 'crit' : '');
+    this.particles.burst(pos, new THREE.Color(part.weak && !part.broken ? titan.def.accent : 0xffffff).multiplyScalar(1.6), part.weak ? 14 : 6, 30, 0.8, 0.4);
+    const killed = this.beasts.damage(boss, amount, this.time, null);
+    this.arts.onHit(boss, kind, killed);
     if (kind !== 'poison') this.hud.hitmarker(killed);
   }
 

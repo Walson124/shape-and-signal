@@ -1,6 +1,16 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-16', version: '0.12',
+    title: 'Beasts and titans',
+    items: [
+      'Every beast is rebuilt: sculpted, armoured and fanged, with real animation for prowling, running, snarling, attacking, flinching and dying.',
+      'The planetary threats are now true titans, hundreds of metres long. They hunt you across the battlefield: stalking, circling, leaping, burrowing and diving.',
+      'No more warning markings on the ground: read the titan's body. Its attacks chain into combos with uneven, delayed follow-ups.',
+      'Sniping doesn't work: a titan's hide turns aside distant blows, and it answers range with leaps, sweeping beams and swarms of homing orbs. Break its glowing weak points up close to stagger it.',
+    ],
+  },
+  {
     date: '2026-10-16', version: '0.11.2',
     title: 'New starships',
     items: [

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { PlanetaryBrain, PLANETARY_BOSSES, attackHits } from './planetary-bosses.js';
+import { PLANETARY_BOSSES } from './planetary-bosses.js';
+import { Titan, TitanBody, loadTitan } from './titan.js';
 import { buildPlanetDestruction } from './planet-destruction.js';
 import { derive } from './state.js';
 
@@ -47,13 +48,20 @@ export class PlanetaryEncounter {
     this.c.st.siegeFailure = null;
     g.beasts.clear(); g.combat.clear();
     this.boss = g.beasts.spawnPlanetary(this.def, this.centre.clone().addScaledVector(this.up, this.def.lift));
-    this.brain = new PlanetaryBrain(this.def); this.status = 'fighting'; this.abandon = 0; this.hit = false;
-    // it wakes with a roar and gives you a few seconds to take it in before the first attack
-    this.brain.t = 6;
+    // the titan is the fight: it moves, attacks and is struck through its body parts
+    this.titan = this.brain = new Titan(g, this.def, this.boss, this.centre);
+    this.status = 'fighting'; this.abandon = 0;
+    const attempt = this.titan;
+    loadTitan(id).then((src) => {
+      if (!src || this.titan !== attempt || !this.boss?.alive) return;
+      attempt.attach(new TitanBody(src, this.def));
+      // the titan's parts take the hits now, not one big sphere
+      this.boss.radius = 0.01;
+    });
     g.combat.shockwave(this.boss.pos.clone(), 220, this.def.accent, 1.6); g.sound.thunder(); g.rt.shake = Math.max(g.rt.shake, 0.9);
     g.hud.el?.alert?.classList.add('planetary');
     g.hud.banner('PLANETARY THREAT', this.def.name, `${this.def.cn} · ${this.def.planet} will fall if you lose`, '#ffb752', 5);
-    g.cutscene.say([['Nix', 'Watch its tells. Commit after it attacks. When the core opens, interrupt the World Rend.']]);
+    g.cutscene.say([['Nix', 'Watch its body, not the ground: it shows you every blow before it lands. Get in close. Its hide shrugs off distant fire, and its glowing weak points break.']]);
     g.save(); return true;
   }
   onDeath() {
@@ -64,57 +72,16 @@ export class PlanetaryEncounter {
     if (!this.active) return;
     this.status = 'pending-failure'; this.reason = reason; this.g.mode = 'cutscene';
   }
-  onKill(b) { if (this.active && b === this.boss) { this.status = 'pending-win'; return true; } return false; }
+  onKill(b) { if (this.active && b === this.boss) { this.titan?.removeParts(); this.status = 'pending-win'; return true; } return false; }
   clearTells() {
     for (const m of this.telegraphs) { m.removeFromParent(); m.geometry.dispose(); m.material.dispose(); }
     this.telegraphs = [];
-  }
-  tell(attack) {
-    this.clearTells(); const g = this.g, b = this.boss;
-    this.origin = b.pos.clone().addScaledVector(this.up, -this.def.lift + 1.8);
-    const prediction = g.player.pos.clone().addScaledVector(g.player.vel, 0.45);
-    this.direction = prediction.clone().sub(this.origin);
-    if (attack.id !== 'lance') this.direction.projectOnPlane(this.up);
-    this.direction.normalize();
-    if (this.direction.lengthSq() < 0.5) this.direction = new THREE.Vector3(1, 0, 0).projectOnPlane(this.up).normalize();
-    const side = new THREE.Vector3().crossVectors(this.direction, this.up).normalize();
-    this.marks = attack.shape === 'disc' || attack.shape === 'discs' ? [prediction.clone()] : [];
-    if (attack.shape === 'discs') for (const offset of [-65, 65]) this.marks.push(prediction.clone().addScaledVector(side, offset).addScaledVector(this.direction, 35));
-    this.marks.forEach(p => { const d = p.clone().normalize(), floor = this.planet.floorRadius(d.x, d.y, d.z) + 1.8;
-      if (attack.id === 'eruption' || p.length() - floor < 70) p.copy(d.multiplyScalar(floor)); });
-    const add = (geo, pos, q) => {
-      const dir = pos.clone().normalize(), floor = this.planet.floorRadius(dir.x, dir.y, dir.z);
-      if (attack.id !== 'lance' && pos.length() - floor < 10) {
-        const vertices = geo.attributes.position, inverse = q.clone().invert(), v = new THREE.Vector3();
-        for (let i = 0; i < vertices.count; i++) {
-          v.fromBufferAttribute(vertices, i).applyQuaternion(q).add(pos);
-          const n = v.clone().normalize(); v.copy(n.multiplyScalar(this.planet.floorRadius(n.x, n.y, n.z) + 1.8)).sub(pos).applyQuaternion(inverse);
-          vertices.setXYZ(i, v.x, v.y, v.z);
-        }
-        geo.computeBoundingSphere();
-      }
-      const mat = new THREE.MeshBasicMaterial({ color: attack.id === 'devour' ? 0xff3c64 : this.def.accent, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide });
-      const m = new THREE.Mesh(geo, mat); m.position.copy(pos); m.quaternion.copy(q); g.localRoot.add(m); this.telegraphs.push(m); return m;
-    };
-    const groundQ = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), this.up);
-    if (attack.shape === 'lane') {
-      const basis = new THREE.Matrix4().makeBasis(side, this.direction, new THREE.Vector3().crossVectors(side, this.direction));
-      add(new THREE.PlaneGeometry(attack.width * 2, attack.reach), this.origin.clone().addScaledVector(this.direction, attack.reach / 2), new THREE.Quaternion().setFromRotationMatrix(basis));
-    } else if (attack.shape === 'disc' || attack.shape === 'discs') for (const p of this.marks) add(new THREE.RingGeometry(attack.width * 0.85, attack.width, 48), p, groundQ);
-    else if (attack.shape === 'cone') {
-      const geo = new THREE.CircleGeometry(attack.reach, 40, Math.PI / 2 - attack.width, attack.width * 2);
-      const basis = new THREE.Matrix4().makeBasis(side, this.direction, this.up);
-      add(geo, this.origin, new THREE.Quaternion().setFromRotationMatrix(basis));
-    } else add(new THREE.RingGeometry(attack.id === 'devour' ? 43 : 48, attack.id === 'devour' ? 49 : 52, 64), this.origin, groundQ);
-    this.hit = false;
-    const [name, instruction] = attack.label.split(' — ');
-    g.hud.banner(this.def.phases[this.brain.phase].toUpperCase(), name, instruction || 'Strike during recovery', '#ffb752', Math.min(attack.wind, 3), true);
   }
   update(dt) {
     const g = this.g;
     if (this.status === 'pending-failure') { this.fail(this.reason); return; }
     if (this.status === 'pending-win') {
-      this.status = 'idle'; this.clearTells(); g.hud.alert(null);
+      this.status = 'idle'; this.clearTells(); g.hud.alert(null); this.titan?.dispose(); this.titan = null;
       g.hud.el?.alert?.classList.remove('planetary');
       this.c.st.slain = [...new Set([...(this.c.st.slain || []), this.def.id])];
       delete this.c.st.siegeCheckpoint; delete this.c.st.siegeFailure;
@@ -128,42 +95,22 @@ export class PlanetaryEncounter {
     const b = this.boss, distance = g.player.pos.distanceTo(this.centre);
     this.abandon = distance > 1900 ? this.abandon + dt : 0;
     if (this.abandon > 12) { this.requestFailure('You abandoned the final defensive line.'); return; }
-    const events = this.brain.tick(dt, { hp: b.hp, maxHp: b.maxHp, distance: b.pos.distanceTo(g.player.pos) });
+    const events = this.titan.update(dt);
     for (const event of events) {
-      if (event.type === 'tell') this.tell(event.attack);
       if (event.type === 'phase') { g.sound.thunder(); g.combat.shockwave(b.pos, 160, this.def.accent, 1.5); }
-      if (event.type === 'interrupt') { this.clearTells(); g.hud.banner('WORLD REND INTERRUPTED', 'Core stagger', 'Punish the opening', '#5dffa8', 2, true); }
-      if (event.type === 'recover') this.clearTells();
-      if (event.type === 'strike') {
-        if (event.attack.id === 'devour') { g.sound.thunder(); g.combat.shockwave(this.centre, 900, this.def.accent, 2); g.rt.shake = 1.2; }
-        if (event.attack.id === 'lance') g.combat.beam(this.origin.clone().addScaledVector(this.up, 18), this.origin.clone().addScaledVector(this.direction, event.attack.reach).addScaledVector(this.up, 18), this.def.accent, 8, 0.6);
-        if (event.attack.shape === 'disc' || event.attack.shape === 'discs') for (const mark of this.marks) g.combat.explosion(mark, this.def.accent, 6);
-      }
+      if (event.type === 'interrupt') g.hud.banner('WORLD REND INTERRUPTED', 'It staggers', 'Punish the opening', '#5dffa8', 2, true);
       if (event.type === 'failure') { this.requestFailure('The planetary core ruptured.'); return; }
     }
-    b.model.anim(g.time); g.beasts.face(b, this.direction || g.player.pos.clone().sub(b.pos).projectOnPlane(this.up).normalize(), dt, this.brain.state === 'windup' ? 2 : 0.5, this.up);
-    b.state = this.brain.state;
-    if (this.brain.state === 'active') {
-      const attack = this.brain.attack, progress = Math.min(1, 1 - this.brain.t / attack.active);
-      if (attack.id === 'charge') {
-        const at = this.origin.clone().addScaledVector(this.direction, attack.reach * progress), d = at.normalize();
-        b.pos.copy(d.multiplyScalar(this.planet.floorRadius(d.x, d.y, d.z) + this.def.lift));
-      }
-      if (attack.shape === 'ring') for (const m of this.telegraphs) m.scale.setScalar(Math.max(0.1, attack.reach * progress / 50));
-      if (!this.hit && attackHits(attack, this.origin, this.direction, g.player.pos, this.up, progress, this.marks)) {
-        // a hit hurts, but never takes more than about a fifth to a quarter of your life
-        const cap = g.stats.maxHp * [0.18, 0.22, 0.26][this.brain.phase];
-        this.hit = true; g.hurtPlayer(Math.min(b.dmg * (this.brain.phase === 2 ? 1.2 : 1), cap), b.pos);
-      }
-    }
     b.stunT = 0; b.held = false;
-    const left = Math.max(0, Math.ceil(this.def.limit - this.brain.elapsed));
-    g.hud.alert(`${this.def.planet.toUpperCase()} INTEGRITY ${this.brain.integrity}% · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} · ${this.abandon > 0 ? 'RETURN — ' + Math.ceil(12 - this.abandon) + 's' : this.brain.state === 'recovery' ? 'CORE EXPOSED' : this.brain.attack?.id === 'devour' ? 'INTERRUPT WORLD REND' : this.brain.state === 'windup' ? 'ATTACK INCOMING' : 'EVADE'}`);
+    const left = Math.max(0, Math.ceil(this.def.limit - this.titan.elapsed));
+    const ph = this.def.phases[this.titan.phase].toUpperCase();
+    g.hud.alert(`${this.def.planet.toUpperCase()} INTEGRITY ${this.titan.integrity}% · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} · ${this.abandon > 0 ? 'RETURN — ' + Math.ceil(12 - this.abandon) + 's' : this.titan.state === 'rend' ? 'WORLD REND — STRIKE ITS CORE' : ph}`);
   }
   async fail(reason) {
     if (this.status === 'defeated' || this.status === 'cinematic') return;
     const g = this.g; this.status = 'cinematic'; this.clearTells();
     g.hud.hideBanner?.(); g.hud.el?.alert?.classList.remove('planetary');
+    this.titan?.dispose(); this.titan = null;
     this.c.st.siegeFailure = reason; g.rt.hp = 0; g.rt.inShip = false; g.rt.inVehicle = false;
     g.beasts.clear(); g.combat.clear(); g.player.vel.set(0, 0, 0); g.hud.alert(null); g.save();
     const fx = this.destruction = buildPlanetDestruction(g, this.planet, this.def.accent);
@@ -207,9 +154,10 @@ export class PlanetaryEncounter {
   }
   clearDestruction() { this.destruction?.dispose(); this.destruction = null; }
   rebase(m, q) {
+    this.titan?.rebase(m, q);
     this.centre?.applyMatrix4(m); this.origin?.applyMatrix4(m); this.up?.applyQuaternion(q); this.direction?.applyQuaternion(q);
     for (const mark of this.marks) mark.applyMatrix4(m);
     for (const mesh of this.telegraphs) { mesh.position.applyMatrix4(m); mesh.quaternion.premultiply(q); }
   }
-  dispose() { this.status = 'idle'; this.clearTells(); this.clearDestruction(); this.boss = null; this.g.hud.alert?.(null); this.g.hud.el?.alert?.classList.remove('planetary'); }
+  dispose() { this.titan?.dispose(); this.titan = null; this.status = 'idle'; this.clearTells(); this.clearDestruction(); this.boss = null; this.g.hud.alert?.(null); this.g.hud.el?.alert?.classList.remove('planetary'); }
 }

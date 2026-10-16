@@ -104,7 +104,8 @@ test('planetary enemies bypass generic AI and keep normal boss combat targeting'
   g.beasts.setEnv({ max: 0, spawn: () => null });
   g.beasts.update(1, { player: g.player, playerAlive: true, time: 2 });
   assert.ok(b.pos.equals(pos)); assert.equal(g.beasts.liveBoss, b); assert.equal(b.boss, true);
-  e.update(0.05); assert.equal(b.state, 'recovery');
+  // it wakes with a roar before it does anything else
+  e.update(0.05); assert.equal(b.state, 'intro');
   g.beasts.clear(); e.dispose();
 });
 
@@ -165,4 +166,36 @@ test('campaign order preserves old missions and gives later confrontations off-w
   assert.ok(ACT1.findIndex(m => m.id === 'tide') < ACT1.findIndex(m => m.id === 'worldbreaker'));
   const { g } = fixture(); assert.equal(Campaign.prototype.onTerra.call({ g }), true);
   g.star.key = 'other'; assert.equal(Campaign.prototype.onTerra.call({ g }), false);
+});
+
+test('titans hunt: far or airborne players draw gap-closers and ranged moves, players behind draw the tail', async () => {
+  const { Titan } = await import('../src/game/titan.js');
+  const { g, encounter: e } = fixture(); e.begin('vesper');
+  const t = e.titan;
+  const pick = (sense, n = 40) => { const seen = {}; for (let i = 0; i < n; i++) { t.recent = []; const id = t.choose(sense); seen[id] = (seen[id] || 0) + 1; } return seen; };
+  t.farT = 8;
+  const far = pick({ dist: 5, ahead: 1, air: false });
+  assert.ok((far.leap || 0) + (far.beam || 0) + (far.roar || 0) > 30, 'keeping away is answered by leaps, beams and roars');
+  t.farT = 0;
+  const behind = pick({ dist: 1.2, ahead: -0.9, air: false });
+  assert.ok((behind.tail || 0) > 20, 'standing behind it draws the tail');
+  t.airT = 6;
+  const air = pick({ dist: 1.5, ahead: 1, air: true });
+  assert.ok((air.roar || 0) > 15, 'flying or riding a ship draws its anti-air roar');
+  assert.ok(t instanceof Titan);
+  e.dispose(); g.beasts.clear();
+});
+
+test('titan hide shrugs off distant blows; weak points take more and break into a stagger', async () => {
+  const { g, encounter: e } = fixture(); e.begin('vesper');
+  const t = e.titan;
+  g.hud.notify = noop;
+  const near = { pos: g.player.pos.clone().add(v(0, 0, -20)), radius: 10, weak: false };
+  const far = { pos: g.player.pos.clone().add(v(0, 0, -2000)), radius: 10, weak: false };
+  const weak = { pos: near.pos.clone(), radius: 10, weak: true, taken: 0, breakHp: 50, name: 'Crown' };
+  const a = t.hitPart(near, 100), b = t.hitPart(far, 100), c = t.hitPart(weak, 100);
+  assert.ok(b < a * 0.2, 'far hits are mostly turned aside');
+  assert.ok(c > a * 3, 'weak points take far more');
+  assert.equal(t.state, 'stagger');
+  e.dispose(); g.beasts.clear();
 });

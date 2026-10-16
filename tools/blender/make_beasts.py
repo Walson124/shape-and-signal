@@ -22,12 +22,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import beastkit as K  # noqa: E402
 from beastkit import S, C, TAU  # noqa: E402
 
-argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-ap = argparse.ArgumentParser()
-ap.add_argument("--out", required=True)
-ap.add_argument("--preview", default="")
-ap.add_argument("--only", default="")
-args = ap.parse_args(argv)
 
 
 def mirror_joints(j):
@@ -898,22 +892,36 @@ def preview(arm, body, name, path, poses):
         bpy.ops.render.render(write_still=True)
 
 
-os.makedirs(args.out, exist_ok=True)
-for name, fn in PLANS.items():
-    if args.only and name not in args.only.split(","):
-        continue
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    K.MATS.clear()
-    arm, body = fn()
-    print("BEAST", name, "verts", len(body.data.vertices), "bones", len(arm.data.bones))
-    if args.preview:
-        preview(arm, body, name, args.preview, [("idle", 1, -2.3), ("run", 5, -1.4), ("attack", 13, -1.1), ("windup", 12, -2.5)])
+def export(arm, body, out):
     arm.animation_data.action = None
     bpy.ops.object.select_all(action="DESELECT")
     arm.select_set(True)
     body.select_set(True)
-    out = os.path.join(args.out, f"{name}.glb")
     bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_selection=True, export_skins=True, export_animations=True,
                               export_animation_mode="ACTIONS", export_force_sampling=True, export_optimize_animation_size=True,
                               export_yup=True, export_apply=False, export_vertex_color="ACTIVE")
     print("EXPORTED", out, os.path.getsize(out))
+
+
+def run(plans, poses):
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--preview", default="")
+    ap.add_argument("--only", default="")
+    args = ap.parse_args(argv)
+    os.makedirs(args.out, exist_ok=True)
+    for name, fn in plans.items():
+        if args.only and name not in args.only.split(","):
+            continue
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        K.MATS.clear()
+        arm, body = fn()
+        print("BEAST", name, "verts", len(body.data.vertices), "bones", len(arm.data.bones))
+        if args.preview:
+            preview(arm, body, name, args.preview, poses(name) if callable(poses) else poses)
+        export(arm, body, os.path.join(args.out, f"{name}.glb"))
+
+
+if __name__ == "__main__":
+    run(PLANS, [("idle", 1, -2.3), ("run", 5, -1.4), ("attack", 13, -1.1), ("windup", 12, -2.5)])
