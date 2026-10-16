@@ -1,6 +1,14 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-16', version: '0.11.1',
+    title: 'Story fixes',
+    items: [
+      'Fixed a big frame-rate drop while the story was active far from Base City 07: the game kept rebuilding the city every frame just to point the objective marker at it.',
+      'The story can only be started on a character at the beginning of their journey. Already started it on a seasoned character? Open the Story panel and choose Leave the story.',
+    ],
+  },
+  {
     date: '2026-10-16', version: '0.11',
     title: 'A cultivator in a combat suit',
     items: [

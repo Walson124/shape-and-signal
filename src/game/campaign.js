@@ -319,7 +319,26 @@ export class Campaign {
   // ------------------------------------------------------- locations --
   terra() { return this.g.homePlanet(); }
   onTerra() { return this.g.star.key === 'home' && this.g.frame?.body.id === 'p2'; }
-  capital() { const t = this.terra(); return t.ensureSettlement(t.body.sites.city); }
+  // Where the capital's landmarks are. Asking must not build the city: Terra unloads
+  // cities beyond 9.5 km, and the objective marker asks every frame, so a far-away
+  // capital used to be rebuilt (and thrown away) every frame. Its layout is remembered
+  // after the first look and answered from memory while it isn't loaded.
+  capital() {
+    const t = this.terra();
+    const site = t.body.sites.city;
+    const live = t.details?.sites.find((e) => e.site === site)?.obj;
+    if (live && this.capitalPlan?.from === live) return this.capitalPlan;
+    if (!live && this.capitalPlan?.planet === t) return this.capitalPlan;
+    const obj = live || t.ensureSettlement(site);
+    this.capitalPlan = {
+      planet: t, from: obj,
+      group: { position: obj.group.position.clone() },
+      spawnLocal: obj.spawnLocal.clone(),
+      services: obj.services.map((x) => ({ kind: x.kind, pos: x.pos.clone() })),
+      gates: obj.gates.map((x) => ({ pos: x.pos.clone(), out: x.out.clone(), wall: x.wall })),
+    };
+    return this.capitalPlan;
+  }
   svc(kind) { const s = this.capital().services.find((x) => x.kind === kind); return s ? s.pos.clone() : this.capital().spawnLocal.clone(); }
   ruinCenter(i) {
     const t = this.terra();
@@ -327,10 +346,16 @@ export class Campaign {
     const d = V(site.x, site.y, site.z).normalize();
     return d.multiplyScalar(t.floorRadius(d.x, d.y, d.z) + EYE);
   }
+  // The bunker door in a ruin field, remembered the same way as the capital's layout.
   bunker(i) {
-    const r = this.terra().ensureRuin(i);
+    const t = this.terra();
+    const memo = (this.bunkers ||= {});
+    const live = t.details?.ruins[i]?.obj;
+    if (!live && memo[i]?.planet === t) return memo[i].pos.clone();
+    const r = live || t.ensureRuin(i);
     const sv = r && r.services.find((x) => x.kind === 'lore');
-    return sv ? sv.pos.clone() : this.ruinCenter(i);
+    memo[i] = { planet: t, pos: sv ? sv.pos.clone() : this.ruinCenter(i) };
+    return memo[i].pos.clone();
   }
   gate() {
     const st = this.capital();

@@ -2544,11 +2544,30 @@ export class Game {
     if (!this.input.locked && !this.menus.overlayOpen) this.menus.showPause(true);
   }
 
+  // Act I is the start of a journey (you are seventeen, with two years of savings),
+  // so it can only begin on a character who hasn't got far yet.
+  canBeginStory() { return this.state.realm < 2 && !this.state.ship; }
+
+  // Set the story down (for a character who started it after they'd already got far).
+  async leaveStory() {
+    if (this.campaign?.planetary?.active) return this.denied('Not in the middle of a planetary siege.');
+    const ok = await this.menus.confirm('Leave the story?', 'Your story progress is cleared. Your character, items and everything else stay as they are.', 'Leave the story', true);
+    if (!ok) return;
+    this.campaign.cleanup();
+    this.state.campaign = null;
+    this.campaign.render();
+    this.save();
+    this.hud.notify('You left the story. The galaxy is yours to roam.', 'gold');
+    if (this.menus.panelKind) this.menus.render();
+  }
+
   beginStory() {
     if (this.training.active) return this.denied('Return to your real character to begin the story.');
+    if (!this.canBeginStory()) return this.denied('The story starts a new journey. Start a Campaign from the title screen to play it.');
     this.closePanel();
     this.state.nixAwake = false;
     this.campaign.begin();
+    if (!this.campaign.onTerra()) this.hud.notify('The story begins on <b>Terra</b>. Head home to Base City 07.', 'gold');
   }
 
   // ------------------------------------------------ virtual universe --

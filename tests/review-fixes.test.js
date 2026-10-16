@@ -82,3 +82,26 @@ test('a radar order with nothing better to install is refunded and cleared', () 
   assert.equal(s.deliveries.length, 0);
   assert.equal(s.coins, coins + 500);
 });
+
+test('a far-away capital is never rebuilt just to point the objective marker at it', () => {
+  const V3 = (x) => new THREE.Vector3(x, 0, 0);
+  const city = { group: { position: V3(1) }, spawnLocal: V3(2), services: [{ kind: 'forge', pos: V3(3) }], gates: [{ pos: V3(4), out: V3(5), wall: () => V3(6) }] };
+  let builds = 0;
+  const site = {};
+  // the planet has unloaded the city (obj null) and would build a fresh one when asked
+  const planet = { body: { sites: { city: site } }, details: { sites: [{ site, obj: null }] }, ensureSettlement: () => { builds++; return city; } };
+  const c = Object.create(Campaign.prototype);
+  c.terra = () => planet;
+  for (let i = 0; i < 60; i++) c.svc('forge');
+  assert.equal(builds, 1, 'built once for its layout, then answered from memory');
+  assert.equal(c.svc('forge').x, 3);
+  assert.equal(c.capital().gates[0].wall().x, 6);
+});
+
+test('the story can only begin on a character at the start of their journey', () => {
+  const s = newState();
+  const g = { state: s };
+  assert.equal(Game.prototype.canBeginStory.call(g), true);
+  s.realm = 5;
+  assert.equal(Game.prototype.canBeginStory.call(g), false);
+});

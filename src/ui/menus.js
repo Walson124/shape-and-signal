@@ -151,6 +151,7 @@ export class Menus {
         'pet-away': () => g.putAwayPet(),
         'pet-release': () => g.releasePet(a.dataset.id),
         story: () => g.beginStory(),
+        'leave-story': () => g.leaveStory(),
       };
       if (handlers[action]) {
         handlers[action]();
@@ -1011,6 +1012,9 @@ export class Menus {
   renderStory() {
     const g = this.game;
     const c = g.state.campaign;
+    if ((!c || !c.started) && !g.canBeginStory()) {
+      return '<p class="panel-note">The story follows a new hunter from their first day in Base City 07. Your character is already well past that, so start a <b>Campaign</b> from the title screen to play it.</p>';
+    }
     if (!c || !c.started) {
       return `<p class="panel-note">Act I · <b>The Walled City</b>. A salvage convoy, an ambush in the ruins of the Aurean Concord, and a ring that talks back. Your realm, skills and items are kept.</p>
         <div class="actions-row"><button class="btn primary" data-action="story">Begin the story</button></div>`;
@@ -1023,7 +1027,9 @@ export class Menus {
       return `<div class="item story ${done ? 'done' : cur ? 'focus' : 'locked'}"><div><h4>${done ? '✓ ' : ''}Act ${m.act || 1} · ${esc(m.title)} <span class="cn">${m.cn}</span></h4><p>${done ? 'Complete.' : cur ? esc(obj || 'In progress…') : 'Locked.'}</p></div></div>`;
     }).join('');
     const end = c.campaignDone ? '<p class="panel-note gold">The planetary campaign is complete. The wider galaxy remains open.</p>' : '<p class="panel-note">Three planetary confrontations: defend Terra, investigate the buried engine on Dune, and silence the relay on Glacis. Defeat destroys the threatened planet in that attempt; retry restores a checkpoint.</p>';
-    return `<p class="panel-note"><b>The Walled City · The Buried Sun · The Silent Choir</b></p>${end}<div class="list">${rows}</div>`;
+    // a story started on a character who was already far along can be set down again
+    const leave = !c.campaignDone && !g.canBeginStory() ? '<div class="actions-row"><button class="btn small danger" data-action="leave-story">Leave the story</button></div>' : '';
+    return `<p class="panel-note"><b>The Walled City · The Buried Sun · The Silent Choir</b></p>${end}<div class="list">${rows}</div>${leave}`;
   }
 
   renderArchive() {
