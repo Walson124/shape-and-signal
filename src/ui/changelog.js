@@ -6,8 +6,8 @@ export const CHANGELOG = [
     items: [
       'Every beast is rebuilt: sculpted, armoured and fanged, with real animation for prowling, running, snarling, attacking, flinching and dying.',
       'The planetary threats are now true titans, hundreds of metres long. They hunt you across the battlefield: stalking, circling, leaping, burrowing and diving.',
-      'No more warning markings on the ground: read the titan's body. Its attacks chain into combos with uneven, delayed follow-ups.',
-      'Sniping doesn't work: a titan's hide turns aside distant blows, and it answers range with leaps, sweeping beams and swarms of homing orbs. Break its glowing weak points up close to stagger it.',
+      'No more warning markings on the ground: read the titan’s body. Its attacks chain into combos with uneven, delayed follow-ups.',
+      'Sniping doesn’t work: a titan’s hide turns aside distant blows, and it answers range with leaps, sweeping beams and swarms of homing orbs. Break its glowing weak points up close to stagger it.',
     ],
   },
   {
