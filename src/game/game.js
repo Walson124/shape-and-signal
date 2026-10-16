@@ -25,6 +25,7 @@ import { SkyBaker } from '../world/sky.js';
 import { StarSystem } from '../world/system.js';
 import { getStar, starsNear, HOME_KEY, CORE_KEY } from '../world/galaxy.js';
 import { recordJump } from './starmap.js';
+import { WorldEater } from './worldeater.js';
 import { texPool } from '../world/texpool.js';
 import { LensFlare } from '../world/flare.js';
 import { SpaceDust } from '../world/dust.js';
@@ -361,6 +362,7 @@ export class Game {
       this.particles.rebase(m, q);
       this.arts.rebase(m);
       this.campaign.rebase(m, q);
+      this.worldEater?.rebase(m, q);
       this.structures.rebase(m, q);
       if (this.rt.trib) {
         this.rt.trib.clouds.position.applyMatrix4(m);
@@ -980,6 +982,7 @@ export class Game {
     // only a dead or absent player makes them give up
     const ctx = { player: p, playerAlive: body, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
     if (!this.training.active || !this.training.options.freeze) this.beasts.update(dt, ctx);
+    this.updateWorldEater(dt);
     if (this.training.active) this.training.duel.update(dt);
     this.swords.setup(activePath(s) === 'mind' ? st.swords : 0, s.swordGrade);
     this.swords.update(dt, {
@@ -2218,12 +2221,38 @@ export class Game {
         const group = this.beasts.spawnGroup(type, poi.pos.clone().addScaledVector(poi.up, 8), type === 'ray' ? 3 : 5, tier + 0.3, true);
         group.forEach((b) => { if (Math.random() < 0.3) b.elite = true; });
         this.hud.notify('The nest stirs. Beasts pour out!', 'red');
-      } else if (poi.poi.kind === 'lair' && d < 900 && this.star.boss !== null && this.star.boss !== undefined && !s.bosses.includes(this.star.key) && !this.beasts.liveBoss && this.mode === 'playing') {
+      } else if (false && poi.poi.kind === 'lair') {
         this.beasts.spawnBoss(this.star.boss, poi.pos.clone().addScaledVector(poi.up, 120), this.star.tier);
         const def = BOSSES[this.star.boss];
         this.hud.banner('OVERLORD', def.name, `<span class="cn">${def.cn}</span>has awakened`, hex(def.color), 4);
       }
     }
+  }
+
+  // The World-Eater of a boss system: it sleeps coiled round the lair world, wakes
+  // when you come close and goes back to sleep (whole again) if you die or leave.
+  updateWorldEater(dt) {
+    const we = this.worldEater;
+    if (we) {
+      if (!we.boss.alive) {
+        if ((we.dying || 0) > 6.5) { we.dispose(); this.worldEater = null; }
+        return;
+      }
+      const far = this.playerWorld ? we.centre().distanceTo(this.player.pos) > we.R * 14 : false;
+      if (we.system !== this.system || this.mode === 'dead' || far || this.training.active) { we.dispose(); this.worldEater = null; return; }
+      if (this.mode === 'playing') we.update(dt);
+      return;
+    }
+    const st = this.star;
+    if (this.mode !== 'playing' || this.training.active || st.boss === null || st.boss === undefined || this.state.bosses.includes(st.key)) return;
+    const lair = this.system?.gen?.lairBody;
+    const planet = lair && this.system.planets.find((p) => p.body.id === lair);
+    if (!planet) return;
+    const c = planet.spin.getWorldPosition(new THREE.Vector3());
+    this.localRoot.worldToLocal(c);
+    if (c.distanceTo(this.player.pos) > planet.R * 12) return;
+    this.worldEater = new WorldEater(this, st.boss, planet);
+    this.worldEater.system = this.system;
   }
 
   // ------------------------------------------------------ interaction --

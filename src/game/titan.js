@@ -14,7 +14,7 @@ import { relativeSkinning } from './beast-models.js';
 // aside distant blows, and it has leaps, beams and volleys for anyone who tries.
 // Weak points stagger it when broken; the World Rend opens at phase changes.
 
-const V = () => new THREE.Vector3();
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const tA = V(), tB = V(), tC = V(), tQ = new THREE.Quaternion(), tM = new THREE.Matrix4();
 const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -198,7 +198,7 @@ export class Titan {
       if (!bone) continue;
       const proxy = {
         uid: ++g.beasts.uid, type: 'titanpart', planetary: true, part: p, owner: this, alive: true, boss: false, elite: false,
-        pos: V(), vel: V(), radius: p.r * this.S, hp: 1, maxHp: 1, def: { color: this.def.color, accent: this.def.accent, name: p.name || this.def.name },
+        pos: V(), vel: V(), home: V(), radius: p.r * this.S, hp: 1, maxHp: 1, def: { color: this.def.color, accent: this.def.accent, name: p.name || this.def.name },
         name: p.name || this.def.name, cn: this.def.cn, tier: this.def.tier, flashT: 0, lastHit: -99,
         model: { group: new THREE.Group(), anim() {}, flash: [] }, mesh: null,
         bone, at: p.at ? new THREE.Vector3(...p.at) : null, weak: p.kind === 'weak' || p.kind === 'core', core: p.kind === 'core',

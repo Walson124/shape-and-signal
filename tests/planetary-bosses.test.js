@@ -199,3 +199,21 @@ test('titan hide shrugs off distant blows; weak points take more and break into 
   assert.equal(t.state, 'stagger');
   e.dispose(); g.beasts.clear();
 });
+
+test('a World-Eater wraps its planet, shrugs off body blows and breaks at its heart-nodes', async () => {
+  const { WorldEater } = await import('../src/game/worldeater.js');
+  const root = new THREE.Group(), spin = new THREE.Group(); root.add(spin);
+  const g = { star: { tier: 5 }, beasts: new BeastManager(root, { burst: noop }, { debris: noop }, { thunder: noop }), hud: { banner: noop, notify: noop }, sound: { thunder: noop, explosion: noop },
+    combat: { explosion: noop, shockwave: noop }, rt: { shake: 0 }, cutscene: { say: noop }, player: { pos: v(0, 0, 9000), vel: v() }, stats: { maxHp: 100 } };
+  const we = new WorldEater(g, 1, { R: 3000, spin, body: { name: 'Test' } });
+  const pts = we.samples();
+  const length = pts.slice(1).reduce((a, p, i) => a + p.distanceTo(pts[i]), 0);
+  assert.ok(length > 3000 * 3, 'the body is several planet radii long');
+  assert.ok(pts.every((p) => p.length() > 3000), 'coiled outside the surface');
+  assert.equal(g.beasts.liveBoss, we.boss);
+  const body = { kind: 'body' }, node = { kind: 'node', taken: 0, breakHp: 1e9 };
+  assert.ok(we.hitPart(node, 100) > we.hitPart(body, 100) * 20, 'nodes take far more than the hide');
+  we.mawOpen = 0; const closed = we.hitPart({ kind: 'core' }, 100); we.mawOpen = 1; const open = we.hitPart({ kind: 'core' }, 100);
+  assert.ok(open > closed * 10, 'the core is only exposed while the jaws are open');
+  we.dispose(); assert.equal(g.beasts.liveBoss, null);
+});

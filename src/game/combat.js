@@ -126,8 +126,9 @@ export class Combat {
     mesh.scale.setScalar(size);
     const glow = new THREE.Sprite(this.spriteMat(color, 1));
     glow.scale.setScalar(size * 6);
-    this.addShot({ kind: 'orb', owner: 'enemy', pos: origin.clone(), vel: dir.clone().normalize().multiplyScalar(speed), life: 4.5, damage, radius: size * 1.1, color: new THREE.Color(color).multiplyScalar(1.5), mesh, glow });
+    const shot = this.addShot({ kind: 'orb', owner: 'enemy', pos: origin.clone(), vel: dir.clone().normalize().multiplyScalar(speed), life: 4.5, damage, radius: size * 1.1, color: new THREE.Color(color).multiplyScalar(1.5), mesh, glow });
     this.sound.enemyShot(origin);
+    return shot;
   }
 
   rebase(m, q) {
@@ -323,6 +324,11 @@ export class Combat {
         continue;
       }
       prevPos.copy(s.pos);
+      // homing shots bend toward their target
+      if (s.homing) {
+        const want = s.homing().sub(s.pos).normalize().multiplyScalar(s.vel.length());
+        s.vel.lerp(want, Math.min(1, dt * (s.turn || 1)));
+      }
       s.pos.addScaledVector(s.vel, dt);
       s.group.position.copy(s.pos);
       if (Math.random() < 0.6) this.particles.emit(s.pos.x, s.pos.y, s.pos.z, 0, 0, 0, s.color, s.owner === 'player' ? 0.6 : 1.2, 0.25, 0, 0.5);

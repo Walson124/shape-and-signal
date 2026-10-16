@@ -724,7 +724,7 @@ export class BeastManager {
     }
 
     for (const b of this.beasts) {
-      if (b.duelist || b.planetary) continue;
+      if (b.duelist || b.planetary || b.colossal) continue;
       if (b.static) {
         if (b.flashT > 0) b.flashT -= dt;
         continue;

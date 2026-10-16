@@ -1,6 +1,16 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-16', version: '0.12.1',
+    title: 'World-Eaters',
+    items: [
+      'The Overlords of the outer regions are now World-Eaters: serpents tens of kilometres long that sleep coiled around the lair world of their system.',
+      'Fight them in flight. Every move of the head whips the whole body through space; its jaws flare and its spines kindle before it strikes.',
+      'It lunges to devour, drinks in everything near its maw, rains homing meteors and sheds parasite broods. Wounded, it wraps the planet to crush it: break its heart-nodes to loosen its grip.',
+      'Its hide barely notices you: burst the glowing heart-nodes on its back, or strike the core in its throat while the jaws are open.',
+    ],
+  },
+  {
     date: '2026-10-16', version: '0.12',
     title: 'Beasts and titans',
     items: [
