@@ -33,8 +33,8 @@ class Arm {
     this.model.traverse((o) => {
       if (!o.isMesh) return;
       o.frustumCulled = false;
-      // only the suited body shows (its head and the other arm are folded away below)
-      if (o.material.name !== 'suit') o.visible = false;
+      // only the arms-only copy of the suited body shows (the other arm is folded away below)
+      if (!/fparms/.test(o.name)) o.visible = false;
       else { o.material = o.material.clone(); this.suit = o.material; this.suit.emissive.set(0x3ef2ff); this.suit.emissiveIntensity = 2; }
     });
     const skinned = [];
@@ -50,11 +50,12 @@ class Arm {
     this.hand = bones[`hand_${side}`];
     this.upperLen = wp(`upperarm_${side}`).distanceTo(wp(`lowerarm_${side}`));
     this.lowerLen = wp(`lowerarm_${side}`).distanceTo(wp(`hand_${side}`));
-    // the back of the hand at rest, from where the fingers and thumb are
+    // the back of the hand at rest, from the finger direction and the line across the knuckles
+    // (pinky to index, pointing to the thumb side)
     const fingerDir = wp(`middle_01_${side}`).sub(wp(`hand_${side}`)).normalize();
-    const thumbDir = wp(`thumb_01_${side}`).sub(wp(`index_01_${side}`));
-    thumbDir.addScaledVector(fingerDir, -thumbDir.dot(fingerDir)).normalize();
-    const backRest = side === 'r' ? new THREE.Vector3().crossVectors(fingerDir, thumbDir) : new THREE.Vector3().crossVectors(thumbDir, fingerDir);
+    const across = wp(`index_01_${side}`).sub(wp(`pinky_01_${side}`));
+    across.addScaledVector(fingerDir, -across.dot(fingerDir)).normalize();
+    const backRest = side === 'r' ? new THREE.Vector3().crossVectors(fingerDir, across) : new THREE.Vector3().crossVectors(across, fingerDir);
     backRest.normalize();
     // the model's rear (where an elbow points at rest)
     const rear = v(0, 0, -1).applyQuaternion(this.model.quaternion);

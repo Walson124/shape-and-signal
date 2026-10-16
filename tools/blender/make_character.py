@@ -106,15 +106,15 @@ def simplify(obj):
 
 # ---- the combat suit: MakeHuman's "special suit" skin, recoloured graphite, on this character's
 # own face and neck, with its piping split out as a glow map the game tints with the realm colour
-def head_uv_mask(obj, size):
-    """Pixels of the skin texture used by the head (faces weighted mostly to the head bone)."""
+def head_uv_mask(obj, size, groups=("head",)):
+    """Pixels of the skin texture used by faces weighted mostly to the given bones (the head by default)."""
     import numpy as np
     w, h = size
     me = obj.data
     me.calc_loop_triangles()
-    gi = obj.vertex_groups["head"].index
+    gis = {obj.vertex_groups[n].index for n in groups if n in obj.vertex_groups}
     def head_w(v):
-        return next((g.weight for g in me.vertices[v].groups if g.group == gi), 0.0)
+        return sum(g.weight for g in me.vertices[v].groups if g.group in gis)
     uv = me.uv_layers.active.data
     m = np.zeros((h, w), dtype=np.float32)
     for t in me.loop_triangles:
@@ -161,6 +161,9 @@ def suit_textures(body):
     mask = spread(spread(mask, 10, np.minimum), 10, np.maximum)
     # and never on the head
     mask *= 1 - spread(head_uv_mask(body, size), 3, np.maximum)
+    # black gloves: the hands are suit too (plain, without piping)
+    hand_bones = [f"{b}_{s}" for s in ("l", "r") for b in ["hand"] + [f"{f}_0{i}" for f in ("index", "middle", "ring", "pinky", "thumb") for i in (1, 2, 3)]]
+    gloves = spread(head_uv_mask(body, size, hand_bones), 2, np.maximum)[..., None]
     # soften the edge a little (box blur)
     for _ in range(2):
         mask = (mask + np.roll(mask, 1, 0) + np.roll(mask, -1, 0) + np.roll(mask, 1, 1) + np.roll(mask, -1, 1)) / 5
@@ -174,10 +177,12 @@ def suit_textures(body):
     # graphite with a cool sheen, keeping the folds and seams of the painted suit
     graphite = np.stack([0.035 + lum * 0.28, 0.04 + lum * 0.31, 0.05 + lum * 0.38], axis=2)
     graphite = graphite * (1 - lines[..., None]) + np.array([0.55, 0.62, 0.7], dtype=np.float32) * lines[..., None]
+    glove = np.stack([0.03 + own[..., 0] * 0.06, 0.032 + own[..., 1] * 0.06, 0.04 + own[..., 2] * 0.07], axis=2)
     out = own.copy()
     out[..., :3] = own[..., :3] * (1 - mask) + graphite * mask
+    out[..., :3] = out[..., :3] * (1 - gloves) + glove * gloves
     glow = np.zeros_like(own)
-    glow[..., :3] = lines[..., None]
+    glow[..., :3] = lines[..., None] * (1 - gloves)
     glow[..., 3] = 1
     def make(name, arr):
         img = bpy.data.images.new(name, size[0], size[1], alpha=False)
@@ -355,6 +360,25 @@ for act in made:
         rig.animation_data.action_slot = act.slots[0]
 rig.animation_data.action = None
 print("ACTIONS", [a.name for a in made])
+
+# first-person arms: a copy of the suited body with everything but the arms cut away,
+# so the view model never shows a shoulder or chest
+import bmesh  # noqa: E402
+fparms = body.copy()
+fparms.data = body.data.copy()
+fparms.name = "player.fparms"
+bpy.context.scene.collection.objects.link(fparms)
+arm_groups = {fparms.vertex_groups[n].index for n in fparms.vertex_groups.keys()
+              if any(n.startswith(p) for p in ("upperarm_", "lowerarm_", "hand_", "index_", "middle_", "ring_", "pinky_", "thumb_"))}
+bm = bmesh.new()
+bm.from_mesh(fparms.data)
+deform = bm.verts.layers.deform.verify()
+drop = [v for v in bm.verts if sum(w for g, w in v[deform].items() if g in arm_groups) < 0.5]
+bmesh.ops.delete(bm, geom=drop, context="VERTS")
+bm.to_mesh(fparms.data)
+bm.free()
+meshes.append(fparms)
+print("FPARMS verts", len(fparms.data.vertices))
 
 # the full-resolution body is only used to fit the proxy and clothes; it doesn't ship
 export = [rig] + [o for o in meshes if o != basemesh]

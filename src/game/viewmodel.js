@@ -215,7 +215,7 @@ export class ViewModel {
     loadPlayerModel().then((source) => {
       if (!source) return;
       this.arms = new FirstPersonArms(source, this.scene);
-      this.arms.setGlow(this.color, 2);
+      this.arms.setGlow(this.color, 0.5);
       this.arms.setVisible(this.right.root.visible);
       for (const m of [...this.right.shell, ...this.left.shell]) m.visible = false;
     });
@@ -330,7 +330,7 @@ export class ViewModel {
     this.mats.circuit.emissive.copy(this.color);
     this.right.setColor(this.color);
     this.left.setColor(this.color);
-    this.arms?.setGlow(this.color, 2);
+    this.arms?.setGlow(this.color, 0.5);
     this.threadMat.color.copy(this.color).multiplyScalar(1.6);
   }
 

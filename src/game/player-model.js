@@ -62,6 +62,8 @@ export class SkinnedFigure {
     this.model.traverse((o) => {
       if (!o.isMesh) return;
       o.frustumCulled = false; // skinned bounds don't follow the pose
+      // the arms-only copy is for first person (fp-arms.js)
+      if (/fparms/.test(o.name)) { o.visible = false; return; }
       const m = o.material;
       // the combat suit's piping glows in the realm colour (setGlow)
       if (m.name === 'suit') { o.material = m.clone(); this.suit = o.material; this.suit.emissive.set(0x3ef2ff); this.suit.emissiveIntensity = 2.2; }

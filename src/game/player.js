@@ -58,7 +58,7 @@ export class Player {
       if (!source) return;
       this.skin = new SkinnedFigure(source, this.figure);
       this.hipHeight = this.skin.hipHeight;
-      this.skin.setGlow(this.accent.color);
+      this.skin.setGlow(this.auraColor, this.glowLevel());
       for (const m of shapes) m.visible = false;
     });
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.4 }));
@@ -75,11 +75,14 @@ export class Player {
     this.trailColor.copy(c).multiplyScalar(0.9);
     this.aura.material.color.copy(c).multiplyScalar(0.8);
     this.accent.color.copy(c).multiplyScalar(1.5);
-    // the suit's piping burns brighter with each realm
-    this.skin?.setGlow(this.accent.color, 1.4 + realm * 0.25);
+    // the suit's piping burns a little brighter with each realm (a trim, not a lamp)
+    this.realmLevel = realm;
+    this.skin?.setGlow(this.auraColor, this.glowLevel());
     // the aura swells with each realm
     this.aura.scale.setScalar(5 + realm * 2.2);
   }
+
+  glowLevel() { return 0.35 + (this.realmLevel || 0) * 0.07; }
 
   forward(out = new THREE.Vector3()) {
     return out.set(0, 0, -1).applyQuaternion(this.quat);
@@ -173,7 +176,7 @@ export class Player {
       this.figure.rotation.set(0, 0, 0);
       this.figure.position.y = -1.07 - this.skin.pelvisY();
     }
-    this.aura.material.opacity = 0.12;
+    this.aura.material.opacity = this.skin ? 0.02 : 0.12;
     this.shield.material.opacity = 0;
   }
 
@@ -269,7 +272,8 @@ export class Player {
     this.kneeR.rotation.x = L(L(-0.15, -(0.08 + Math.max(0, cw) * 1.05) * gait - 0.04, st), -2.5, p);
     if (this.skin) this.animate(dt, env, speed, f);
     this.syncRoot();
-    this.aura.material.opacity = 0.18 + 0.08 * Math.sin(t * 3) + 0.3 * p;
+    // with the modelled body the aura only shows while cultivating; it washed the figure out otherwise
+    this.aura.material.opacity = this.skin ? (0.02 + 0.22 * p) * (1 + 0.15 * Math.sin(t * 3)) : 0.18 + 0.08 * Math.sin(t * 3) + 0.3 * p;
     this.shield.material.opacity = env.shield ? 0.35 + 0.15 * Math.sin(t * 12) : 0;
     this.shield.rotation.y += dt * 1.5;
 
