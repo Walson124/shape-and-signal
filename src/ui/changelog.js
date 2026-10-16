@@ -4,6 +4,8 @@ export const CHANGELOG = [
     date: '2026-10-16', version: '0.12.1',
     title: 'World-Eaters',
     items: [
+      'Each World-Eater is its own creature: the Abyssal Leviathan (a whale of the abyss whose song crushes), the Crimson Sky-Wyrm (a winged dragon that rakes you with fire), the Jadebone Colossus (a skeleton of bone and jade that bursts into shards), the Ancient Sentinel (a machine whose lances of light cross the sky) and the Primordial Devourer (a maw that drinks in everything).',
+      'The star map marks World-Eater lairs with ☠.',
       'The Overlords of the outer regions are now World-Eaters: serpents tens of kilometres long that sleep coiled around the lair world of their system.',
       'Fight them in flight. Every move of the head whips the whole body through space; its jaws flare and its spines kindle before it strikes.',
       'It lunges to devour, drinks in everything near its maw, rains homing meteors and sheds parasite broods. Wounded, it wraps the planet to crush it: break its heart-nodes to loosen its grip.',

@@ -965,14 +965,17 @@ export class Menus {
       const line = [cur, ...route].map((st) => P(st).map(f1).join(',')).join(' ');
       svg.push(`<polyline points="${line}" class="sm-route"/>`);
     }
+    // a World-Eater lairs at a boss star until it is slain
+    const lair = (st) => st.boss !== null && st.boss !== undefined && !s.bosses.includes(st.key);
     for (const st of nearby) {
       const [px, py] = P(st);
-      svg.push(`<g class="sm-star sm-near${st.key === nav ? ' sm-nav' : ''}" data-action="map-target" data-key="${esc(st.key)}"><circle cx="${f1(px)}" cy="${f1(py)}" r="7" class="sm-hit"/><circle cx="${f1(px)}" cy="${f1(py)}" r="2.2" fill="${col(st)}"/><title>${esc(st.name)} · unvisited</title></g>`);
+      const skull = lair(st) ? `<text x="${f1(px + 7)}" y="${f1(py - 6)}" class="sm-lair">☠ ${esc(BOSSES[st.boss].name)}</text>` : '';
+      svg.push(`<g class="sm-star sm-near${st.key === nav ? ' sm-nav' : ''}" data-action="map-target" data-key="${esc(st.key)}"><circle cx="${f1(px)}" cy="${f1(py)}" r="7" class="sm-hit"/><circle cx="${f1(px)}" cy="${f1(py)}" r="2.2" fill="${col(st)}"/>${skull}<title>${esc(st.name)} · unvisited${lair(st) ? ` · ${esc(BOSSES[st.boss].name)} lairs here` : ''}</title></g>`);
     }
     for (const st of known) {
       const [px, py] = P(st);
       const home = st.key === homeKey, here = st.key === cur.key;
-      const label = `${esc(st.name)}${home ? ' · HOME' : ''}`;
+      const label = `${esc(st.name)}${home ? ' · HOME' : ''}${lair(st) ? ' ☠' : ''}`;
       svg.push(`<g class="sm-star${home ? ' sm-home' : ''}${here ? ' sm-here' : ''}${st.key === nav ? ' sm-nav' : ''}" data-action="map-target" data-key="${esc(st.key)}">
         <circle cx="${f1(px)}" cy="${f1(py)}" r="12" class="sm-hit"/>
         ${here ? `<circle cx="${f1(px)}" cy="${f1(py)}" r="10" class="sm-pulse"/>` : ''}
@@ -999,10 +1002,10 @@ export class Menus {
     else homeLine = `${f1(homeDist)} light years away. No chain of known systems reaches it with your ${range} ly range: explore systems in between, or get a longer-range ship.`;
     const rows = known.filter((st) => st.key !== cur.key).map((st) => ({ st, d: st.pos.distanceTo(cur.pos) })).sort((a, b) => a.d - b.d).map(({ st, d }) => {
       const reach = range && d <= range;
-      return `<div class="item"><div><h4 style="color:${col(st)}">${esc(st.name)}${st.key === homeKey ? ' <span class="tag">HOME</span>' : ''}</h4><p>${esc((REGIONS[st.region] || REGIONS[0]).name)} · ${f1(d)} ly${reach ? '' : range ? ' · out of range' : ''}</p></div><span></span>
+      return `<div class="item"><div><h4 style="color:${col(st)}">${esc(st.name)}${st.key === homeKey ? ' <span class="tag">HOME</span>' : ''}${lair(st) ? ' <span class="tag" style="background:#ff3c64">☠ WORLD-EATER</span>' : ''}</h4><p>${esc((REGIONS[st.region] || REGIONS[0]).name)} · ${f1(d)} ly${lair(st) ? ` · ${esc(BOSSES[st.boss].name)} coils round its outermost world` : ''}${reach ? '' : range ? ' · out of range' : ''}</p></div><span></span>
         <button class="btn small ${st.key === nav ? 'gold' : ''}" data-action="map-target" data-key="${esc(st.key)}">${st.key === nav ? 'Targeted' : 'Set course'}</button></div>`;
     }).join('');
-    return `<p class="panel-note">Systems you've visited, the jumps you've made, and home. Click a star to set it as your warp target, then press <kbd>${esc(codeLabel(settings.key('engage')))}</kbd> in your ship. ${range ? `Your ship reaches <b>${range} ly</b> (dashed circle); faint dots are unvisited stars in range.` : 'You have no starship yet.'}</p>
+    return `<p class="panel-note">Systems you've visited, the jumps you've made, and home. ☠ marks a World-Eater's lair. Click a star to set it as your warp target, then press <kbd>${esc(codeLabel(settings.key('engage')))}</kbd> in your ship. ${range ? `Your ship reaches <b>${range} ly</b> (dashed circle); faint dots are unvisited stars in range.` : 'You have no starship yet.'}</p>
       <svg class="starmap" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${svg.join('')}</svg>
       <div class="section-title">Home · ${esc(homeName)}</div>
       <div class="item"><div><h4>${esc(homeStar.name)}</h4><p>${homeLine}</p></div><span></span>${homeBtn || '<span></span>'}</div>

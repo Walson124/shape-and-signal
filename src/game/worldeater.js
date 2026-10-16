@@ -17,14 +17,26 @@ const tA = V(), tB = V(), tC = V(), tM = new THREE.Matrix4();
 const rand = (a, b) => a + Math.random() * (b - a);
 const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 
-let kit = null;
-function loadKit() {
+// Each region's World-Eater is its own creature: its body (tools/blender/make_worldeaters.py),
+// its jaws, its proportions and a signature attack.
+export const VARIANTS = [
+  { id: 'leviathan', size: 1.2, speed: 0.8, jaws: { count: 2, radius: 0.42, z: 0.62, closed: 0.25, open: -0.55, spin: 0 }, signature: 'song' },
+  { id: 'skywyrm', size: 0.95, speed: 1.25, jaws: { count: 2, radius: 0.16, z: 0.76, closed: 0.3, open: -0.6, spin: 0 }, wings: 4, signature: 'breath' },
+  { id: 'jadebone', size: 1.0, speed: 1.0, jaws: { count: 4, radius: 0.32, z: 0.6, closed: 0.5, open: -0.5, spin: Math.PI / 4 }, signature: 'shards' },
+  { id: 'sentinel', size: 1.05, speed: 1.0, jaws: { count: 6, radius: 0.55, z: 0.55, closed: Math.PI / 2, open: 0.05, spin: 0 }, signature: 'grid' },
+  { id: 'devourer', size: 1.25, speed: 1.1, jaws: { count: 4, radius: 0.5, z: 0.6, closed: 0.42, open: -0.75, spin: Math.PI / 4 }, signature: 'inhale' },
+];
+
+const kits = new Map();
+function loadKit(id) {
   if (typeof document === 'undefined') return Promise.resolve(null);
-  kit ||= new GLTFLoader().loadAsync(`${import.meta.env?.BASE_URL ?? './'}models/worldeater.glb`).then((g) => {
-    const get = (n) => g.scene.getObjectByName(n);
-    return { head: get('we_head'), petal: get('we_petal'), seg: get('we_seg'), tail: get('we_tail'), node: get('we_node') };
-  }).catch((e) => { console.warn('world-eater failed to load', e); return null; });
-  return kit;
+  if (!kits.has(id)) {
+    kits.set(id, new GLTFLoader().loadAsync(`${import.meta.env?.BASE_URL ?? './'}models/worldeaters/${id}.glb`).then((g) => {
+      const get = (n) => g.scene.getObjectByName(`${id}_${n}`);
+      return { head: get('head'), petal: get('petal'), seg: get('seg'), tail: get('tail'), node: get('node'), wing: get('wing') };
+    }).catch((e) => { console.warn(`world-eater ${id} failed to load`, e); return null; }));
+  }
+  return kits.get(id);
 }
 
 const NODES = [5, 10, 15, 20, 25];
@@ -33,21 +45,24 @@ const SEGMENTS = 30;
 export class WorldEater {
   constructor(g, bossIndex, planet) {
     this.g = g; this.planet = planet; this.index = bossIndex;
+    this.V = VARIANTS[bossIndex] || VARIANTS[VARIANTS.length - 1];
     this.def = { ...BOSSES[bossIndex], behavior: 'boss', aggro: 9e9, cores: 40, xp: BOSSES[bossIndex].xp * 2, coins: BOSSES[bossIndex].coins * 2 };
     const R = planet.R;
     this.R = R;
     // body radius and segment spacing scale with the planet it coils around
-    this.br = R * 0.075 * (1 + bossIndex * 0.08);
+    this.br = R * 0.075 * this.V.size;
     this.sc = this.br / 0.45;
     this.L = this.sc * 0.86;
     this.state = 'sleep'; this.t = 0; this.phase = 0; this.time = 0;
     this.speed = 0;
     this.mawOpen = 0; this.glow = 0;
     this.recent = [];
+    this.waves = [];
     this.parts = [];
     // the path the body follows, as offsets from the planet centre (newest first)
     this.path = [];
-    this.coil(R + this.br * 1.05, 0);
+    // asleep, it lies in a tilted coil round the world, so it reads from any approach
+    this.coil(R + this.br * 1.05, 0.35 + Math.random() * 0.5);
     this.headOff = this.path[0].clone();
     this.fwd = V().subVectors(this.path[0], this.path[1]).normalize();
     const tier = g.star.tier;
@@ -63,7 +78,7 @@ export class WorldEater {
     this.boss.mesh = this.boss.model.group;
     g.beasts.beasts.push(this.boss);
     g.beasts.boss = this.boss;
-    loadKit().then((k) => { if (k && this.boss.alive && !this.disposed) this.build(k); });
+    loadKit(this.V.id).then((k) => { if (k && this.boss.alive && !this.disposed) this.build(k); });
   }
 
   centre(out = V()) {
@@ -112,19 +127,34 @@ export class WorldEater {
     this.mats = mats;
     this.head = dress(k.head);
     this.petals = [];
-    for (let i = 0; i < 4; i++) {
+    const jw = this.V.jaws;
+    for (let i = 0; i < jw.count; i++) {
       const pivot = new THREE.Group();
-      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      pivot.position.set(Math.cos(a) * 0.5, Math.sin(a) * 0.5, 0.6);
+      const a = (i / jw.count) * Math.PI * 2 + jw.spin + Math.PI / 2;
+      pivot.position.set(Math.cos(a) * jw.radius, Math.sin(a) * jw.radius, jw.z);
       pivot.rotation.z = a - Math.PI / 2;
       const p = k.petal.clone(true);
-      p.traverse((m) => { if (m.isMesh) { m.frustumCulled = false; const mat = mats.get(m.material.name) || m.material; m.material = mat; } });
+      p.traverse((m) => { if (m.isMesh) { m.frustumCulled = false; m.material = mats.get(m.material.name) || m.material; } });
       pivot.add(p);
       this.head.add(pivot);
       this.petals.push(p);
     }
     this.segs = [];
     for (let i = 0; i < SEGMENTS; i++) this.segs.push(dress(i === SEGMENTS - 1 ? k.tail : k.seg));
+    // the Sky-Wyrm's wings, a pair on every few segments
+    this.wings = [];
+    if (k.wing && this.V.wings) {
+      for (let i = 1; i < SEGMENTS - 2; i += this.V.wings) {
+        for (const side of [1, -1]) {
+          const w = k.wing.clone(true);
+          w.traverse((m) => { if (m.isMesh) { m.frustumCulled = false; m.material = mats.get(m.material.name) || m.material; } });
+          w.position.set(side * 0.36, 0.1, 0);
+          w.scale.set(side * (1 - (i / SEGMENTS) * 0.6), 1, 1);
+          this.segs[i].add(w);
+          this.wings.push({ obj: w, side, phase: i * 0.4 });
+        }
+      }
+    }
     this.nodes = NODES.map((i) => { const n = dress(k.node); n.scale.setScalar(this.sc * 0.9); return { seg: i, obj: n }; });
     this.makeParts();
     this.layout();
@@ -170,7 +200,8 @@ export class WorldEater {
       n.obj.position.copy(s.position).addScaledVector(tA.set(0, 1, 0).applyQuaternion(s.quaternion), this.br * 0.85);
       n.obj.quaternion.copy(s.quaternion);
     }
-    for (const p of this.petals) p.rotation.x = THREE.MathUtils.lerp(0.42, -0.75, this.mawOpen);
+    for (const p of this.petals) p.rotation.x = THREE.MathUtils.lerp(this.V.jaws.closed, this.V.jaws.open, this.mawOpen);
+    for (const w of this.wings || []) w.obj.rotation.z = w.side * (Math.sin(this.time * 1.4 + w.phase) * 0.45 - 0.1);
     // parts follow
     this.core.pos.copy(headPos);
     for (const p of this.nodeParts) p.pos.copy(p.node.obj.position);
@@ -254,6 +285,8 @@ export class WorldEater {
     add('sweep', r.dist < this.br * 14 ? 2.2 : 0.6);
     add('inhale', r.dist < this.br * 22 ? 1.6 : 0.4);
     add('starfall', far ? 2.4 : 1.2);
+    // its own attack, the one it is known for
+    add(this.V.signature, this.V.signature === 'inhale' ? 3.2 : 2.6);
     if (this.phase >= 1) add('brood', 1.0);
     opts.sort((a, b) => b[1] - a[1]);
     return opts[0]?.[0] || 'lunge';
@@ -264,7 +297,8 @@ export class WorldEater {
     this.recent.push(id); if (this.recent.length > 3) this.recent.shift();
     const g = this.g;
     if (id === 'lunge' || id === 'inhale') g.sound.thunder();
-    this.dur = { lunge: 4.2, sweep: 5, inhale: 5.5, starfall: 4.5, brood: 3, crush: 14, stagger: 5 }[id] || 4;
+    this.dur = { lunge: 4.2, sweep: 5, inhale: 5.5, starfall: 4.5, brood: 3, crush: 14, stagger: 5, song: 5, breath: 5.5, shards: 4, grid: 5 }[id] || 4;
+    this.gridAim = null;
   }
 
   update(dt) {
@@ -283,7 +317,7 @@ export class WorldEater {
       for (const p of this.nodeParts) if (p.broken) { p.broken = false; p.taken = 0; p.node.obj.visible = true; }
       if (phase === 1) { this.begin('crush'); this.crushHits = 0; }
     }
-    const fast = this.phase >= 2 ? 1.35 : 1;
+    const fast = (this.phase >= 2 ? 1.35 : 1) * this.V.speed;
     const base = this.br * 3.2 * fast;
     if (this.state === 'sleep') {
       if (r.dist < this.R * 1.6) this.wake();
@@ -298,6 +332,12 @@ export class WorldEater {
     } else this.act(dt, r, base);
     this.layout();
     this.contact(dt);
+    // the Leviathan's song: spheres of sound spreading from where it sang
+    for (const w of this.waves) {
+      w.r += this.br * 12 * dt;
+      if (!w.hit && w.r < this.br * 30 && Math.abs(w.origin.distanceTo(g.player.pos) - w.r) < this.br * 0.9) { w.hit = true; this.hurt(0.22, 'song'); }
+    }
+    this.waves = this.waves.filter((w) => w.r < this.br * 30);
     this.boss.pos.copy(this.centre(V()).add(this.headOff));
   }
 
@@ -380,6 +420,61 @@ export class WorldEater {
         this.boss.hp = Math.min(this.boss.maxHp * 0.66, this.boss.hp + this.boss.maxHp * 0.08);
         g.hud.notify('It feeds on the planet\'s heart and grows stronger.', 'red');
       }
+    } else if (s === 'song') {
+      // the Leviathan's abyssal song: it stills, then rings out three crushing spheres of sound; dodge through or outrun them
+      this.swim(dt, g.player.pos, base * 0.1, 0.8);
+      this.glow = smooth(k / 0.3); this.mawOpen = smooth(k / 0.3) * 0.7;
+      if (k > 0.3 && this.fired < 3 && this.t > 0.3 * this.dur + this.fired * 0.8) {
+        this.fired++;
+        g.combat.shockwave(r.head, this.br * 30, this.def.accent, 30 / 12);
+        g.sound.thunder();
+        this.waves.push({ origin: r.head.clone(), r: 0, hit: false });
+      }
+    } else if (s === 'breath') {
+      // the Sky-Wyrm draws breath (the throat glows), then sweeps a river of fire after you
+      if (k < 0.25) { this.swim(dt, this.predict(0.8), base * 0.3, 1.4); this.glow = smooth(k / 0.25); this.mawOpen = smooth(k / 0.25); }
+      else if (k < 0.9) {
+        this.swim(dt, g.player.pos, base * 0.25, 0.45);
+        this.mawOpen = 1;
+        const end = r.head.clone().addScaledVector(this.fwd, this.br * 28);
+        g.combat.beam(r.head, end, 0xff7a2a, this.br * 0.35, 0.06);
+        if (Math.random() < 0.5) g.particles.burst(end, new THREE.Color(2, 0.8, 0.2), 6, this.br * 2, 0.8, 0.5);
+        if (this.beamHit(r.head, end, this.br * 0.55)) this.dot(dt, 0.12);
+      } else { this.mawOpen = Math.max(0, this.mawOpen - dt * 2); this.glow = 0; }
+    } else if (s === 'shards') {
+      // the Jadebone's crystals blaze, then every segment bursts into bone shards flung outwards
+      this.swim(dt, g.player.pos.clone().addScaledVector(r.to.clone().normalize(), -this.br * 10), base * 0.5, 0.8);
+      this.glow = smooth(k / 0.4);
+      if (k > 0.4 && !this.fired && this.segs) {
+        this.fired = 1;
+        const c = this.centre(V());
+        const dmg = Math.min(this.boss.dmg * 0.4, g.stats.maxHp * 0.07);
+        for (let i = 0; i < this.segs.length; i += 2) {
+          const sg = this.segs[i];
+          const up = V().subVectors(sg.position, c).normalize();
+          const side = V(1, 0, 0).applyQuaternion(sg.quaternion);
+          for (const d of [up, side, side.clone().negate()]) {
+            const dir = d.clone().addScaledVector(V(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5), 0.3).normalize();
+            g.combat.enemyShot(sg.position.clone().addScaledVector(dir, this.br), dir, this.br * 3.5, dmg, this.def.accent, this.br * 0.05);
+          }
+        }
+        g.sound.explosion(r.head, true);
+      }
+    } else if (s === 'grid') {
+      // the Sentinel's rings flare, it fixes on where you were, and lances of light cross that space
+      this.swim(dt, g.player.pos.clone().addScaledVector(r.to.clone().normalize(), -this.br * 12), base * 0.4, 0.8);
+      this.glow = k < 0.35 ? smooth(k / 0.35) : 1;
+      if (!this.gridAim && k > 0.3) this.gridAim = this.predict(0.5);
+      if (k > 0.45 && k < 0.85 && this.segs && this.gridAim) {
+        for (let i = 3; i < this.segs.length; i += 5) {
+          const from = this.segs[i].position;
+          const wobble = Math.sin(this.time * 2 + i) * this.br * 2;
+          const to = this.gridAim.clone().add(V(wobble, -wobble, wobble * 0.5));
+          const end = from.clone().add(to.sub(from).normalize().multiplyScalar(this.br * 45));
+          g.combat.beam(from, end, this.def.accent, this.br * 0.12, 0.05);
+          if (this.beamHit(from, end, this.br * 0.3)) this.dot(dt, 0.18);
+        }
+      }
     } else if (s === 'stagger') {
       this.swim(dt, this.centre(V()).add(this.headOff).addScaledVector(this.fwd, this.br * 5), base * 0.25, 0.3);
       this.mawOpen = 1; this.glow = 0;
@@ -402,6 +497,19 @@ export class WorldEater {
         break;
       }
     }
+  }
+
+  beamHit(a, b, width) {
+    const p = this.g.player.pos;
+    const ab = V().subVectors(b, a);
+    const t = THREE.MathUtils.clamp(V().subVectors(p, a).dot(ab) / ab.lengthSq(), 0, 1);
+    return a.clone().addScaledVector(ab, t).distanceTo(p) < width;
+  }
+
+  // beams burn a little every quarter second
+  dot(dt, perSecond) {
+    this.dotT = (this.dotT || 0) + dt;
+    if (this.dotT > 0.25) { this.dotT = 0; this.hurt(perSecond * 0.25, 'beam'); }
   }
 
   hurt(frac, kind) {

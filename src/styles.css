@@ -602,3 +602,4 @@ a.menu-item { text-decoration: none; }
 .fb-field textarea { resize: vertical; min-height: 84px; max-height: 40vh; }
 .fb-field select:focus, .fb-field input:focus, .fb-field textarea:focus { outline: none; border-color: var(--cy); }
 .fb-trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.starmap .sm-lair { font-size: 10px; fill: #ff6a80; display: inline !important; }
