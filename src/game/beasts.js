@@ -4,6 +4,7 @@ import { BEASTS, BOSSES, power } from './data.js';
 import { glowTexture } from '../world/textures.js';
 import { rimMaterial } from '../world/models.js';
 import { buildCreature } from './creatures.js';
+import { upgradeBeast, preloadBeasts } from './beast-models.js';
 import { pickSpecies } from './bestiary.js';
 import { buildPlanetaryModel } from './planetary-bosses.js';
 
@@ -465,6 +466,7 @@ const def0 = (b) => b.def;
 // ----------------------------------------------------------- manager --
 export class BeastManager {
   constructor(scene, particles, combat, sound) {
+    preloadBeasts();
     this.scene = scene;
     this.particles = particles;
     this.combat = combat;
@@ -556,6 +558,8 @@ export class BeastManager {
   spawn(type, pos, tier, { gid = 0, elite = false, aggro = false } = {}) {
     const def = BEASTS[type] || this.species.get(type);
     const model = BUILDERS[type] ? BUILDERS[type](elite ? 0xffd040 : def.color) : buildCreature(def, elite ? 0xffd040 : null);
+    // the sculpted, animated body replaces the code-built one once its file has loaded
+    if (!BUILDERS[type]) upgradeBeast(model, def, elite);
     // higher-grade beasts are visibly bigger
     const scale = (elite ? 1.35 : 1) * (1 + Math.min(0.8, Math.max(0, tier) * 0.12));
     model.group.scale.multiplyScalar(scale);
@@ -612,6 +616,7 @@ export class BeastManager {
     if (!b.alive) return false;
     b.hp -= amount;
     b.flashT = 0.1;
+    if (b.model.act && !b.model.animated?.over && b.hp > 0) b.model.act('hit', 1.5);
     b.lastHit = time;
     if (knock && !b.boss) b.vel.add(knock);
     if (!b.aggro) {
@@ -644,12 +649,15 @@ export class BeastManager {
       this.particles.burst(b.pos, new THREE.Color(b.def.accent).multiplyScalar(2), 300, 260, 5, 2.5, 0.8);
     }
     this.sound.explosion(b.pos, b.boss || b.type === 'rockback');
-    this.removeModel(b);
+    const dying = b.model.die ? b.model.die() : 0;
+    if (dying > 0) (this.corpses ||= []).push({ b, t: dying + 1.2, time: 0 });
+    else this.removeModel(b);
     this.beasts.splice(this.beasts.indexOf(b), 1);
     if (this.onKill) this.onKill(b);
   }
 
   removeModel(b) {
+    b.model.removed = true;
     cancelAdd(b.mesh);
     this.scene.remove(b.mesh);
     b.mesh.traverse((o) => {
@@ -662,6 +670,8 @@ export class BeastManager {
 
   clear() {
     for (const b of this.beasts) this.removeModel(b);
+    for (const c of this.corpses || []) this.removeModel(c.b);
+    this.corpses = [];
     this.beasts = [];
     this.boss = null;
   }
@@ -688,6 +698,16 @@ export class BeastManager {
   update(dt, ctx) {
     const { player, playerAlive, time } = ctx;
     const env = this.env;
+    // bodies finish their death animation, then go
+    if (this.corpses?.length) {
+      for (let i = this.corpses.length - 1; i >= 0; i--) {
+        const c = this.corpses[i];
+        c.t -= dt;
+        c.time += dt;
+        c.b.model.anim(time + c.b.phase, 0, null);
+        if (c.t <= 0) { this.removeModel(c.b); this.corpses.splice(i, 1); }
+      }
+    }
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0 && env) {
       this.spawnTimer = env.interval ?? 6;
@@ -764,6 +784,7 @@ export class BeastManager {
           b.cd = def.fireRate * (0.8 + Math.random() * 0.4);
           const muzzle = b.pos.clone().addScaledVector(dirP, b.radius);
           this.combat.enemyShot(muzzle, this.aimAt(b, player, def.shotSpeed), def.shotSpeed, b.dmg, b.elite ? 0xffd040 : def.color, 1.5);
+          b.model.act?.('attack', 1.8);
         }
       } else if (def.behavior === 'tank') {
         b.cd2 -= dt;
@@ -852,6 +873,7 @@ export class BeastManager {
           b.cd3 = 1.0;
           const mult = b.state === 'charge' ? 2 : 1;
           ctx.hurtPlayer(b.dmg * mult * (b.boss ? 1.2 : 1), b.pos.clone(), dirP.clone().multiplyScalar(b.boss ? 160 : 90));
+          b.model.act?.('attack', 1.5);
         }
       } else if (b.cd3 > 0) {
         b.cd3 -= dt;
