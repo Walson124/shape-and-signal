@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { glowTexture } from '../world/textures.js';
 import { REALMS } from './data.js';
 import { buildHumanoid, HIP_HEIGHT } from './humanoid.js';
+import { loadPlayerModel, SkinnedFigure } from './player-model.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
@@ -47,6 +48,18 @@ export class Player {
     this.elbowL = body.armL.elbow; this.elbowR = body.armR.elbow; this.handR = body.armR.hand;
     this.legL = body.legL.hip; this.legR = body.legR.hip;
     this.kneeL = body.legL.knee; this.kneeR = body.legR.knee;
+    this.joints = { armL: this.armL, armR: this.armR, elbowL: this.elbowL, elbowR: this.elbowR, legL: this.legL, legR: this.legR, kneeL: this.kneeL, kneeR: this.kneeR };
+    this.hipHeight = HIP_HEIGHT;
+    // the realistic skinned model replaces the simple shapes once it has loaded;
+    // the shapes' joint groups keep driving the pose (and still hold anything put in a hand)
+    const shapes = [];
+    this.figure.traverse((o) => { if (o.isMesh) shapes.push(o); });
+    loadPlayerModel().then((source) => {
+      if (!source) return;
+      this.skin = new SkinnedFigure(source, this.figure);
+      this.hipHeight = this.skin.hipHeight;
+      for (const m of shapes) m.visible = false;
+    });
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.4 }));
     this.aura.scale.setScalar(5);
     this.root.add(this.aura);
@@ -151,6 +164,7 @@ export class Player {
     this.legL.rotation.z = -0.28;
     this.legR.rotation.z = 0.28;
     this.kneeL.rotation.x = this.kneeR.rotation.x = -1.5;
+    this.skin?.apply(this.joints);
     this.aura.material.opacity = 0.12;
     this.shield.material.opacity = 0;
   }
@@ -228,16 +242,16 @@ export class Player {
     const swing = sw * (0.42 + 0.18 * Math.min(1, speed / 14)) * gait;
     const L = THREE.MathUtils.lerp;
     // standing: hips at full leg height, a little lower mid-stride; sitting: hips on the ground
-    const standY = -EYE + HIP_HEIGHT - Math.abs(Math.cos(this.walkPhase)) * 0.03 * gait;
+    const standY = -EYE + this.hipHeight - Math.abs(Math.cos(this.walkPhase)) * 0.03 * gait;
     this.figure.position.y = L(L(-0.45, standY, st), -EYE + 0.13, p);
     this.figure.rotation.x = L(L(-Math.PI / 2 + 0.15, 0, st), 0, p);
     // arms swing against the legs, elbows bend more on the forward swing
-    this.armR.rotation.x = L(L(Math.PI - 0.15, swing, st), 0.35, p);
-    this.armL.rotation.x = L(L(0.25, -swing, st), 0.35, p);
-    this.armR.rotation.z = L(L(0, 0.08, st), 0.15, p);
-    this.armL.rotation.z = L(L(0, -0.08, st), -0.15, p);
-    this.elbowR.rotation.x = L(L(0.05, 0.18 + Math.max(0, swing) * 0.7, st), 1.05, p);
-    this.elbowL.rotation.x = L(L(0.25, 0.18 + Math.max(0, -swing) * 0.7, st), 1.05, p);
+    this.armR.rotation.x = L(L(Math.PI - 0.15, swing, st), 0.28, p);
+    this.armL.rotation.x = L(L(0.25, -swing, st), 0.28, p);
+    this.armR.rotation.z = L(L(0, 0.08, st), 0.32, p);
+    this.armL.rotation.z = L(L(0, -0.08, st), -0.32, p);
+    this.elbowR.rotation.x = L(L(0.05, 0.18 + Math.max(0, swing) * 0.7, st), 0.22, p);
+    this.elbowL.rotation.x = L(L(0.25, 0.18 + Math.max(0, -swing) * 0.7, st), 0.22, p);
     // legs: the trailing leg's knee folds as it lifts; cross-legged when sitting
     this.legL.rotation.x = L(L(0.08 + Math.sin(t * 3) * 0.06, -swing, st), 1.45, p);
     this.legR.rotation.x = L(L(-0.05 - Math.sin(t * 3) * 0.06, swing, st), 1.45, p);
@@ -245,6 +259,7 @@ export class Player {
     this.legR.rotation.z = L(0, 1.0, p);
     this.kneeL.rotation.x = L(L(-0.25, -(0.08 + Math.max(0, -cw) * 1.05) * gait - 0.04, st), -2.5, p);
     this.kneeR.rotation.x = L(L(-0.15, -(0.08 + Math.max(0, cw) * 1.05) * gait - 0.04, st), -2.5, p);
+    this.skin?.apply(this.joints);
     this.syncRoot();
     this.aura.material.opacity = 0.18 + 0.08 * Math.sin(t * 3) + 0.3 * p;
     this.shield.material.opacity = env.shield ? 0.35 + 0.15 * Math.sin(t * 12) : 0;

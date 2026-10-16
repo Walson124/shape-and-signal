@@ -1,6 +1,13 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-16', version: '0.11',
+    title: 'A realistic character',
+    items: [
+      'Your character is now a realistic, fully modelled person: real skin, eyes, hair and clothes, with a proper skeleton, so walking, sitting, flying and riding look natural.',
+    ],
+  },
+  {
     date: '2026-10-15', version: '0.10.3',
     title: 'Feedback',
     items: [
