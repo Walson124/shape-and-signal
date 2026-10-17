@@ -8,6 +8,7 @@ export const CHANGELOG = [
       'Lakes and seas mirror the sky, with a bright sheen toward the horizon.',
       'Green worlds have meadows of varied grass: sun-dried patches and darker, lusher hollows.',
       'Beaches only form on gentle shores, so cliffs no longer wear a jagged band of sand.',
+      'Slain beasts fall and release their qi in a soft glow, instead of bursting in a grey flash that hazed the whole screen.',
       'Hitting a beast no longer sticks dark lumps onto its body.',
       'Markers for beasts off the edge of the screen show just the pointer, without a stray health bar.',
       'Fixed fine striped patterns that crawled over the ground on large worlds and on slopes seen edge-on.',

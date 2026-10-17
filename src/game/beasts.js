@@ -642,8 +642,16 @@ export class BeastManager {
       return;
     }
     const c = b.boss ? b.def.color : b.elite ? 0xffd040 : b.def.color;
-    this.combat.explosion(b.pos, c, b.boss ? 6 : Math.max(1, b.radius / 4));
-    this.combat.debris(b.pos, c, b.boss ? 40 : Math.round(6 + b.radius), b.radius * 0.25);
+    if (!b.boss && b.model?.animated) {
+      // a sculpted beast falls and plays its death: only its qi escapes, with a little blood
+      const qi = new THREE.Color(b.elite ? 0xffd040 : 0x7affd8);
+      this.combat.flash(b.pos, qi, b.radius * 2.5, 0.5);
+      this.particles.burst(b.pos, qi.clone().multiplyScalar(1.6), 26, 6 + b.radius * 2, 0.5, 1.1, 1.5);
+      this.particles.burst(b.pos, new THREE.Color(1.2, 0.12, 0.08), 14, 8 + b.radius, 0.45, 0.6, 2);
+    } else {
+      this.combat.explosion(b.pos, c, b.boss ? 6 : Math.max(1, b.radius / 4));
+      this.combat.debris(b.pos, c, b.boss ? 40 : Math.round(6 + b.radius), b.radius * 0.25);
+    }
     if (b.boss) {
       this.combat.shockwave(b.pos, 450, b.def.accent, 1.4);
       this.particles.burst(b.pos, new THREE.Color(b.def.accent).multiplyScalar(2), 300, 260, 5, 2.5, 0.8);
