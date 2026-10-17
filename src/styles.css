@@ -187,7 +187,7 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .mk.loot { color: var(--mg); }
 .mk.nav .mk-dot { border-color: var(--yl); box-shadow: 0 0 10px var(--yl); }
 .mk.nav .mk-label { color: var(--yl); }
-.mk.edge .mk-label, .mk.edge .mk-sub, .mk.edge .mk-dot { display: none; }
+.mk.edge .mk-label, .mk.edge .mk-sub, .mk.edge .mk-dot, .mk.edge .mk-hp { display: none; }
 .mk-arrow { display: none; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 13px solid currentColor; filter: drop-shadow(0 0 4px currentColor); }
 .mk.edge .mk-arrow { display: block; }
 

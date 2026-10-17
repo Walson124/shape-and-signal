@@ -1772,7 +1772,8 @@ export class Game {
     const col = b.def.color || 0x884444;
     this.combat.debris(pos, heavy ? 0x7a1a14 : col, heavy ? 5 : 2, Math.max(0.25, b.radius * (heavy ? 0.14 : 0.08)));
     this.particles.burst(pos, new THREE.Color(1.4, 0.15, 0.1), heavy ? 18 : 8, 18 + b.radius * 3, 0.5, 0.45, 2);
-    if (!b.mesh || (b.wounds || 0) >= 7 || amount < b.maxHp * 0.04) return;
+    // sculpted beasts are skinned: a stuck-on wound would float off the moving body
+    if (!b.mesh || b.model?.animated || (b.wounds || 0) >= 7 || amount < b.maxHp * 0.04) return;
     b.wounds = (b.wounds || 0) + 1;
     if (!this.woundMat) this.woundMat = new THREE.MeshStandardMaterial({ color: 0x2a0806, roughness: 0.9, emissive: 0x3a0400, emissiveIntensity: 0.6 });
     if (!this.woundGeo) this.woundGeo = new THREE.IcosahedronGeometry(1, 0);
