@@ -86,7 +86,7 @@ export class Grass {
   // which worlds have grass, and what colour
   tint(body) {
     if (!body || !body.landable) return null;
-    if (body.type === 'terran') return [0.2, 0.42, 0.12];
+    if (body.type === 'terran') return [0.22, 0.37, 0.13];
     if (body.type === 'toxic') return [0.45, 0.55, 0.12];
     return null;
   }

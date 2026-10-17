@@ -13,6 +13,8 @@ export const CHANGELOG = [
       'Daylight fills the shade: sunlit ground bounces warm light up onto walls, cliffs and undersides.',
       'The night sky and deep space are darker and deeper: nebulae gather along the galactic band in softer colours, cut by dark dust lanes.',
       'Desert cacti grow in scattered stands rather than a carpet, in a dusty sage green; open sand has stones and the odd dead snag.',
+      'Your eyes adjust to the dark: after a few seconds at night the world opens up, and city lights glow brighter.',
+      'Forests are a deeper, more natural green, and foliage dissolving near the camera no longer shows stripes.',
       'Boulders half-sunk in the ground take each world’s colour; saguaro cacti are ribbed with rising arms; ice worlds grow clusters of hexagonal ice shards; desert sand is combed into wind ripples.',
     ],
   },

@@ -92,7 +92,7 @@ export function propGeometries() {
         p.setXYZ(i, x * rag, yy - rim * rim * 0.35 * rad, z * rag);
       }
       g.computeVertexNormals();
-      const shade = [0x2f6a36, 0x356f3a, 0x3c7a40, 0x44843f][Math.floor(r() * 4)];
+      const shade = [0x2b5233, 0x2f5a37, 0x36633b, 0x3d6c3d][Math.floor(r() * 4)];
       parts.push(colored(g.translate(0, y, 0), shade, 0.12));
     }
     return occlude(merge(parts), 11.5);
@@ -111,7 +111,7 @@ export function propGeometries() {
       parts.push(colored(br, 0x5a3e26, 0.1));
     }
     crown.forEach(([x, y, z, rad], i) => {
-      const shade = [0x4e8a34, 0x5a9a3a, 0x64a340, 0x4a8030][Math.floor(r() * 4)];
+      const shade = [0x4d7836, 0x58823b, 0x628c40, 0x496e32][Math.floor(r() * 4)];
       parts.push(colored(lumpy(new THREE.IcosahedronGeometry(rad, 2).scale(1, 0.82, 1), rad * 0.16, 1.4, i * 3.1).translate(x, y, z), shade, 0.14));
     });
     return occlude(merge(parts), 10);
@@ -260,13 +260,13 @@ vGlow = glow;
     ).replace(
       '#include <clipping_planes_fragment>',
       `#include <clipping_planes_fragment>
-      // foliage right in front of the camera dissolves (an ordered dither) so a tree you're
+      // foliage right in front of the camera dissolves (interleaved gradient noise, no stripes) so a tree you're
       // standing in never fills the screen
       float nearFade = smoothstep(2.5, 7.0, length(vViewPosition));
-      float dither = fract(dot(floor(gl_FragCoord.xy), vec2(0.5, 0.25)) + fract(gl_FragCoord.x * 0.25) * 0.5);
+      float dither = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
       if (nearFade < 1.0 && dither > nearFade) discard;`,
     );
   };
-  mat.customProgramCacheKey = () => 'prop-glow-wind-fade';
+  mat.customProgramCacheKey = () => 'prop-glow-wind-fade-2';
   return mat;
 }

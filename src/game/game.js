@@ -827,7 +827,7 @@ export class Game {
     this.system.update(dt, this.state.worldTime, this.camera, this.playerWorld());
     this.particles.update(dt);
     this.dust.update(this.camera.position, tB.set(0, 0, 0), 0);
-    this.updateAtmosphereLighting();
+    this.updateAtmosphereLighting(dt);
     this.flare.update(this.camera, this.system.root.position, this.system.starRadius, this.flareOccluders(), dt);
     Object.assign(this.post.fx, { speed: 0, damage: 0, tintAmt: 0, glitch: 0, flash: 0 });
   }
@@ -4448,7 +4448,7 @@ export class Game {
     this.system.update(dt, this.state.worldTime, this.camera, this.playerWorld());
     this.particles.update(dt);
     this.dust.update(this.camera.position, this.shipObj ? this.shipObj.vel : p.vel, inten);
-    this.updateAtmosphereLighting();
+    this.updateAtmosphereLighting(dt);
     this.flare.update(this.camera, this.system.root.position, this.system.starRadius, this.flareOccluders(), dt);
     this.post.fx.speed = settings.get('speedBlur') ? inten : 0;
     this.post.fx.damage = 0;
@@ -4502,7 +4502,7 @@ export class Game {
     return this.system.planets.map((p) => ({ kind: 'planet', pos: p.worldPos, radius: p.R }));
   }
 
-  updateAtmosphereLighting() {
+  updateAtmosphereLighting(dt = 0.016) {
     const f = this.frame;
     const sky = f && f.body.atmo ? f.skyState(this.system.root.position) : null;
     const fog = this.scene.fog;
@@ -4513,19 +4513,25 @@ export class Game {
       const night = 1 - sky.day;
       fog.color.copy(sky.color).multiplyScalar(0.06 + 0.85 * sky.day).lerp(NIGHT_FOG, night * 0.8);
       // daylight fills the shade too: buildings and cliffs away from the sun still read
-      this.hemi.intensity = 0.12 + 1.4 * sky.day + 0.38 * night;
+      this.hemi.intensity = 0.12 + 1.4 * sky.day + 0.6 * night;
       this.hemi.color.copy(sky.color).lerp(WHITE, 0.3).lerp(MOONLIGHT, night);
-      this.ambient.intensity = 0.16 + 0.3 * sky.day + 0.12 * night;
+      this.ambient.intensity = 0.16 + 0.3 * sky.day + 0.2 * night;
       // sunlit ground bounces warm light up onto walls and undersides
       this.hemi.groundColor.copy(GROUND_NIGHT).lerp(GROUND_DAY, sky.day);
       this.scene.environmentIntensity = 0.5 + 0.45 * sky.day;
+      // the eye adapts to the dark: nights open up a little instead of going black
+      this.exposureTarget = 1 + 0.75 * night * night;
     } else {
       fog.density = 0;
       this.hemi.intensity = 0.1;
       this.ambient.intensity = 0.2;
       this.hemi.groundColor.copy(GROUND_NIGHT);
       this.scene.environmentIntensity = 0.5;
+      this.exposureTarget = 1;
     }
+    // adapt over a couple of seconds, so stepping out of a lit city into the dark takes a moment
+    const ex = this.renderer.toneMappingExposure;
+    this.renderer.toneMappingExposure = ex + (this.exposureTarget - ex) * Math.min(1, dt * 0.8);
     if (f) this.hemi.position.copy(this.camera.getWorldPosition(tA).sub(f.worldPos).normalize());
     else this.hemi.position.set(0, 1, 0);
   }
@@ -4546,7 +4552,7 @@ export class Game {
     const vel = rt.inShip && this.shipObj ? this.shipObj.vel : p.vel;
     const speed = vel.length();
     fx.speed = settings.get('speedBlur') ? (rt.cruise ? Math.min(0.8, speed / 60000) : p.boosting && p.mode !== 'ground' ? 0.35 : 0) : 0;
-    this.updateAtmosphereLighting();
+    this.updateAtmosphereLighting(dt);
     this.applyUnderground();
     this.applyUnderwater();
 
