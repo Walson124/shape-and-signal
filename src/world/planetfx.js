@@ -149,9 +149,19 @@ export function makeOcean(body) {
         vec3 tx = normalize(cross(normal, vec3(0.0, 1.0, 0.0)) + 1e-4);
         vec3 ty = cross(normal, tx);
         normal = normalize(normal + (w1 - 0.5) * 0.18 * tx + (w2 - 0.5) * 0.18 * ty);`,
+      ).replace(
+        '#include <opaque_fragment>',
+        `// the environment map is the starfield, so the sky the water mirrors comes from the fog
+        // colour (which follows the sky): faint looking down, a bright sheen toward the horizon
+        #ifdef USE_FOG
+        float fres = pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 3.0);
+        outgoingLight = mix(outgoingLight, fogColor * 1.1, 0.08 + fres * 0.8);
+        diffuseColor.a = mix(diffuseColor.a, 1.0, fres);
+        #endif
+        #include <opaque_fragment>`,
       );
     };
-    mat.customProgramCacheKey = () => 'ocean-water';
+    mat.customProgramCacheKey = () => 'ocean-water-2';
   }
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(R, 320, 160), mat);
   mesh.renderOrder = 1;

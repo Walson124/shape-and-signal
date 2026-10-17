@@ -1,6 +1,15 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-17', version: '0.12.3',
+    title: 'Rock and water',
+    items: [
+      'Cliffs and steep slopes are bare rock in layered strata, in each world’s own colours.',
+      'Lakes and seas mirror the sky, with a bright sheen toward the horizon.',
+      'Fixed fine striped patterns that crawled over the ground on large worlds and on slopes seen edge-on.',
+    ],
+  },
+  {
     date: '2026-10-16', version: '0.12.2',
     title: 'Living wilds',
     items: [

@@ -200,12 +200,14 @@ export function terrainMaterial(detailScale = 0.35, type = '') {
   const ripples = type === 'desert' ? `groundDetail += 0.42 * sin((vPP.x * 0.83 + vPP.z * 0.47 + vPP.y * 0.31) * 1.3 + vn(vPP * 0.04) * 7.0) * (0.6 + 0.4 * vn(vPP * 0.11));` : '';
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, metalness: 0, envMapIntensity: 0.25 });
   mat.onBeforeCompile = (shader) => {
-    shader.vertexShader = `attribute float glow;\nattribute vec3 ppos;\nvarying float vGlow;\nvarying vec3 vPP;\n${shader.vertexShader}`.replace(
+    shader.vertexShader = `attribute float glow;\nattribute vec3 ppos;\nvarying float vGlow;\nvarying vec3 vPP;\nvarying float vUpness;\n${shader.vertexShader}`.replace(
       '#include <begin_vertex>',
-      '#include <begin_vertex>\nvGlow = glow;\nvPP = ppos;',
+      '#include <begin_vertex>\nvGlow = glow;\nvPP = ppos;\nvUpness = dot(normalize(objectNormal), normalize(ppos));',
     );
-    shader.fragmentShader = `varying float vGlow;\nvarying vec3 vPP;\n
-      float th(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+    shader.fragmentShader = `varying float vGlow;\nvarying vec3 vPP;\nvarying float vUpness;\n
+      // hash of a lattice cell; wrapped first, because at planet-scale coordinates the raw hash
+      // runs out of float precision and draws stripes
+      float th(vec3 p){ p = fract(mod(p, 289.0) * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
       float vn(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f*f*(3.0-2.0*f);
         return mix(mix(mix(th(i), th(i+vec3(1,0,0)), f.x), mix(th(i+vec3(0,1,0)), th(i+vec3(1,1,0)), f.x), f.y),
                    mix(mix(th(i+vec3(0,0,1)), th(i+vec3(1,0,1)), f.x), mix(th(i+vec3(0,1,1)), th(i+vec3(1,1,1)), f.x), f.y), f.z); }
@@ -214,7 +216,16 @@ export function terrainMaterial(detailScale = 0.35, type = '') {
       `#include <color_fragment>
       float groundDetail = vn(vPP * ${detailScale.toFixed(3)}) * 0.55 + vn(vPP * ${(detailScale * 4.1).toFixed(3)}) * 0.3 + vn(vPP * 0.031) * 0.35;
       ${ripples}
-      diffuseColor.rgb *= 0.72 + 0.5 * groundDetail;`,
+      diffuseColor.rgb *= 0.72 + 0.5 * groundDetail;
+      // steep ground is bare rock: the world's own colour, greyed, in layered strata
+      float steep = 1.0 - smoothstep(0.6, 0.82, vUpness + (vn(vPP * 0.09) - 0.5) * 0.12);
+      if (steep > 0.0) {
+        float lumG = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        vec3 rockC = mix(vec3(lumG) * vec3(1.06, 1.0, 0.94), diffuseColor.rgb, 0.4) * 1.25;
+        float strata = sin(length(vPP) * 0.8 + vn(vPP * 0.05) * 6.0);
+        rockC *= 0.82 + 0.18 * smoothstep(-0.4, 0.6, strata) + 0.12 * vn(vPP * 1.9 + strata);
+        diffuseColor.rgb = mix(diffuseColor.rgb, rockC, steep);
+      }`,
     ).replace(
       '#include <normal_fragment_maps>',
       `#include <normal_fragment_maps>
@@ -226,14 +237,17 @@ export function terrainMaterial(detailScale = 0.35, type = '') {
       vec3 groundR2 = cross(normal, groundDx);
       float groundDet = dot(groundDx, groundR1);
       vec3 groundGrad = sign(groundDet) * (dFdx(groundDetail) * groundR1 + dFdy(groundDetail) * groundR2) / max(abs(groundDet), 0.000001);
-      float groundRelief = 0.35 * (1.0 - smoothstep(25.0, 130.0, length(vViewPosition)));
-      normal = normalize(normal - groundGrad * groundRelief);`,
+      // derivatives break into 2x2 blocks on surfaces seen edge-on, so the relief fades there
+      float groundFacing = smoothstep(0.08, 0.3, abs(dot(normal, normalize(vViewPosition))));
+      float groundRelief = 0.35 * groundFacing * (1.0 - smoothstep(25.0, 130.0, length(vViewPosition)));
+      vec3 groundBump = groundGrad * groundRelief;
+      normal = normalize(normal - groundBump / max(1.0, length(groundBump) * 1.5));`,
     ).replace(
       '#include <emissivemap_fragment>',
       '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vGlow * 3.0;',
     );
   };
-  mat.customProgramCacheKey = () => `terrain-relief-v3-${detailScale}-${type === 'desert' ? 'sand' : ''}`;
+  mat.customProgramCacheKey = () => `terrain-relief-v5-${detailScale}-${type === 'desert' ? 'sand' : ''}`;
   return mat;
 }
 
