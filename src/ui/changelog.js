@@ -9,6 +9,8 @@ export const CHANGELOG = [
       'Grass grows across green worlds around you (not in towns, on beaches or under water).',
       'Foliage right in front of the camera dissolves, so a tree you walk through never fills the screen.',
       'Nights are moonlit: cool blue light instead of pitch black.',
+      'City towers are built of pale weathered concrete with sky-tinted glass, so streets read in daylight instead of standing in silhouette.',
+      'Daylight fills the shade: sunlit ground bounces warm light up onto walls, cliffs and undersides.',
       'Boulders half-sunk in the ground take each world’s colour; saguaro cacti are ribbed with rising arms; ice worlds grow clusters of hexagonal ice shards; desert sand is combed into wind ripples.',
     ],
   },

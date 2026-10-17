@@ -52,6 +52,7 @@ import { Menus } from '../ui/menus.js';
 
 const tA = new THREE.Vector3();
 const WHITE = new THREE.Color(1, 1, 1), MOONLIGHT = new THREE.Color(0.55, 0.68, 1.0), NIGHT_FOG = new THREE.Color(0.05, 0.08, 0.16);
+const GROUND_NIGHT = new THREE.Color(0x3a3020), GROUND_DAY = new THREE.Color(0x8a7a62);
 const tB = new THREE.Vector3();
 const tQ = new THREE.Quaternion();
 const tM = new THREE.Matrix4();
@@ -4511,13 +4512,19 @@ export class Game {
       // night is moonlit, not black: a cool blue light the eye can still read shapes by
       const night = 1 - sky.day;
       fog.color.copy(sky.color).multiplyScalar(0.06 + 0.85 * sky.day).lerp(NIGHT_FOG, night * 0.8);
-      this.hemi.intensity = 0.12 + 0.55 * sky.day + 0.38 * night;
+      // daylight fills the shade too: buildings and cliffs away from the sun still read
+      this.hemi.intensity = 0.12 + 1.4 * sky.day + 0.38 * night;
       this.hemi.color.copy(sky.color).lerp(WHITE, 0.3).lerp(MOONLIGHT, night);
-      this.ambient.intensity = 0.16 + 0.1 * sky.day + 0.12 * night;
+      this.ambient.intensity = 0.16 + 0.3 * sky.day + 0.12 * night;
+      // sunlit ground bounces warm light up onto walls and undersides
+      this.hemi.groundColor.copy(GROUND_NIGHT).lerp(GROUND_DAY, sky.day);
+      this.scene.environmentIntensity = 0.5 + 0.45 * sky.day;
     } else {
       fog.density = 0;
       this.hemi.intensity = 0.1;
       this.ambient.intensity = 0.2;
+      this.hemi.groundColor.copy(GROUND_NIGHT);
+      this.scene.environmentIntensity = 0.5;
     }
     if (f) this.hemi.position.copy(this.camera.getWorldPosition(tA).sub(f.worldPos).normalize());
     else this.hemi.position.set(0, 1, 0);
