@@ -116,21 +116,46 @@ export function propGeometries() {
     });
     return occlude(merge(parts), 10);
   })();
-  const rock = (() => {
-    const g = new THREE.DodecahedronGeometry(1.6, 1);
+  // a boulder half sunk in the ground with a smaller stone beside it (tinted per world)
+  const boulder = (seed, size) => {
+    const g = new THREE.IcosahedronGeometry(size, 2);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
-      const s = 0.75 + Math.sin(p.getX(i) * 3.1 + p.getZ(i) * 2.3) * 0.2 + Math.cos(p.getY(i) * 4.2) * 0.1;
-      p.setXYZ(i, p.getX(i) * s, p.getY(i) * s * 0.7, p.getZ(i) * s);
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      // blocky facets plus fine grain, flattened underneath
+      const s = 0.82 + Math.sin(x * 2.3 + seed) * Math.cos(z * 2.7 + seed) * 0.16 + Math.sin(y * 5.1 + x * 3.3) * 0.05;
+      p.setXYZ(i, x * s, Math.max(y * s * 0.72, -size * 0.25), z * s);
     }
-    const smooth = smoothSurface(g);
-    return merge([colored(smooth.translate(0, 0.6, 0), 0x9a948a, 0.1)]);
-  })();
-  const cactus = merge([
-    colored(new THREE.CapsuleGeometry(0.45, 4, 3, 8).translate(0, 2.4, 0), 0x4a7a3a),
-    colored(new THREE.CapsuleGeometry(0.3, 1.6, 3, 8).rotateZ(Math.PI / 2).translate(0.9, 2.6, 0), 0x4a7a3a),
-    colored(new THREE.CapsuleGeometry(0.28, 1.4, 3, 8).translate(1.6, 3.2, 0), 0x4a7a3a),
-  ]);
+    return smoothSurface(g);
+  };
+  const rock = occlude(merge([
+    colored(boulder(1, 1.7).translate(0, 0.45, 0), 0x9a948a, 0.12),
+    colored(boulder(4, 0.7).translate(1.7, 0.15, 0.6), 0x8e887e, 0.12),
+  ]), 2.2, 0.6);
+  // a saguaro: a ribbed column with two arms that rise from elbows
+  const ribbed = (r0, len, segs = 12) => {
+    const g = new THREE.CylinderGeometry(r0 * 0.85, r0, len, segs * 2, 6);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i), y = p.getY(i);
+      const a = Math.atan2(z, x);
+      const rib = 1 + Math.cos(a * segs) * 0.09;
+      const top = y > len / 2 - 0.01 ? 0.55 : 1;
+      p.setXYZ(i, x * rib * top, y, z * rib * top);
+    }
+    g.computeVertexNormals();
+    return g;
+  };
+  const arm = (side, h, reach, up) => {
+    const elbow = ribbed(0.3, reach).rotateZ(side * Math.PI / 2).translate(side * reach / 2, h, 0);
+    const rise = ribbed(0.29, up).translate(side * reach, h + up / 2, 0);
+    return [colored(elbow, 0x3d6b35, 0.1), colored(rise, 0x427238, 0.1)];
+  };
+  const cactus = occlude(merge([
+    colored(ribbed(0.48, 6).translate(0, 3, 0), 0x3d6b35, 0.1),
+    ...arm(1, 2.6, 1.1, 1.8),
+    ...arm(-1, 3.4, 0.9, 1.4),
+  ]), 6.5, 0.45);
   const crystal = merge([
     glowing(new THREE.OctahedronGeometry(1, 0).scale(0.7, 3.4, 0.7).translate(0, 2.6, 0), 0xa98cff),
     glowing(new THREE.OctahedronGeometry(1, 0).scale(0.45, 2.2, 0.45).rotateZ(0.5).translate(1.1, 1.6, 0.2), 0x7affe0),
@@ -145,10 +170,22 @@ export function propGeometries() {
     colored(new THREE.CylinderGeometry(0.08, 0.15, 2.4, 4).rotateZ(0.9).translate(0.8, 3.6, 0), 0x2a2420),
     colored(new THREE.CylinderGeometry(0.08, 0.14, 2, 4).rotateZ(-1.0).translate(-0.7, 3.0, 0.2), 0x2a2420),
   ]);
+  // a cluster of hexagonal ice shards with sharp tips, leaning out, faintly glowing at the core
+  const shard = (r, h, lean, yaw, x, z, hex) => {
+    const g = new THREE.CylinderGeometry(r * 0.75, r, h, 6, 1).translate(0, h / 2, 0);
+    const tip = new THREE.ConeGeometry(r * 0.75, r * 2.2, 6).translate(0, h + r * 1.1, 0);
+    const m = mergeGeometries([g.toNonIndexed(), tip.toNonIndexed()]);
+    m.rotateZ(lean).rotateY(yaw).translate(x, 0, z);
+    return colored(m, hex, 0.06);
+  };
   const ice = merge([
-    colored(new THREE.ConeGeometry(0.9, 6, 5).translate(0, 3, 0), 0xcfe8ff, 0.04),
-    colored(new THREE.ConeGeometry(0.6, 3.5, 5).rotateZ(0.3).translate(0.9, 1.6, 0.3), 0xb0d8ff, 0.04),
+    shard(0.55, 4.2, 0.05, 0, 0, 0, 0x9ccbf2),
+    shard(0.4, 2.8, 0.45, 0.8, 0.5, 0.2, 0x86bdee),
+    shard(0.35, 2.2, -0.5, 2.1, -0.5, 0.3, 0xa6d2f5),
+    shard(0.3, 1.6, 0.6, 4.0, 0.1, -0.6, 0x7ab4ea),
+    shard(0.22, 1.1, -0.3, 5.2, -0.3, -0.5, 0xc0e2fa),
   ]);
+  ice.attributes.glow.array.fill(0.12);
   cache = {
     [PROP.PINE]: pine, [PROP.BROAD]: broad, [PROP.ROCK]: rock, [PROP.CACTUS]: cactus,
     [PROP.CRYSTAL]: crystal, [PROP.SHROOM]: shroom, [PROP.DEAD]: dead, [PROP.ICE]: ice,
@@ -158,7 +195,9 @@ export function propGeometries() {
 
 // Shared material for terrain chunks and props: vertex colours, a glow mask,
 // and procedural micro-detail so close-up ground doesn't look smeared.
-export function terrainMaterial(detailScale = 0.35) {
+export function terrainMaterial(detailScale = 0.35, type = '') {
+  // wind-combed ripples across sand worlds, carried into the relief below
+  const ripples = type === 'desert' ? `groundDetail += 0.42 * sin((vPP.x * 0.83 + vPP.z * 0.47 + vPP.y * 0.31) * 1.3 + vn(vPP * 0.04) * 7.0) * (0.6 + 0.4 * vn(vPP * 0.11));` : '';
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, metalness: 0, envMapIntensity: 0.25 });
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = `attribute float glow;\nattribute vec3 ppos;\nvarying float vGlow;\nvarying vec3 vPP;\n${shader.vertexShader}`.replace(
@@ -174,6 +213,7 @@ export function terrainMaterial(detailScale = 0.35) {
       '#include <color_fragment>',
       `#include <color_fragment>
       float groundDetail = vn(vPP * ${detailScale.toFixed(3)}) * 0.55 + vn(vPP * ${(detailScale * 4.1).toFixed(3)}) * 0.3 + vn(vPP * 0.031) * 0.35;
+      ${ripples}
       diffuseColor.rgb *= 0.72 + 0.5 * groundDetail;`,
     ).replace(
       '#include <normal_fragment_maps>',
@@ -193,7 +233,7 @@ export function terrainMaterial(detailScale = 0.35) {
       '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vGlow * 3.0;',
     );
   };
-  mat.customProgramCacheKey = () => `terrain-relief-v2-${detailScale}`;
+  mat.customProgramCacheKey = () => `terrain-relief-v3-${detailScale}-${type === 'desert' ? 'sand' : ''}`;
   return mat;
 }
 

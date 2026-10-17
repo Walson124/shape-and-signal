@@ -7,6 +7,11 @@ import { Digs } from './digs.js';
 import { FEATURES } from '../game/features.js';
 import { addCompiled, cancelAdd } from '../core/precompile.js';
 import { terrainMaterial, propMaterial, propGeometries } from './props.js';
+
+const ROCK_TINT = {
+  desert: [1.05, 0.78, 0.55], ice: [0.95, 1.05, 1.2], lava: [0.42, 0.38, 0.36], terran: [0.82, 0.8, 0.76],
+  toxic: [0.7, 0.78, 0.55], crystal: [0.75, 0.7, 0.9], rocky: [0.78, 0.74, 0.68],
+};
 import { makeAtmosphere, makeOcean, makeClouds, makeRings } from './planetfx.js';
 import { buildSettlement } from './city.js';
 import { buildRuinField } from './ruins.js';
@@ -109,7 +114,7 @@ export class Planet {
     this.faceArc = (this.R * Math.PI) / 2;
     this.maxLevel = Math.max(3, Math.ceil(Math.log2(this.faceArc / pre.leaf)));
     this.splitK = pre.split;
-    this.material = terrainMaterial(0.35);
+    this.material = terrainMaterial(0.35, this.body.type);
     // holes and caves: built volume replaces the heightfield where dug
     this.voxMaterial = terrainMaterial(0.35);
     this.digsSys = FEATURES.digging ? new Digs(this) : null;
@@ -183,6 +188,9 @@ export class Planet {
         const geoP = this.propGeos[type];
         if (!geoP) continue;
         const inst = new THREE.InstancedMesh(geoP, this.propMat, list.length);
+        // rocks take the colour of the world they lie on
+        const tint = type === PROP.ROCK ? ROCK_TINT[this.body.type] || ROCK_TINT.rocky : null;
+        if (tint) inst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(list.length * 3), 3);
         list.forEach((i, k) => {
           tA.set(out.props[i + 1], out.props[i + 2], out.props[i + 3]);
           tB.copy(tA).add(mesh.position).normalize();
@@ -193,6 +201,7 @@ export class Planet {
           s.set(sc, sc, sc);
           m.compose(tA, tQ, s);
           inst.setMatrixAt(k, m);
+          if (tint) { const v = 0.85 + ((i * 7919) % 100) / 100 * 0.3; inst.instanceColor.setXYZ(k, tint[0] * v, tint[1] * v, tint[2] * v); }
           instOf.set(i, [inst, k]);
         });
         inst.computeBoundingSphere();
