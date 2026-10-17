@@ -6,6 +6,8 @@ export const CHANGELOG = [
     items: [
       'Cliffs and steep slopes are bare rock in layered strata, in each world’s own colours.',
       'Lakes and seas mirror the sky, with a bright sheen toward the horizon.',
+      'Green worlds have meadows of varied grass: sun-dried patches and darker, lusher hollows.',
+      'Beaches only form on gentle shores, so cliffs no longer wear a jagged band of sand.',
       'Fixed fine striped patterns that crawled over the ground on large worlds and on slopes seen edge-on.',
     ],
   },

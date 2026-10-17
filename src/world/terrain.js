@@ -99,7 +99,7 @@ function mixC(out, a, b, t) {
 }
 
 const PAL = {
-  terran: { deep: hexLin(0x1c2a2a), sand: hexLin(0xc9b78a), grass: hexLin(0x4c7a2e), forest: hexLin(0x2c4f1f), dry: hexLin(0x9a8a52), rock: hexLin(0x6e665c), snow: hexLin(0xf1f4f8), dirt: hexLin(0x6a5434) },
+  terran: { deep: hexLin(0x1c2a2a), sand: hexLin(0xc9b78a), grass: hexLin(0x4b7432), forest: hexLin(0x2c4f1f), dry: hexLin(0x9a8a52), rock: hexLin(0x6e665c), snow: hexLin(0xf1f4f8), dirt: hexLin(0x6a5434) },
   desert: { sand: hexLin(0xd9a066), dune: hexLin(0xe8b878), rock: hexLin(0x9a4e2c), dark: hexLin(0x6a3420) },
   ice: { snow: hexLin(0xeef6ff), ice: hexLin(0x9fd0f0), crack: hexLin(0x3a78b0), rock: hexLin(0x6a7a8a) },
   lava: { basalt: hexLin(0x1c1614), ash: hexLin(0x3a302c), glow: hexLin(0xff6a1a), crust: hexLin(0x50281a) },
@@ -247,13 +247,18 @@ export function makeTerrain(params) {
       const hs = h / A;
       if (h < 0) {
         mixC(out, pal.sand, pal.deep, smooth(0, -0.12, hs));
-      } else if (hs < 0.012) {
+      } else if (hs < 0.012 && slope < 0.3) {
         mixC(out, pal.sand, pal.grass, hs / 0.012 * 0.3);
       } else {
         const moist = fbm(x * 2.2 + o[6][0], y * 2.2 + o[6][1], z * 2.2 + o[6][2], 3) + 0.1 - lat * 0.3;
         mixC(out, pal.dry, pal.grass, smooth(-0.15, 0.1, moist));
         mixC(tmp, out, pal.forest, smooth(0.05, 0.25, moist + n * 0.2));
         out[0] = tmp[0]; out[1] = tmp[1]; out[2] = tmp[2];
+        // meadows a few hundred metres across: sun-dried patches and darker, lusher hollows
+        const patch = fbm(x * 110 + o[1][0], y * 110 + o[1][1], z * 110 + o[1][2], 3);
+        mixC(tmp, out, pal.dry, smooth(0.0, 0.55, patch) * 0.22);
+        const lush = 1 + Math.min(0, patch) * 0.45;
+        out[0] = tmp[0] * lush; out[1] = tmp[1] * (0.5 + lush * 0.5); out[2] = tmp[2] * lush;
         const rock = Math.max(smooth(0.3, 0.55, slope), smooth(0.35, 0.55, hs));
         mixC(tmp, out, mix(0, 1, n > 0 ? 1 : 0) ? pal.rock : pal.dirt, rock);
         out[0] = tmp[0]; out[1] = tmp[1]; out[2] = tmp[2];
