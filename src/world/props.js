@@ -28,6 +28,41 @@ function glowing(geo, hex) {
   g.attributes.glow.array.fill(1);
   return g;
 }
+// deterministic randomness so every tree of a kind is the same mesh (they're instanced)
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+// Push vertices in and out with smooth noise so foliage clumps read as lumpy masses.
+function lumpy(geo, amount, freq, seed = 0) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const p = g.attributes.position;
+  const v = new THREE.Vector3(), c = new THREE.Vector3();
+  g.computeBoundingBox(); g.boundingBox.getCenter(c);
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const d = v.clone().sub(c);
+    const n = Math.sin(v.x * freq + seed) * Math.cos(v.y * freq * 1.3 + seed * 2) * Math.sin(v.z * freq * 0.9 + seed * 3)
+      + 0.5 * Math.sin(v.x * freq * 2.7 + v.z * freq * 2.1 + seed);
+    v.addScaledVector(d.normalize(), n * amount);
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+// Darken a prop where light can't reach: low down, under the canopy and on undersides.
+// It's baked into the vertex colours, so it costs nothing to draw.
+function occlude(geo, top, strength = 0.55) {
+  const p = geo.attributes.position, n = geo.attributes.normal, c = geo.attributes.color;
+  for (let i = 0; i < p.count; i++) {
+    const h = Math.max(0, Math.min(1, p.getY(i) / top));
+    const under = Math.max(0, -n.getY(i));
+    const rad = Math.min(1, Math.hypot(p.getX(i), p.getZ(i)) / (top * 0.35));
+    const k = 1 - strength * (1 - h) * 0.6 - strength * under * 0.5 + strength * 0.25 * rad * h;
+    c.setXYZ(i, c.getX(i) * k, c.getY(i) * k, c.getZ(i) * k);
+  }
+  return geo;
+}
+
 const merge = (parts) => {
   const m = mergeGeometries(parts);
   // Keep the source normals: spheres/capsules are smooth, crystals stay sharp.
@@ -37,18 +72,50 @@ const merge = (parts) => {
 let cache = null;
 export function propGeometries() {
   if (cache) return cache;
-  const pine = merge([
-    colored(new THREE.CylinderGeometry(0.25, 0.4, 3, 6).translate(0, 1.5, 0), 0x5a3a22),
-    colored(new THREE.ConeGeometry(2.6, 5, 7).translate(0, 4.5, 0), 0x3a7a40),
-    colored(new THREE.ConeGeometry(2.0, 4, 7).translate(0, 7, 0), 0x448a48),
-    colored(new THREE.ConeGeometry(1.3, 3.2, 7).translate(0, 9.2, 0), 0x4e9a50),
-  ]);
-  const broad = merge([
-    colored(new THREE.CylinderGeometry(0.3, 0.5, 4, 6).translate(0, 2, 0), 0x6a4a2a),
-    colored(new THREE.IcosahedronGeometry(3.2, 1).scale(1, 0.8, 1).translate(0, 6, 0), 0x5a9a3a),
-    colored(new THREE.IcosahedronGeometry(2.2, 1).translate(1.6, 7.2, 0.6), 0x6aaa42),
-    colored(new THREE.IcosahedronGeometry(2.0, 1).translate(-1.4, 6.8, -0.8), 0x4e8a34),
-  ]);
+  // a conifer: a tapering trunk and seven tiers of drooping, ragged boughs, darker inside
+  const pine = (() => {
+    const r = rng(11);
+    const parts = [colored(new THREE.CylinderGeometry(0.16, 0.42, 11, 7).translate(0, 5.5, 0), 0x4a3020, 0.12)];
+    const tiers = 7;
+    for (let t = 0; t < tiers; t++) {
+      const k = t / (tiers - 1);
+      const rad = 2.9 * (1 - k * 0.82) + 0.3;
+      const y = 2.6 + t * 1.25;
+      const g = new THREE.ConeGeometry(rad, 2.4 - k * 0.8, 12, 2, true);
+      const p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), z = p.getZ(i), yy = p.getY(i);
+        const a = Math.atan2(z, x);
+        // ragged bough tips, and the skirt droops at its rim
+        const rag = 1 + Math.sin(a * 6 + t * 1.7) * 0.16 + Math.sin(a * 11 + t) * 0.08;
+        const rim = Math.hypot(x, z) / rad;
+        p.setXYZ(i, x * rag, yy - rim * rim * 0.35 * rad, z * rag);
+      }
+      g.computeVertexNormals();
+      const shade = [0x2f6a36, 0x356f3a, 0x3c7a40, 0x44843f][Math.floor(r() * 4)];
+      parts.push(colored(g.translate(0, y, 0), shade, 0.12));
+    }
+    return occlude(merge(parts), 11.5);
+  })();
+  // a broadleaf: a trunk that forks into branches, under a crown of lumpy leaf clumps
+  const broad = (() => {
+    const r = rng(23);
+    const parts = [colored(new THREE.CylinderGeometry(0.32, 0.6, 4.4, 8).translate(0, 2.2, 0), 0x5a3e26, 0.12)];
+    const crown = [[0, 7.2, 0, 3.1], [2.1, 6.4, 0.8, 2.2], [-1.9, 6.6, -0.9, 2.3], [0.6, 6.0, -2.0, 2.0], [-0.8, 5.9, 2.0, 2.0], [0.4, 8.6, 0.3, 2.0]];
+    for (const [x, y, z] of crown.slice(1)) {
+      // a branch from the fork to each outer clump
+      const from = new THREE.Vector3(0, 4.2, 0), to = new THREE.Vector3(x * 0.8, y - 0.8, z * 0.8);
+      const len = from.distanceTo(to);
+      const br = new THREE.CylinderGeometry(0.12, 0.24, len, 5).translate(0, len / 2, 0);
+      br.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize())).translate(from.x, from.y, from.z);
+      parts.push(colored(br, 0x5a3e26, 0.1));
+    }
+    crown.forEach(([x, y, z, rad], i) => {
+      const shade = [0x4e8a34, 0x5a9a3a, 0x64a340, 0x4a8030][Math.floor(r() * 4)];
+      parts.push(colored(lumpy(new THREE.IcosahedronGeometry(rad, 2).scale(1, 0.82, 1), rad * 0.16, 1.4, i * 3.1).translate(x, y, z), shade, 0.14));
+    });
+    return occlude(merge(parts), 10);
+  })();
   const rock = (() => {
     const g = new THREE.DodecahedronGeometry(1.6, 1);
     const p = g.attributes.position;
@@ -130,15 +197,36 @@ export function terrainMaterial(detailScale = 0.35) {
   return mat;
 }
 
+// one clock for every prop material, advanced by the game each frame
+export const propWind = { value: 0 };
+
 export function propMaterial() {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, envMapIntensity: 0.3 });
   mat.onBeforeCompile = (shader) => {
-    shader.vertexShader = `attribute float glow;\nvarying float vGlow;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
+    shader.uniforms.uWind = propWind;
+    shader.vertexShader = `attribute float glow;\nvarying float vGlow;\nuniform float uWind;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+vGlow = glow;
+#ifdef USE_INSTANCING
+  // sway: grows with height, phase from the instance's position so trees move independently
+  float swayH = max(0.0, transformed.y - 2.0);
+  float swayP = instanceMatrix[3].x * 0.07 + instanceMatrix[3].z * 0.05 + instanceMatrix[3].y * 0.03;
+  float swayA = sin(uWind * 1.3 + swayP) * 0.6 + sin(uWind * 2.9 + swayP * 1.7) * 0.25;
+  transformed.x += swayH * swayH * 0.0035 * swayA;
+  transformed.z += swayH * swayH * 0.0025 * cos(uWind * 1.1 + swayP);
+#endif`);
     shader.fragmentShader = `varying float vGlow;\n${shader.fragmentShader}`.replace(
       '#include <emissivemap_fragment>',
       '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vGlow * 2.2;',
+    ).replace(
+      '#include <clipping_planes_fragment>',
+      `#include <clipping_planes_fragment>
+      // foliage right in front of the camera dissolves (an ordered dither) so a tree you're
+      // standing in never fills the screen
+      float nearFade = smoothstep(2.5, 7.0, length(vViewPosition));
+      float dither = fract(dot(floor(gl_FragCoord.xy), vec2(0.5, 0.25)) + fract(gl_FragCoord.x * 0.25) * 0.5);
+      if (nearFade < 1.0 && dither > nearFade) discard;`,
     );
   };
-  mat.customProgramCacheKey = () => 'prop-glow';
+  mat.customProgramCacheKey = () => 'prop-glow-wind-fade';
   return mat;
 }

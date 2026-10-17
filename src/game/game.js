@@ -26,6 +26,8 @@ import { StarSystem } from '../world/system.js';
 import { getStar, starsNear, HOME_KEY, CORE_KEY } from '../world/galaxy.js';
 import { recordJump } from './starmap.js';
 import { WorldEater } from './worldeater.js';
+import { propWind } from '../world/props.js';
+import { Grass } from '../world/grass.js';
 import { texPool } from '../world/texpool.js';
 import { LensFlare } from '../world/flare.js';
 import { SpaceDust } from '../world/dust.js';
@@ -49,6 +51,7 @@ import { HUD, fmt, esc, hex } from '../ui/hud.js';
 import { Menus } from '../ui/menus.js';
 
 const tA = new THREE.Vector3();
+const WHITE = new THREE.Color(1, 1, 1), MOONLIGHT = new THREE.Color(0.55, 0.68, 1.0), NIGHT_FOG = new THREE.Color(0.05, 0.08, 0.16);
 const tB = new THREE.Vector3();
 const tQ = new THREE.Quaternion();
 const tM = new THREE.Matrix4();
@@ -90,6 +93,7 @@ export class Game {
     // Everything the player touches lives in this group. It is re-parented
     // between the star system and a planet's rotating surface.
     this.localRoot = new THREE.Group();
+    this.grass = new Grass(this.localRoot);
     this.localRoot.name = 'local';
     this.scene.add(this.localRoot);
     this.localRoot.add(this.camera);
@@ -983,6 +987,8 @@ export class Game {
     const ctx = { player: p, playerAlive: body, time: this.time, hurtPlayer: (d, pos, knock) => this.hurtPlayer(d, pos, knock), slowAt: (b) => this.arts.slowAt(b) };
     if (!this.training.active || !this.training.options.freeze) this.beasts.update(dt, ctx);
     this.updateWorldEater(dt);
+    propWind.value = this.time;
+    this.grass.update(this.frame, this.player.pos, settings.get('quality') !== 'minimal' && this.env.inAtmo && !this.training.active);
     if (this.training.active) this.training.duel.update(dt);
     this.swords.setup(activePath(s) === 'mind' ? st.swords : 0, s.swordGrade);
     this.swords.update(dt, {
@@ -4502,10 +4508,12 @@ export class Game {
     if (sky) {
       const thick = f.body.type === 'toxic' ? 2.4 : f.body.type === 'desert' ? 1.4 : 1;
       fog.density = 0.00011 * thick * Math.pow(1 - Math.min(1, sky.alt), 2);
-      fog.color.copy(sky.color).multiplyScalar(0.06 + 0.85 * sky.day);
-      this.hemi.intensity = 0.12 + 0.55 * sky.day;
-      this.hemi.color.copy(sky.color).lerp(new THREE.Color(1, 1, 1), 0.3);
-      this.ambient.intensity = 0.16 + 0.1 * sky.day;
+      // night is moonlit, not black: a cool blue light the eye can still read shapes by
+      const night = 1 - sky.day;
+      fog.color.copy(sky.color).multiplyScalar(0.06 + 0.85 * sky.day).lerp(NIGHT_FOG, night * 0.8);
+      this.hemi.intensity = 0.12 + 0.55 * sky.day + 0.38 * night;
+      this.hemi.color.copy(sky.color).lerp(WHITE, 0.3).lerp(MOONLIGHT, night);
+      this.ambient.intensity = 0.16 + 0.1 * sky.day + 0.12 * night;
     } else {
       fog.density = 0;
       this.hemi.intensity = 0.1;

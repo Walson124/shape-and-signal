@@ -1,6 +1,17 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-16', version: '0.12.2',
+    title: 'Living wilds',
+    items: [
+      'New trees: conifers with ragged, drooping tiers of boughs and broadleaf trees with branching trunks and lumpy crowns, shaded darker inside and underneath.',
+      'Trees and grass sway in the wind.',
+      'Grass grows across green worlds around you (not in towns, on beaches or under water).',
+      'Foliage right in front of the camera dissolves, so a tree you walk through never fills the screen.',
+      'Nights are moonlit: cool blue light instead of pitch black.',
+    ],
+  },
+  {
     date: '2026-10-16', version: '0.12.1',
     title: 'World-Eaters',
     items: [
