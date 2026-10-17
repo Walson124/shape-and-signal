@@ -63,13 +63,19 @@ export class SkyBaker {
           float coreGlow = pow(clamp(dot(d, coreDir), 0.0, 1.0), 10.0) * band;
           vec3 neb = mix(colA, colB, clamp(q.x * 1.8 - 0.4, 0.0, 1.0));
           neb = mix(neb, colD, clamp(q.z * 2.2 - 1.35, 0.0, 1.0) * 0.6);
-          float density = smoothstep(0.38, 0.92, n) * (0.15 + 0.85 * bandWide);
-          vec3 col = colC * 0.18;
-          col += neb * density * 0.85;
-          float fil = pow(clamp(1.0 - abs(fbm(p * 3.6 + q * 3.0) * 2.0 - 1.0), 0.0, 1.0), 7.0);
-          col += neb * fil * bandWide * 0.35;
-          float dust = smoothstep(0.48, 0.74, fbm7(p * 2.6 + q * 2.0 + 7.0));
-          col *= 1.0 - 0.8 * dust * band;
+          // real nebulae are dim, patchy and less saturated than their palette: keep the gas mostly
+          // near the galactic band, fade it into the dark, and cut it with dust lanes
+          float lum = dot(neb, vec3(0.2126, 0.7152, 0.0722));
+          neb = mix(vec3(lum) * vec3(1.05, 0.98, 1.0), neb, 0.62);
+          float density = smoothstep(0.45, 0.95, n) * (0.04 + 0.96 * bandWide * bandWide);
+          float bright = smoothstep(0.7, 1.0, n);
+          vec3 col = colC * 0.09;
+          col += neb * density * 0.55;
+          col += mix(neb, vec3(1.0, 0.9, 0.85), 0.35) * bright * bandWide * 0.25;
+          float fil = pow(clamp(1.0 - abs(fbm(p * 3.6 + q * 3.0) * 2.0 - 1.0), 0.0, 1.0), 9.0);
+          col += neb * fil * bandWide * 0.28;
+          float dust = smoothstep(0.46, 0.7, fbm7(p * 2.6 + q * 2.0 + 7.0));
+          col *= 1.0 - 0.85 * dust * bandWide;
           col += vec3(1.0, 0.92, 0.84) * band * 0.05 * (0.4 + n);
           col += mix(vec3(1.0, 0.86, 0.7), colD, 0.2) * coreGlow * 0.9;
           gl_FragColor = vec4(col, 1.0);

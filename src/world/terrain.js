@@ -326,7 +326,8 @@ export function makeTerrain(params) {
       if (moist > -0.05 && rnd < 0.25) return PROP.BROAD;
       return -1;
     }
-    if (type === 'desert') return rnd < 0.06 ? PROP.CACTUS : rnd < 0.1 ? PROP.ROCK : -1;
+    // cacti gather in stands where the ground holds water; open sand has stones and the odd dead snag
+    if (type === 'desert') return n > 0.12 ? (rnd < 0.07 ? PROP.CACTUS : rnd < 0.09 ? PROP.ROCK : -1) : rnd < 0.006 ? PROP.CACTUS : rnd < 0.012 ? PROP.DEAD : rnd < 0.05 ? PROP.ROCK : -1;
     if (type === 'ice') return rnd < 0.08 ? PROP.ICE : -1;
     if (type === 'lava') return rnd < 0.05 ? PROP.DEAD : rnd < 0.1 ? PROP.ROCK : -1;
     if (type === 'toxic') return n > -0.1 && rnd < 0.4 ? PROP.SHROOM : -1;

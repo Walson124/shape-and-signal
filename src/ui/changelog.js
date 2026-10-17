@@ -11,6 +11,8 @@ export const CHANGELOG = [
       'Nights are moonlit: cool blue light instead of pitch black.',
       'City towers are built of pale weathered concrete with sky-tinted glass, so streets read in daylight instead of standing in silhouette.',
       'Daylight fills the shade: sunlit ground bounces warm light up onto walls, cliffs and undersides.',
+      'The night sky and deep space are darker and deeper: nebulae gather along the galactic band in softer colours, cut by dark dust lanes.',
+      'Desert cacti grow in scattered stands rather than a carpet, in a dusty sage green; open sand has stones and the odd dead snag.',
       'Boulders half-sunk in the ground take each world’s colour; saguaro cacti are ribbed with rising arms; ice worlds grow clusters of hexagonal ice shards; desert sand is combed into wind ripples.',
     ],
   },

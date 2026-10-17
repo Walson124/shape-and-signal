@@ -149,10 +149,10 @@ export function propGeometries() {
   const arm = (side, h, reach, up) => {
     const elbow = ribbed(0.3, reach).rotateZ(side * Math.PI / 2).translate(side * reach / 2, h, 0);
     const rise = ribbed(0.29, up).translate(side * reach, h + up / 2, 0);
-    return [colored(elbow, 0x3d6b35, 0.1), colored(rise, 0x427238, 0.1)];
+    return [colored(elbow, 0x50694a, 0.1), colored(rise, 0x56714d, 0.1)];
   };
   const cactus = occlude(merge([
-    colored(ribbed(0.48, 6).translate(0, 3, 0), 0x3d6b35, 0.1),
+    colored(ribbed(0.48, 6).translate(0, 3, 0), 0x50694a, 0.1),
     ...arm(1, 2.6, 1.1, 1.8),
     ...arm(-1, 3.4, 0.9, 1.4),
   ]), 6.5, 0.45);
