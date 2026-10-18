@@ -1,6 +1,15 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-18', version: '0.12.4',
+    title: 'Under the surface',
+    items: [
+      'You can really dive now: the camera follows you below the surface instead of staying on top of the water.',
+      'Holding the sink key (X) takes you all the way down; before, the water kept floating you back up.',
+      'Under water the sky gives way to deep, murky blue, and the seabed comes into view.',
+    ],
+  },
+  {
     date: '2026-10-17', version: '0.12.3',
     title: 'Rock and water',
     items: [

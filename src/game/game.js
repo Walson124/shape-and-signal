@@ -1162,6 +1162,27 @@ export class Game {
       fog.color.set(f.body.ocean.color).multiplyScalar(0.35 * Math.max(0.25, 1 - depth / 120));
       fog.density = 0.018 + Math.min(0.02, depth * 0.0004);
     }
+    // fog never reaches the sky, so under water the sky, air and clouds give way to the
+    // deep: wherever the seabed is out of sight you look into dark water, not daylight
+    const sunk = under ? f : null;
+    if (sunk !== this.sunkFrame) {
+      const was = this.sunkFrame;
+      if (was) {
+        if (was.atmo) was.atmo.mesh.visible = true;
+        if (was.clouds) was.clouds.mesh.visible = true;
+        if (this.surfaceBg) this.scene.background = this.surfaceBg;
+        this.surfaceBg = null;
+      }
+      if (sunk) {
+        if (sunk.atmo) sunk.atmo.mesh.visible = false;
+        if (sunk.clouds) sunk.clouds.mesh.visible = false;
+        this.surfaceBg = this.scene.background;
+        this.deepBg = this.deepBg || new THREE.Color();
+        this.scene.background = this.deepBg;
+      }
+      this.sunkFrame = sunk;
+    }
+    if (sunk) this.deepBg.copy(this.scene.fog.color);
     if (tint) tint.style.opacity = '0';
     const fx = this.post.fx;
     if (under) {
@@ -1379,7 +1400,7 @@ export class Game {
       align: 4,
     });
     // near the surface you bob up unless you swim down on purpose
-    if (swimming && move.y <= 0 && move.z === 0) {
+    if (swimming && move.y === 0 && move.z === 0) {
       const D = p.pos.length();
       if (D > water.seaR - 2.5 && D < water.seaR + EYE * 0.35) p.pos.setLength(D + (water.seaR + EYE * 0.35 - D) * Math.min(1, dt * 2.5));
     }
@@ -1655,8 +1676,17 @@ export class Game {
     } else if (f && f.terrain) {
       const D = this.camera.position.length();
       const d = this.camera.position.clone().divideScalar(D);
-      const floor = f.floorRadius(d.x, d.y, d.z) + 0.6;
+      // the real ground, not the sea surface: the camera follows you under water
+      const floor = f.groundRadius(d.x, d.y, d.z) + 0.6;
       if (D < floor) this.camera.position.multiplyScalar(floor / D);
+      // and stays on your side of the surface, so it never straddles the waterline
+      const w = !rt.inShip && this.waterAt(this.camera.position);
+      if (w) {
+        const cD = this.camera.position.length();
+        const under = p.pos.length() < w.seaR - 0.3;
+        if (under && cD > w.seaR - 0.35) this.camera.position.setLength(Math.max(floor, w.seaR - 0.35));
+        else if (!under && cD < w.seaR + 0.35) this.camera.position.setLength(w.seaR + 0.35);
+      }
     }
     if (rt.shake > 0) {
       rt.shake = Math.max(0, rt.shake - dt * 3);
