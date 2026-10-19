@@ -6,6 +6,7 @@ export const CHANGELOG = [
     items: [
       'You can really dive now: the camera follows you below the surface instead of staying on top of the water.',
       'Holding the sink key (X) takes you all the way down; before, the water kept floating you back up.',
+      'Ships can dive too: the hull holds under water, you push through at a crawl, and you can set down on the seabed.',
       'Under water the sky gives way to deep, murky blue, and the seabed comes into view.',
     ],
   },

@@ -1076,7 +1076,7 @@ export class Game {
     if (!planet.body.landable) return { planet, up, floorR: null, inAtmo: D < planet.atmoR, alt: D - planet.R, D, gas: true };
     let floorR = planet.floorRadius(up.x, up.y, up.z);
     const water = this.waterAt(pos);
-    if (water && !this.rt.inShip && !this.rt.inVehicle) floorR = water.bedR;
+    if (water && !this.rt.inVehicle) floorR = water.bedR;
     // dug holes and caves
     if (planet.digsSys && planet.digsSys.inZone(pos)) floorR = planet.digsSys.groundBelow(pos);
     const roof = planet.collide(pos, this.rt.inShip ? 10 : this.player.radius, this.rt.inShip ? 0 : EYE);
@@ -1535,8 +1535,17 @@ export class Game {
         return;
       }
     }
+    const sub = !!(onWorld && env.water && ship.pos.length() < env.water.seaR - 0.5);
+    if (sub !== !!rt.shipSub) {
+      rt.shipSub = sub;
+      if (onWorld && env.water) this.particles.burst(ship.pos.clone().setLength(env.water.seaR), new THREE.Color(1.6, 2.2, 2.6), 60, 22, 1.4, 0.9);
+      // hitting the water brakes you hard
+      if (sub) ship.vel.multiplyScalar(0.3);
+      if (sub && !this.notifyGate.shipSub) { this.notifyGate.shipSub = 1; this.hud.notify('Submerged. The hull holds; the water slows you.', 'cy'); }
+    }
+    if (sub) { speed = Math.min(speed, 45); rt.cruise = false; }
     ship.look(look.x, look.y, { up: env.inAtmo ? env.up : null });
-    ship.update(dt, alive ? move : { x: 0, y: 0, z: 0 }, { up: env.up, floorR: onWorld ? env.floorR : null, speed, boost: boost && !rt.cruise, inAtmo: env.inAtmo, accel: rt.cruise ? 1.4 : 1.2 });
+    ship.update(dt, alive ? move : { x: 0, y: 0, z: 0 }, { up: env.up, floorR: onWorld ? env.floorR : null, speed, boost: boost && !rt.cruise, inAtmo: env.inAtmo, accel: rt.cruise ? 1.4 : sub ? 2.2 : 1.2 });
     if (rt.warpCharge > 0) {
       ship.pos.add(tA.set((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3));
       ship.sync();
@@ -1680,7 +1689,7 @@ export class Game {
       const floor = f.groundRadius(d.x, d.y, d.z) + 0.6;
       if (D < floor) this.camera.position.multiplyScalar(floor / D);
       // and stays on your side of the surface, so it never straddles the waterline
-      const w = !rt.inShip && this.waterAt(this.camera.position);
+      const w = this.waterAt(this.camera.position);
       if (w) {
         const cD = this.camera.position.length();
         const under = p.pos.length() < w.seaR - 0.3;
