@@ -24,7 +24,7 @@ export function dangerClass(tier, realm) {
 }
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const tmpV = new THREE.Vector3();
-const FEED_TAGS = { '': 'SYS', gold: 'CULT', red: 'WARN', violet: 'INFO', green: 'ITEM', yl: 'TASK' };
+const FEED_TAGS = { '': 'SYS', gold: 'CULT', red: 'WARN', violet: 'INFO', green: 'ITEM', yl: 'TASK', chat: 'CHAT' };
 
 export class HUD {
   constructor() {

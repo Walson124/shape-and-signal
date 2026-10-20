@@ -1,6 +1,15 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-20', version: '0.13.0',
+    title: 'You are not alone',
+    items: [
+      'Multiplayer: cultivators in the same star system and on the same world now see each other, on foot or in their ships, with their name and realm overhead.',
+      'Press Enter to chat with everyone on your world.',
+      'Set your name, or play offline, under Settings > Gameplay > Multiplayer.',
+    ],
+  },
+  {
     date: '2026-10-18', version: '0.12.4',
     title: 'Under the surface',
     items: [

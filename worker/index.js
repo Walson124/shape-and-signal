@@ -1,8 +1,12 @@
 import { EmailMessage } from 'cloudflare:email';
 import { validateFeedback, buildEmail } from './feedback.js';
+import { cleanRoomKey } from './room-protocol.js';
 
-// The site's Worker: serves the built game from dist/, plus one endpoint,
-// POST /api/feedback, which emails player feedback to FEEDBACK_TO.
+export { Room } from './room.js';
+
+// The site's Worker: serves the built game from dist/, plus two endpoints:
+// POST /api/feedback emails player feedback to FEEDBACK_TO, and
+// GET /api/room?key=... opens a multiplayer room (a Durable Object per world).
 
 const WINDOW = 10 * 60 * 1000, PER_WINDOW = 5;
 const recent = new Map(); // ip -> send times (per Worker instance: a soft limit)
@@ -43,6 +47,13 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/api/feedback') return feedback(request, env);
+    if (url.pathname === '/api/room') {
+      const key = cleanRoomKey(url.searchParams.get('key'));
+      if (!key) return json(400, { error: 'Bad room.' });
+      if (!env.ROOMS) return json(503, { error: 'Multiplayer is not set up on this server.' });
+      if (request.headers.get('Upgrade') !== 'websocket') return json(426, { error: 'Expected a WebSocket.' });
+      return env.ROOMS.get(env.ROOMS.idFromName(key)).fetch(request);
+    }
     return env.ASSETS.fetch(request);
   },
 };

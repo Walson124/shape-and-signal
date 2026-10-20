@@ -57,6 +57,10 @@ const DEFAULTS = {
   nixChatter: 'normal',
   headBob: true,
   autoSprint: false,
+  // multiplayer
+  online: true,
+  playerName: '',
+  chat: true,
   hudScale: 1,
   // world detail
   terrainDetail: 1,

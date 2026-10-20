@@ -182,6 +182,9 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .mk.boss { color: var(--mg); }
 .mk.boss .mk-dot { width: 16px; height: 16px; border-width: 2px; }
 .mk.beast { color: #ff8aa4; }
+.mk.player { color: #b8f5ff; }
+.mk.player .mk-dot { width: 7px; height: 7px; }
+.mk.player .mk-sub { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 .mk.beast .mk-dot { display: none; }
 .mk.beast .mk-label { font-size: 11px; }
 .mk.loot { color: var(--mg); }
@@ -205,6 +208,7 @@ kbd { display: inline-block; min-width: 1.7em; padding: 0 0.45em; border: 1px so
 .feed-item.violet { border-color: var(--violet); } .feed-item.violet .tag { color: var(--violet); }
 .feed-item.green { border-color: var(--green); } .feed-item.green .tag { color: var(--green); }
 .feed-item.yl { border-color: var(--yl); } .feed-item.yl .tag { color: var(--yl); }
+.feed-item.chat { border-color: #b8f5ff; } .feed-item.chat .tag { color: #b8f5ff; }
 @keyframes feedIn { from { transform: translateX(-24px); opacity: 0; clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
 #alert { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); padding: 8px 22px; font-family: var(--display); font-weight: 900; font-size: 20px; letter-spacing: 0.18em; color: var(--bg); background: var(--red); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%); animation: blink 0.4s steps(2) infinite; }
@@ -603,3 +607,9 @@ a.menu-item { text-decoration: none; }
 .fb-field select:focus, .fb-field input:focus, .fb-field textarea:focus { outline: none; border-color: var(--cy); }
 .fb-trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .starmap .sm-lair { font-size: 10px; fill: #ff6a80; display: inline !important; }
+
+/* multiplayer chat */
+#chat-box { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); z-index: 40; }
+#chat-box.hidden { display: none; }
+#chat-input { width: 100%; box-sizing: border-box; padding: 10px 14px; font: 14px var(--mono, monospace); color: #e8fbff; background: rgba(4, 12, 20, 0.86); border: 1px solid rgba(184, 245, 255, 0.55); border-radius: 2px; outline: none; box-shadow: 0 0 18px rgba(62, 242, 255, 0.18); }
+.text-set { width: 200px; padding: 6px 10px; font: 13px var(--mono, monospace); color: #e8fbff; background: rgba(4, 12, 20, 0.7); border: 1px solid rgba(184, 245, 255, 0.4); border-radius: 2px; }

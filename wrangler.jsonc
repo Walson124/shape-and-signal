@@ -1,5 +1,6 @@
 {
-  // Cloudflare Worker: serves dist/ and emails player feedback from /api/feedback.
+  // Cloudflare Worker: serves dist/, emails player feedback from /api/feedback and
+  // runs multiplayer rooms (one Durable Object per world) behind /api/room.
   // FEEDBACK_TO (where feedback goes) is a secret set in the Cloudflare dashboard.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "starsea",
@@ -11,6 +12,12 @@
   },
   "send_email": [
     { "name": "FEEDBACK_EMAIL" }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Room"] }
   ],
   "vars": {
     "FEEDBACK_FROM": "feedback@starsea.dev"

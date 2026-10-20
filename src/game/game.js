@@ -28,6 +28,7 @@ import { recordJump } from './starmap.js';
 import { WorldEater } from './worldeater.js';
 import { propWind } from '../world/props.js';
 import { Grass } from '../world/grass.js';
+import { Net } from '../net/net.js';
 import { texPool } from '../world/texpool.js';
 import { LensFlare } from '../world/flare.js';
 import { SpaceDust } from '../world/dust.js';
@@ -129,6 +130,8 @@ export class Game {
     this.shipObj = null;
     this.input = new Input(canvas);
     this.hud = new HUD();
+    // other players in the same world (multiplayer presence and chat)
+    this.net = new Net(this);
     this.menus = new Menus(this);
     this.buildWarpLines();
 
@@ -768,6 +771,7 @@ export class Game {
         this.input.consumeMouse();
       }
     }
+    this.net?.update(dt);
     this.sound.setListener(this.mode === 'virtual' ? this.vu.camera : this.camera);
     this.post.render(this.time);
     this.input.endFrame();
@@ -4800,6 +4804,7 @@ export class Game {
         list.push({ key: `b:${b.uid}`, kind: 'beast', label: focus ? `<span style="color:${rcls}">${esc(b.name)}</span>` : '', sub: focus ? `${realmOf(b.tier).name.toUpperCase()} · ${Math.round(d)}` : '', pos: this.toWorld(mp), dist: d, edge: false, hp: b.hp / b.maxHp });
       }
     }
+    this.net?.markers(list, origin);
     this.hud.updateMarkers(list, this.camera, this.width, this.height);
     return list;
   }

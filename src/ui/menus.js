@@ -202,6 +202,13 @@ export class Menus {
         this.renderSettings();
       }
     });
+    this.$('settings-body').addEventListener('change', (e) => {
+      const t = e.target.closest('[data-text]');
+      if (!t) return;
+      const v = t.value.replace(/[\u0000-\u001f<>&"'`]/g, '').trim().slice(0, 16);
+      if (v.length >= 2) settings.set(t.dataset.text, v);
+      this.renderSettings();
+    });
     this.$('settings-body').addEventListener('input', (e) => {
       const r = e.target.closest('[data-range]');
       if (!r) return;
@@ -411,7 +418,11 @@ export class Menus {
       html = row('View', 'First or third person. The camera key switches during play.', seg('camera', [['first', 'FIRST PERSON'], ['third', 'THIRD PERSON']]))
         + row('Cultivate input', 'Tap toggles cultivation on and off (holding still works). Hold means only while held.', seg('cultivateMode', [['toggle', 'TAP TO TOGGLE'], ['hold', 'HOLD']]))
         + row('Always sprint', 'Run by default; the sprint key walks.', tog('autoSprint'))
-        + row('Nix chatter', 'How much your ring companion talks. Quiet keeps only warnings and story.', seg('nixChatter', [['normal', 'NORMAL'], ['quiet', 'QUIET'], ['off', 'OFF']]));
+        + row('Nix chatter', 'How much your ring companion talks. Quiet keeps only warnings and story.', seg('nixChatter', [['normal', 'NORMAL'], ['quiet', 'QUIET'], ['off', 'OFF']]))
+        + '<div class="section-title">Multiplayer</div>'
+        + row('Online', 'See and talk to other cultivators in the same world. Off plays alone.', tog('online'))
+        + row('Name', 'What others see over your head (2 to 16 characters).', `<input class="text-set" data-text="playerName" maxlength="16" value="${esc(s.playerName || '')}">`)
+        + row('Chat', 'Show what others say. Enter opens the chat box while playing.', tog('chat'));
     } else {
       html = row('Master volume', '', range('master', 0, 100, 1, 100, 'pct'))
         + row('Music', 'Generative score that intensifies in combat.', range('music', 0, 100, 1, 100, 'pct'))

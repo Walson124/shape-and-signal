@@ -58,7 +58,6 @@ export class SkinnedFigure {
     this.model = cloneSkinned(source.scene);
     // the model faces +z; the game's figures face -z
     this.model.rotation.y = Math.PI;
-    figure.add(this.model);
     this.model.traverse((o) => {
       if (!o.isMesh) return;
       o.frustumCulled = false; // skinned bounds don't follow the pose
@@ -78,11 +77,14 @@ export class SkinnedFigure {
     for (const mesh of skinned) relativeSkinning(mesh);
     const bones = skinned[0].skeleton.bones;
     this.pelvis = bones.find((b) => b.name === 'pelvis');
-    // feet on the figure's floor: the hips are the figure's origin
+    // feet on the figure's floor: the hips are the figure's origin. Measured before the model
+    // joins the scene: out on a planet its world matrices are millions of metres from the
+    // origin, and a body made mid-game (another player) would measure its hips from there.
     this.model.updateMatrixWorld(true);
     const p = this.model.worldToLocal(new THREE.Vector3().setFromMatrixPosition(this.pelvis.matrixWorld));
     this.hipHeight = p.y;
     this.model.position.y = -this.hipHeight;
+    figure.add(this.model);
     this.figure = figure;
 
     this.mixer = new THREE.AnimationMixer(this.model);
@@ -107,6 +109,9 @@ export class SkinnedFigure {
 
   // Base layer: target weights for whole-body clips (a missing name fades out).
   setBase(weights, rates = {}) {
+    // kept so multiplayer can send how the body is moving (src/net/net.js)
+    this.lastBase = weights;
+    this.lastRates = rates;
     for (const [name, L] of Object.entries(this.layers)) {
       L.want = weights[name] || 0;
       if (rates[name] !== undefined) { L.upper.timeScale = L.lower.timeScale = rates[name]; }
@@ -126,6 +131,9 @@ export class SkinnedFigure {
       a.timeScale = speed;
     }
     this.overlay = { name, t: 0, duration: L.duration / speed, full: whole, hold };
+    // one-shot moves, for multiplayer to pass on (only the newest few are kept)
+    (this.events ||= []).push([name, speed, whole]);
+    if (this.events.length > 8) this.events.shift();
   }
 
   stop() { this.overlay = null; }

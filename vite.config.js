@@ -15,4 +15,6 @@ export default defineConfig({
     },
   },
   worker: { format: 'es' },
+  // multiplayer rooms run in the Cloudflare Worker: run `npx wrangler dev` alongside `npm run dev`
+  server: { proxy: { '/api': { target: 'http://127.0.0.1:8787', ws: true } } },
 });

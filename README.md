@@ -17,6 +17,18 @@ npm run preview  # serve the production build
 
 It needs a desktop browser with WebGL 2, a keyboard and a mouse. Progress and settings save to local storage.
 
+### Multiplayer
+
+Players in the same star system and on the same world share a room: they see each other (on foot or in their ships) and can chat with Enter. Rooms are Cloudflare Durable Objects (`worker/room.js`, one per world) behind `/api/room`; the client is `src/net/net.js`. To try it locally, build once and run the Worker beside the dev server (Vite proxies `/api` to it):
+
+```bash
+npm run build
+npx wrangler dev      # Worker + rooms on :8787
+npm run dev           # in another terminal
+```
+
+Open two browser profiles (or one normal and one private window) to see each other. Multiplayer can be switched off, and your name set, under Settings > Gameplay.
+
 ## Controls
 
 Every key can be changed in Settings › Controls. The defaults are:
@@ -137,3 +149,5 @@ Graphics use chamfered structural boxes, smooth organic normals, and baked facad
 | `src/world/` | Galaxy and system generation, planet terrain and quadtree, atmospheres, cities, interiors, orbital stations, points of interest, props, worker pool, skybox |
 | `src/game/` | Game loop, paths and skill trees, techniques, player, starship, flying swords, first-person arms, beasts and bestiary, combat, loot, bounties, data, save state |
 | `src/ui/` | HUD, menus and in-game panels |
+| `src/net/` | Multiplayer: room connection, other players' bodies and ships, chat |
+| `worker/` | The Cloudflare Worker: serves the build, feedback email, multiplayer rooms |
