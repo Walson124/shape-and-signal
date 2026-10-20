@@ -669,6 +669,8 @@ export class BeastManager {
     cancelAdd(b.mesh);
     this.scene.remove(b.mesh);
     b.mesh.traverse((o) => {
+      // each sculpted body has its own skeleton, whose bone texture lives on the GPU until disposed
+      if (o.isSkinnedMesh && o.skeleton) o.skeleton.dispose();
       if (o.userData.shared) return;
       if (o.geometry) o.geometry.dispose();
       if (o.material && !o.isSprite) o.material.dispose();

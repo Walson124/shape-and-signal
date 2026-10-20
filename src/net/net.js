@@ -97,6 +97,8 @@ class RemotePlayer {
   dispose() {
     this.gone = true;
     this.parent.remove(this.root);
+    // the body's materials are shared with your own; only its skeleton (a GPU bone texture) is its own
+    this.root.traverse((o) => { if (o.isSkinnedMesh && o.skeleton) o.skeleton.dispose(); });
     if (this.ship) { this.ship.dispose(); this.ship = null; }
   }
 }
