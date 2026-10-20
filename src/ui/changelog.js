@@ -1,6 +1,13 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-22', version: '0.13.2',
+    title: 'Maps and pictures',
+    items: [
+      'World map: press M on a planet to see the land around you from above, with its seas, rivers and mountains, every city, the sites you have found (and rumoured ones), other cultivators, and which way you face. Three zooms; the star map is one tab over.',
+    ],
+  },
+  {
     date: '2026-10-21', version: '0.13.1',
     title: 'Weather',
     items: [

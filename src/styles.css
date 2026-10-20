@@ -613,3 +613,23 @@ a.menu-item { text-decoration: none; }
 #chat-box.hidden { display: none; }
 #chat-input { width: 100%; box-sizing: border-box; padding: 10px 14px; font: 14px var(--mono, monospace); color: #e8fbff; background: rgba(4, 12, 20, 0.86); border: 1px solid rgba(184, 245, 255, 0.55); border-radius: 2px; outline: none; box-shadow: 0 0 18px rgba(62, 242, 255, 0.18); }
 .text-set { width: 200px; padding: 6px 10px; font: 13px var(--mono, monospace); color: #e8fbff; background: rgba(4, 12, 20, 0.7); border: 1px solid rgba(184, 245, 255, 0.4); border-radius: 2px; }
+
+/* world map */
+.wm-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wm-head h3 { margin: 0; letter-spacing: 0.08em; text-transform: uppercase; }
+.wm-zooms { display: flex; gap: 6px; }
+.wm-wrap { position: relative; max-width: 100%; margin: 0 auto; border: 1px solid rgba(62, 242, 255, 0.35); box-shadow: 0 0 24px rgba(62, 242, 255, 0.12); }
+.wm-wrap canvas, .wm-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.wm-city { fill: rgba(10, 20, 30, 0.85); stroke: #ffe44d; stroke-width: 1.6; }
+.wm-city.big { stroke-width: 2.2; fill: rgba(255, 228, 77, 0.25); }
+.wm-label { font: 600 11px var(--mono, monospace); fill: #eaf6ff; text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, 0.85); stroke-width: 3px; letter-spacing: 0.04em; }
+.wm-label.big { font-size: 13px; fill: #ffe44d; }
+.wm-label.poi { font-size: 10px; fill: #c8d6e4; }
+.wm-label.peer { fill: #b8f5ff; }
+.wm-poi { font: 700 14px sans-serif; text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, 0.8); stroke-width: 3px; }
+.wm-peer { fill: #3ef2ff; stroke: #02121a; stroke-width: 1.5; }
+.wm-me { fill: #ffffff; stroke: #ff3c7d; stroke-width: 2; }
+.wm-scale line { stroke: #eaf6ff; stroke-width: 2; }
+.wm-scale text, .wm-north { font: 600 11px var(--mono, monospace); fill: #eaf6ff; paint-order: stroke; stroke: rgba(0, 0, 0, 0.85); stroke-width: 3px; }
+.wm-north { text-anchor: middle; font-size: 13px; }
+.wm-legend { margin-top: 8px; font-size: 12px; text-align: center; }

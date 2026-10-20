@@ -707,7 +707,8 @@ export class Game {
     else if (k('panelBounty')) this.togglePanel('bounties');
     else if (k('panelGuide')) this.togglePanel('guide');
     else if (k('panelRing')) this.togglePanel('ring');
-    else if (k('panelMap')) this.togglePanel('map');
+    // on a world's surface the map key opens the world map; the star map is one tab over
+    else if (k('panelMap')) this.togglePanel(this.menus.onWorld() ? 'world' : 'map');
     else if (k('mute')) this.hud.notify(this.sound.toggleMute() ? 'Sound muted.' : 'Sound on.');
   }
 

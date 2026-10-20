@@ -17,6 +17,7 @@ import { RING_TIERS, ITEMS, RECIPES, MAX_TEMPER, temperCost, armorCost, hasRing,
 import { settings, PRESETS } from '../core/settings.js';
 import { ACTIONS, codeLabel } from '../core/bindings.js';
 import { fmt, esc, hex } from './hud.js';
+import { drawWorldMap, ZOOMS, MAP_SIZE } from './world-map.js';
 
 const key = (a) => `<kbd>${esc(codeLabel(settings.key(a)))}</kbd>`;
 
@@ -96,6 +97,8 @@ export class Menus {
       this.openPanel(t.dataset.kind, t.dataset.tab || null);
     });
     this.$('panel-body').addEventListener('click', (e) => {
+      const z = e.target.closest('[data-wm-zoom]');
+      if (z) { this.wmZoom = Number(z.dataset.wmZoom); this.render(); return; }
       const a = e.target.closest('[data-action]');
       if (!a || a.disabled) return;
       const { action } = a.dataset;
@@ -462,7 +465,8 @@ export class Menus {
     const k = this.panelKind;
     if (!k) return;
     const venue = this.venueTabs();
-    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['ring', 'Ring'], ['map', 'Star map'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
+    const onWorld = this.onWorld();
+    const base = [['cultivation', 'Cultivation'], ['skills', 'Skills'], ['bounties', 'Bounties'], ['ring', 'Ring'], ...(onWorld ? [['world', 'World map']] : []), ['map', 'Star map'], ['story', 'Story'], ['archive', 'Archive'], ['guide', 'Guide']];
     // inside a shop or hall only its own counters show (plus the ring, to see what you carry);
     // the general panels come back when you open one with its key
     const atVenue = venue.some(([vk]) => vk === k);
@@ -479,10 +483,35 @@ export class Menus {
       craft: () => this.renderCraft(),
       story: () => this.renderStory(),
       map: () => this.renderMap(),
+      world: () => this.renderWorldMap(),
       vshop: () => this.renderMall(), vsim: () => this.renderSim(), fame: () => this.renderFame(),
       training: () => this.renderTraining(),
     }[k];
     this.$('panel-body').innerHTML = r ? r() : this.renderGuide();
+    if (k === 'world') this.paintWorldMap();
+  }
+
+  // standing on (or flying low over) a world with ground
+  onWorld() {
+    const g = this.game, f = g.frame;
+    return !!(f && f.terrain && f.body.landable && g.localRoot.parent === f.spin && g.env && g.env.inAtmo);
+  }
+
+  renderWorldMap() {
+    const g = this.game, f = g.frame;
+    if (!this.onWorld()) return '<p class="dim">There is no ground under you. The world map shows the planet you stand on.</p>';
+    const z = this.wmZoom ?? 1;
+    const zooms = ZOOMS.map((o, i) => `<button class="btn small ${i === z ? 'primary' : ''}" data-wm-zoom="${i}">${o.label}</button>`).join('');
+    const peers = g.net ? g.net.count : 0;
+    return `<div class="wm-head"><h3>${esc(f.body.name)}</h3><div class="wm-zooms">${zooms}</div></div>`
+      + `<div class="wm-wrap" style="width:${MAP_SIZE}px;height:${MAP_SIZE}px"><canvas id="wm-canvas" width="${MAP_SIZE}" height="${MAP_SIZE}"></canvas><svg id="wm-svg" viewBox="0 0 ${MAP_SIZE} ${MAP_SIZE}"></svg></div>`
+      + `<p class="dim wm-legend">◇ cities · coloured marks: sites you have found · ? rumours · <span class="cyan">●</span> other cultivators${peers ? ` (${peers} here)` : ''} · ▲ you</p>`;
+  }
+
+  paintWorldMap() {
+    const c = this.$('panel-body').querySelector('#wm-canvas');
+    if (!c) return;
+    this.$('panel-body').querySelector('#wm-svg').innerHTML = drawWorldMap(this.game, c, this.wmZoom ?? 1);
   }
 
   wallet() {
