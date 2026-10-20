@@ -31,6 +31,7 @@ import { Grass } from '../world/grass.js';
 import { Net } from '../net/net.js';
 import { ContactShadows } from '../world/contact-shadows.js';
 import { Weather, wetUpView, forceWeather } from '../world/weather.js';
+import { PhotoMode } from './photo-mode.js';
 import { texPool } from '../world/texpool.js';
 import { LensFlare } from '../world/flare.js';
 import { SpaceDust } from '../world/dust.js';
@@ -139,6 +140,7 @@ export class Game {
     this.hud = new HUD();
     // other players in the same world (multiplayer presence and chat)
     this.net = new Net(this);
+    this.photoMode = new PhotoMode(this);
     this.menus = new Menus(this);
     this.buildWarpLines();
 
@@ -665,6 +667,7 @@ export class Game {
 
   onLockChange(locked) {
     if (this.training.busy) return;
+    if (this.photo) { this.photo.onLock(locked); return; }
     if (!locked && this.mode === 'cutscene') {
       this.cutscene.skip();
       return;
@@ -679,6 +682,11 @@ export class Game {
 
   onKey(code) {
     const m = this.menus;
+    if (this.photo) {
+      if (code === settings.key('photo')) this.photo.exit();
+      else if (code === 'Enter') this.photo.wantShot = true;
+      return;
+    }
     if (code === settings.key('returnBody')) {
       if (this.training.active) { this.training.leave({ returnToBody: true }); return; }
       if (this.mode === 'virtual') { m.closePanel(); m.closeModal(null); m.closeSettings(); this.exitVirtual(); this.resume(); return; }
@@ -710,6 +718,7 @@ export class Game {
     // on a world's surface the map key opens the world map; the star map is one tab over
     else if (k('panelMap')) this.togglePanel(this.menus.onWorld() ? 'world' : 'map');
     else if (k('mute')) this.hud.notify(this.sound.toggleMute() ? 'Sound muted.' : 'Sound on.');
+    else if (k('photo') && !m.panelOpen) this.photoMode.enter();
   }
 
   togglePanel(kind, tab) {
@@ -757,6 +766,18 @@ export class Game {
       return;
     }
     if (!this.system) return;
+    if (this.photo) {
+      this.photo.update(dt);
+      this.net?.update(dt);
+      this.updateWeather(this.photo.freeze ? 0 : dt);
+      this.updateShafts();
+      this.updateContactShadows();
+      this.sound.setListener(this.camera);
+      this.post.render(this.time);
+      if (this.photo.wantShot) this.photo.capture();
+      this.input.endFrame();
+      return;
+    }
     if (this.mode === 'title' || this.mode === 'loading') this.updateTitle(dt);
     else if (this.mode === 'warping') this.updateWarp(dt);
     else if (this.mode === 'virtual') {
@@ -4615,8 +4636,10 @@ export class Game {
       this.exposureTarget = 1;
     }
     // adapt over a couple of seconds, so stepping out of a lit city into the dark takes a moment
-    const ex = this.renderer.toneMappingExposure;
-    this.renderer.toneMappingExposure = ex + (this.exposureTarget - ex) * Math.min(1, dt * 0.8);
+    const ex = this.exposureLevel ?? 1;
+    this.exposureLevel = ex + (this.exposureTarget - ex) * Math.min(1, dt * 0.8);
+    // photo mode can push the exposure either way
+    this.renderer.toneMappingExposure = this.exposureLevel * (this.exposureMul || 1);
     if (f) this.hemi.position.copy(this.camera.getWorldPosition(tA).sub(f.worldPos).normalize());
     else this.hemi.position.set(0, 1, 0);
   }

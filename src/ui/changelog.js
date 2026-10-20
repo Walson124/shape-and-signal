@@ -4,6 +4,7 @@ export const CHANGELOG = [
     date: '2026-10-22', version: '0.13.2',
     title: 'Maps and pictures',
     items: [
+      'Photo mode: press L to stop time, hide the HUD and fly the camera freely around you. Esc opens the controls (time of day, weather, field of view, exposure, hide your character, freeze the rain) and Enter saves the picture.',
       'World map: press M on a planet to see the land around you from above, with its seas, rivers and mountains, every city, the sites you have found (and rumoured ones), other cultivators, and which way you face. Three zooms; the star map is one tab over.',
     ],
   },

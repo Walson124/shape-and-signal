@@ -614,6 +614,20 @@ a.menu-item { text-decoration: none; }
 #chat-input { width: 100%; box-sizing: border-box; padding: 10px 14px; font: 14px var(--mono, monospace); color: #e8fbff; background: rgba(4, 12, 20, 0.86); border: 1px solid rgba(184, 245, 255, 0.55); border-radius: 2px; outline: none; box-shadow: 0 0 18px rgba(62, 242, 255, 0.18); }
 .text-set { width: 200px; padding: 6px 10px; font: 13px var(--mono, monospace); color: #e8fbff; background: rgba(4, 12, 20, 0.7); border: 1px solid rgba(184, 245, 255, 0.4); border-radius: 2px; }
 
+/* photo mode */
+#photo-hint { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; padding: 8px 14px; font: 12px var(--mono, monospace); letter-spacing: 0.04em; color: rgba(234, 246, 255, 0.85); background: rgba(2, 8, 14, 0.55); border: 1px solid rgba(62, 242, 255, 0.25); border-radius: 2px; white-space: nowrap; }
+#photo-hint.hidden, #photo-panel.hidden { display: none; }
+#photo-panel { position: fixed; left: 24px; bottom: 24px; z-index: 61; width: 300px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; font: 12px var(--mono, monospace); color: #eaf6ff; background: rgba(2, 8, 14, 0.82); border: 1px solid rgba(62, 242, 255, 0.4); box-shadow: 0 0 24px rgba(62, 242, 255, 0.12); }
+#photo-panel .ph-title { font-weight: 700; letter-spacing: 0.14em; color: #3ef2ff; }
+#photo-panel label { display: grid; grid-template-columns: 1fr; gap: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; color: rgba(234, 246, 255, 0.75); position: relative; }
+#photo-panel label output { position: absolute; right: 0; top: 0; color: #eaf6ff; }
+#photo-panel input[type=range], #photo-panel select { width: 100%; }
+#photo-panel select { background: rgba(4, 12, 20, 0.9); color: #eaf6ff; border: 1px solid rgba(184, 245, 255, 0.4); padding: 4px; font: 12px var(--mono, monospace); }
+#photo-panel .ph-check { display: flex; align-items: center; gap: 8px; text-transform: none; font-size: 12px; }
+#photo-panel .ph-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.photo-flash { position: fixed; inset: 0; z-index: 70; background: #fff; pointer-events: none; animation: photo-flash 0.45s ease-out forwards; }
+@keyframes photo-flash { from { opacity: 0.7; } to { opacity: 0; } }
+
 /* world map */
 .wm-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .wm-head h3 { margin: 0; letter-spacing: 0.08em; text-transform: uppercase; }

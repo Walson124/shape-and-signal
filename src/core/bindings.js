@@ -36,6 +36,7 @@ export const ACTIONS = [
   { id: 'panelGuide', label: 'Guide', group: 'Interface', def: 'KeyH' },
   { id: 'panelMap', label: 'Map (world map on a planet, star map in space)', group: 'Interface', def: 'KeyM' },
   { id: 'panelTraining', label: 'Training controls (in simulation)', group: 'Interface', def: 'F2' },
+  { id: 'photo', label: 'Photo mode', group: 'Interface', def: 'KeyL' },
   { id: 'mute', label: 'Mute sound', group: 'Interface', def: 'KeyN' },
 ];
 
