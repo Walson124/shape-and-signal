@@ -21,6 +21,7 @@ export function makeAtmosphere(body) {
     uHR: { value: height * 0.24 },
     uHM: { value: height * 0.06 },
     uSunI: { value: 70 },
+    uOver: { value: 0 }, // overcast: storm cloud greys and darkens the sky from below
   };
   const mat = withLogDepth(new THREE.ShaderMaterial({
     uniforms,
@@ -49,6 +50,7 @@ export function makeAtmosphere(body) {
       uniform float uHR;
       uniform float uHM;
       uniform float uSunI;
+      uniform float uOver;
       varying vec3 vView;
       vec2 raySphere(vec3 o, vec3 d, float r) {
         float b = dot(o, d);
@@ -105,6 +107,8 @@ export function makeAtmosphere(body) {
         vec3 col = uSunI * mix(1.0, 0.3, camAlt) * (sumR * uBetaR * pR + sumM * uBetaM * pM);
         vec3 trans = exp(-(uBetaR * odR + uBetaM * 1.1 * odM));
         float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        float over = uOver * (1.0 - camAlt);
+        col = mix(col, vec3(lum) * vec3(0.9, 0.94, 1.0), over * 0.85) * (1.0 - 0.62 * over);
         // a bright sky hides the stars behind it
         float inside = step(length(ro), uAR);
         float sky = (tp.x < tp.y && tp.x > 0.0) ? 0.0 : 1.0;

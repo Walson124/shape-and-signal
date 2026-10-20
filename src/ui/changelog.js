@@ -8,7 +8,7 @@ export const CHANGELOG = [
       'Everyone on a world shares the same sky.',
       'Rain soaks the ground and the city: streets and stone turn dark and glossy, and dry out slowly after.',
       'Thunderstorms throw lightning nearby, the thunder arriving a moment later, and the charged air raises qi density by 15%.',
-      'Cloud dims the sun; rain, snow and dust close in the distance. Rain hisses and storms howl.',
+      'Cloud dims the sun and storms darken the whole sky; rain, snow and dust close in the distance. Rain hisses and storms howl.',
       'The HUD shows the weather where you stand.',
     ],
   },

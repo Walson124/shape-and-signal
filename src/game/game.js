@@ -4595,8 +4595,9 @@ export class Game {
         const cu = f.clouds.uniforms;
         if (cu.baseCover === undefined) { cu.baseCover = cu.uCover.value; cu.baseColor = cu.uColor.value.clone(); }
         cu.uCover.value = cu.baseCover - 0.4 * wx.cover;
-        cu.uColor.value.copy(cu.baseColor).multiplyScalar(1 - 0.5 * wx.cover * wx.cover);
+        cu.uColor.value.copy(cu.baseColor).multiplyScalar(1 - 0.55 * wx.cover * wx.cover - 0.3 * wx.storm);
       }
+      if (f.atmo) f.atmo.uniforms.uOver.value = wx.cover * wx.cover * (wx.kind ? 1 : 0.6);
       // sunlit ground bounces warm light up onto walls and undersides
       this.hemi.groundColor.copy(GROUND_NIGHT).lerp(GROUND_DAY, sky.day);
       this.scene.environmentIntensity = 0.5 + 0.45 * sky.day;
@@ -4607,6 +4608,7 @@ export class Game {
       this.hemi.intensity = 0.1;
       this.ambient.intensity = 0.2;
       this.weatherSun = 1;
+      for (const pl of this.system.planets) if (pl.atmo) pl.atmo.uniforms.uOver.value = 0;
       this.hemi.groundColor.copy(GROUND_NIGHT);
       this.scene.environmentIntensity = 0.5;
       this.exposureTarget = 1;
@@ -4643,7 +4645,7 @@ export class Game {
     if (onWorld && !covered && this.weather.strike(dt)) {
       const p = this.player.pos, up = tA.copy(p).normalize();
       const e = new THREE.Vector3().crossVectors(Math.abs(up.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : Y, up).normalize();
-      const a = Math.random() * Math.PI * 2, d = 160 + Math.random() * 700;
+      const a = Math.random() * Math.PI * 2, d = 140 + Math.random() * 380;
       const at = p.clone().addScaledVector(e, Math.cos(a) * d).addScaledVector(new THREE.Vector3().crossVectors(up, e), Math.sin(a) * d);
       at.setLength(f.groundBelow(at));
       this.combat.lightning(at, 0xd8e2ff, 900, up.clone());

@@ -276,7 +276,8 @@ export class Combat {
       if (i > 0 && i < n) p.add(new THREE.Vector3((Math.random() - 0.5) * 28, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 28));
       pts.push(p);
     }
-    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(4), transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false });
+    // a bolt is light: storm fog must not swallow it
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(4), transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     const g = new THREE.Group();
     g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.1), 80, 2.2, 5, false), mat));
     for (let f = 0; f < 3; f++) {
