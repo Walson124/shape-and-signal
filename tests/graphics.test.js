@@ -129,8 +129,10 @@ test('organic prop and NPC geometry retains smooth normals without extra geometr
 
 test('representative world scenes retain valid merged geometry and bounded scene budgets', () => {
   const site = { x: 0, y: 1, z: 0, height: 0, radius: 320, size: 'capital', name: 'Test', seed: 4 };
-  // Original scene mesh counts; chamfers must not introduce new draw batches.
-  const scenes = [[buildSettlement(site, 4000, { crowd: 1 }).group, 77, 110000],
+  // Original scene mesh counts; chamfers must not introduce new draw batches. The city's
+  // neon signage adds exactly four merged batches (blade signs, roof strips, billboards, posts)
+  // and some 20k triangles of simple boxes and panels.
+  const scenes = [[buildSettlement(site, 4000, { crowd: 1 }).group, 81, 130000],
     [buildDockStation('Test').group, 205, 23000],
     [buildRuinField({ ...site, radius: 200 }, { R: 4000, groundRadius: () => 4000 }).group, 6, 9000]];
   for (const [root, meshBudget, triangleBudget] of scenes) {

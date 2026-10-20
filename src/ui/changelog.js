@@ -8,6 +8,8 @@ export const CHANGELOG = [
       'Press Enter to chat with everyone on your world.',
       'Set your name, or play offline, under Settings > Gameplay > Multiplayer.',
       'Sun shafts: beams of sunlight break through trees, between towers and around anything standing against the sun, strongest at dawn and dusk (a Graphics setting, medium quality and up).',
+      'Neon cities: towers wear glowing glyph signs, shopfronts light up at street level, holographic billboards stand on the rooftops and light strips trace the rooflines.',
+      'Inside a city at night your eyes stay used to its lights, so the sky stays dark and the neon stands out.',
       'Soft shadows pool under you, other players, beasts and landing ships, so they stand on the ground instead of floating over it.',
     ],
   },

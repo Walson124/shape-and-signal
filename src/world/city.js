@@ -3,6 +3,7 @@ import { bevelBox } from './geometry.js';
 import { TerraStreets } from './terra-streets.js';
 import { TerraBlock, inTerraBlock } from './terra-block.js';
 import { TerraArchitecture, planTerraBuilding, terraCityProfile } from './terra-architecture.js';
+import { buildSignage } from './neon-signs.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng.js';
 import { signTexture } from './textures.js';
@@ -189,7 +190,7 @@ export function buildSettlement(site, R, opts = {}) {
       if (hasConcourse && inTerraBlock(x, z, w + 3, dd + 3)) continue;
       const plan = opts.terra ? planTerraBuilding(site, { x, z, w, d: dd, h, enter }) : null;
       if (plan) { architecturePlans.push(plan); h = plan.h; }
-      footprints.push({ x, z, w, d: dd });
+      footprints.push({ x, z, w, d: dd, h });
       if (enter) shells.push({ x, z, w, d: dd, h, dist: d, plan });
       else if (!opts.terra) {
         place(towerParts, facadeBox(w, h, dd), x, h / 2, z);
@@ -523,6 +524,8 @@ export function buildSettlement(site, R, opts = {}) {
     const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(neonColors[k]).multiplyScalar(2.4) });
     group.add(new THREE.Mesh(mergeGeometries(parts.map((g) => { const c = g.clone(); c.deleteAttribute('uv'); c.deleteAttribute('normal'); return c.index ? c.toNonIndexed() : c; })), m));
   }
+  // neon: blade signs, roofline strips and rooftop billboards
+  if (!outpost || footprints.length > 6) for (const m of buildSignage(footprints, Math.floor((site.x + 2) * 1e6), drop, { density: opts.terra ? 0.85 : 1 })) group.add(m);
 
   if (guardSpots.length) {
     const gm = new THREE.InstancedMesh(npcGeometry(), new THREE.MeshStandardMaterial({ color: 0x1c2a3a, roughness: 0.4, metalness: 0.6, emissive: 0x0a3a4a, emissiveIntensity: 0.6 }), guardSpots.length);

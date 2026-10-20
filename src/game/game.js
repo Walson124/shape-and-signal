@@ -2609,8 +2609,11 @@ export class Game {
     }
     if (!best || bd > best.glow.distance + 600) {
       L.intensity = 0;
+      this.nearCity = 0;
       return;
     }
+    // how deep into a city you are (1 inside, fading out over 600 m): its lights keep your eyes from adapting to the dark
+    this.nearCity = THREE.MathUtils.clamp(1 - (bd - (best.radius || 300)) / 600, 0, 1);
     L.position.copy(best.group.position).addScaledVector(tA.copy(best.group.position).normalize(), 120);
     L.intensity = best.glow.intensity;
     L.distance = best.glow.distance;
@@ -4571,7 +4574,7 @@ export class Game {
       this.hemi.groundColor.copy(GROUND_NIGHT).lerp(GROUND_DAY, sky.day);
       this.scene.environmentIntensity = 0.5 + 0.45 * sky.day;
       // the eye adapts to the dark: nights open up a little instead of going black
-      this.exposureTarget = 1 + 0.75 * night * night;
+      this.exposureTarget = 1 + 0.75 * night * night * (1 - 0.65 * (this.nearCity || 0));
     } else {
       fog.density = 0;
       this.hemi.intensity = 0.1;
