@@ -102,6 +102,53 @@ const FinalShader = {
     }`,
 };
 
+// Sun shafts: each pixel marches toward the sun on screen gathering the bright light
+// along the way, so anything standing against a bright sky (trees, towers, a beast's
+// silhouette) cuts dark gaps into beams of light. Runs in linear HDR before bloom.
+const ShaftsShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    sun: { value: new THREE.Vector2(0.5, 0.5) },
+    strength: { value: 0 },
+    tint: { value: new THREE.Color(1, 0.9, 0.75) },
+    aspect: { value: 1 },
+    resolution: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform vec2 sun;
+    uniform float strength;
+    uniform vec3 tint;
+    uniform float aspect;
+    uniform vec2 resolution;
+    varying vec2 vUv;
+    float hash(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+    void main() {
+      vec4 base = texture2D(tDiffuse, vUv);
+      if (strength < 0.002) { gl_FragColor = base; return; }
+      const int N = 40;
+      vec2 delta = (vUv - sun) * (0.92 / float(N));
+      // start each pixel's march a random fraction in, so the steps blur instead of banding
+      vec2 uv = vUv - delta * hash(vUv * resolution);
+      float decay = 1.0;
+      vec3 acc = vec3(0.0);
+      for (int i = 0; i < N; i++) {
+        uv -= delta;
+        vec3 s = texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb;
+        float l = dot(s, vec3(0.2126, 0.7152, 0.0722));
+        acc += s * smoothstep(1.6, 5.0, l) * decay;
+        decay *= 0.965;
+      }
+      acc /= float(N);
+      vec2 d = (vUv - sun) * vec2(aspect, 1.0);
+      float fall = exp(-dot(d, d) * 1.6);
+      gl_FragColor = vec4(base.rgb + min(acc, vec3(4.0)) * tint * strength * fall, base.a);
+    }`,
+};
+
 // Replaces NaN/Inf texels before bloom so one bad pixel can't spread into a black box.
 const SanitizeShader = {
   uniforms: { tDiffuse: { value: null } },
@@ -127,7 +174,7 @@ export class PostFX {
     this.vmScene = vmScene;
     this.vmCamera = vmCamera;
     this.overlays = [];
-    this.fx = { speed: 0, damage: 0, tintAmt: 0, flash: 0, glitch: 0, water: 0, waterCol: new THREE.Color(0.05, 0.3, 0.42), tint: new THREE.Color(0.35, 0.15, 0.85) };
+    this.fx = { shafts: 0, sunX: 0, sunY: 0, sunTint: new THREE.Color(1, 0.9, 0.75), speed: 0, damage: 0, tintAmt: 0, flash: 0, glitch: 0, water: 0, waterCol: new THREE.Color(0.05, 0.3, 0.42), tint: new THREE.Color(0.35, 0.15, 0.85) };
     this.composer = null;
   }
 
@@ -155,6 +202,8 @@ export class PostFX {
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.vmPass);
     this.composer.addPass(new ShaderPass(SanitizeShader));
+    this.shafts = new ShaderPass(ShaftsShader);
+    this.composer.addPass(this.shafts);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.final);
@@ -162,6 +211,8 @@ export class PostFX {
     this.height = height;
     this.pixelRatio = pixelRatio;
     this.final.uniforms.resolution.value.set(width * pixelRatio, height * pixelRatio);
+    this.shafts.uniforms.resolution.value.set(width * pixelRatio, height * pixelRatio);
+    this.shafts.uniforms.aspect.value = width / Math.max(1, height);
   }
 
   setSize(width, height, pixelRatio) {
@@ -173,6 +224,8 @@ export class PostFX {
     this.width = width;
     this.height = height;
     this.final.uniforms.resolution.value.set(width * pixelRatio, height * pixelRatio);
+    this.shafts.uniforms.resolution.value.set(width * pixelRatio, height * pixelRatio);
+    this.shafts.uniforms.aspect.value = width / Math.max(1, height);
   }
 
   set vmEnabled(v) {
@@ -187,6 +240,12 @@ export class PostFX {
     u.grain.value = settings.get('grain') ? 0.012 : 0;
     u.vignette.value = settings.get('vignette') ? 0.45 : 0.08;
     this.bloom.enabled = settings.get('bloom') !== false;
+    const sh = this.shafts.uniforms;
+    const shafts = settings.get('sunShafts') !== false && settings.preset.flare ? fx.shafts : 0;
+    sh.strength.value = shafts;
+    this.shafts.enabled = shafts > 0.002;
+    sh.sun.value.set(fx.sunX * 0.5 + 0.5, fx.sunY * 0.5 + 0.5);
+    sh.tint.value.copy(fx.sunTint);
     u.speed.value = settings.get('speedBlur') ? fx.speed : 0;
     u.damage.value = fx.damage;
     u.tint.value.copy(fx.tint);

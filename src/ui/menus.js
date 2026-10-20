@@ -393,6 +393,7 @@ export class Menus {
       if (this.game.qualityChangePending) html += '<p class="panel-note" style="margin-top:12px">Some changes apply fully the next time you enter a star system.</p>';
     } else if (t === 'visuals') {
       html = row('Field of view', 'Vertical degrees.', range('fov', 60, 110, 1, 1, 'n'))
+        + row('Sun shafts', 'Beams of sunlight through trees, towers and cloud edges (medium quality and up).', tog('sunShafts'))
         + row('Bloom', 'Glow around bright lights.', tog('bloom'))
         + row('Speed blur', 'Radial blur when boosting.', tog('speedBlur'))
         + row('Chromatic aberration', 'Lens fringing at the screen edges.', tog('aberration'))

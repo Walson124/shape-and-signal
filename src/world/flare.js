@@ -39,6 +39,7 @@ export class LensFlare {
   update(camera, starPos, starRadius, colliders, dt) {
     tmp.copy(starPos).applyMatrix4(camera.matrixWorldInverse);
     let target = 0;
+    this.shaftTarget = 0;
     let sx = 0, sy = 0;
     if (tmp.z < 0) {
       tmp2.copy(starPos).project(camera);
@@ -62,10 +63,15 @@ export class LensFlare {
           if (t > 0 && t < len) { target = 0; break; }
         }
       }
+      this.shaftTarget = target;
       const dist = starPos.distanceTo(camera.getWorldPosition(new THREE.Vector3()));
       target *= Math.min(1, Math.max(0.35, (starRadius * 9) / dist));
     }
     this.vis += (target - this.vis) * (1 - Math.exp(-dt * 10));
+    // where the sun is on screen and how clear the view of it is, for the sun shafts pass
+    this.shaftVis = (this.shaftVis || 0) + (this.shaftTarget - (this.shaftVis || 0)) * (1 - Math.exp(-dt * 10));
+    this.sx = sx;
+    this.sy = sy;
     const aspect = camera.aspect;
     for (const m of this.elements) {
       const { t, size, opacity } = m.userData;

@@ -29,6 +29,7 @@ import { WorldEater } from './worldeater.js';
 import { propWind } from '../world/props.js';
 import { Grass } from '../world/grass.js';
 import { Net } from '../net/net.js';
+import { ContactShadows } from '../world/contact-shadows.js';
 import { texPool } from '../world/texpool.js';
 import { LensFlare } from '../world/flare.js';
 import { SpaceDust } from '../world/dust.js';
@@ -54,6 +55,7 @@ import { Menus } from '../ui/menus.js';
 const tA = new THREE.Vector3();
 const WHITE = new THREE.Color(1, 1, 1), MOONLIGHT = new THREE.Color(0.55, 0.68, 1.0), NIGHT_FOG = new THREE.Color(0.05, 0.08, 0.16);
 const GROUND_NIGHT = new THREE.Color(0x3a3020), GROUND_DAY = new THREE.Color(0x8a7a62);
+const SUNSET = new THREE.Color(1.0, 0.62, 0.32);
 const tB = new THREE.Vector3();
 const tQ = new THREE.Quaternion();
 const tM = new THREE.Matrix4();
@@ -96,6 +98,7 @@ export class Game {
     // between the star system and a planet's rotating surface.
     this.localRoot = new THREE.Group();
     this.grass = new Grass(this.localRoot);
+    this.contactShadows = new ContactShadows(this.localRoot);
     this.localRoot.name = 'local';
     this.scene.add(this.localRoot);
     this.localRoot.add(this.camera);
@@ -772,6 +775,10 @@ export class Game {
       }
     }
     this.net?.update(dt);
+    if (this.system) {
+      this.updateShafts();
+      if (this.mode === 'playing' || this.mode === 'dead' || this.mode === 'cutscene') this.updateContactShadows();
+    }
     this.sound.setListener(this.mode === 'virtual' ? this.vu.camera : this.camera);
     this.post.render(this.time);
     this.input.endFrame();
@@ -4583,6 +4590,53 @@ export class Game {
   locationLabel() {
     const f = this.frame;
     return f ? `${f.body.name} · ${this.star.name}` : `${this.star.name} system`;
+  }
+
+  // Soft shadows under you, other players, beasts and ships near the ground.
+  updateContactShadows() {
+    const f = this.frame, p = this.player, rt = this.rt;
+    const list = [];
+    if (f && f.terrain && this.localRoot.parent === f.spin) {
+      const cam = this.camera.position;
+      if (rt.inShip && this.shipObj) {
+        const sh = this.shipObj, g = f.groundBelow(sh.pos);
+        list.push({ key: 'ship', pos: sh.pos, size: sh.radius * 1.5, lift: sh.pos.length() - g - sh.gearHeight, ground: g, strength: 0.5 });
+      } else if (p.mode !== 'space' && this.mode !== 'dead') {
+        const g = this.env.floorR ?? f.groundBelow(p.pos);
+        list.push({ key: 'me', pos: p.pos, size: 1.5, lift: p.pos.length() - EYE - g, ground: g, strength: 0.6 });
+      }
+      if (this.net) {
+        for (const o of this.net.peers.values()) {
+          if (!o.at) continue;
+          const g = f.groundBelow(o.at);
+          if (o.shipTier >= 0) list.push({ key: `pl:${o.id}`, pos: o.at, size: 16 * (1 + o.shipTier * 0.18), lift: o.at.length() - g - 4, ground: g, strength: 0.5 });
+          else list.push({ key: `pl:${o.id}`, pos: o.at, size: 1.5, lift: o.at.length() - EYE - g, ground: g, strength: 0.6 });
+        }
+      }
+      for (const b of this.beasts.beasts) {
+        if (b.planetary || b.def.colossal || b.def.aquatic || b.boss || !b.pos) continue;
+        if (b.pos.distanceToSquared(cam) > 160 * 160) continue;
+        const g = f.groundBelow(b.pos);
+        list.push({ key: `b:${b.uid}`, pos: b.pos, size: b.radius * 1.7, lift: b.pos.length() - g - b.radius * (b.def.footing ?? 0.75), ground: g, strength: 0.6 });
+      }
+      list.sort((a, b) => a.pos.distanceToSquared(cam) - b.pos.distanceToSquared(cam));
+    }
+    this.contactShadows.update(f, this.camera.position, list);
+  }
+
+  // Sun shafts: strongest in air, where light scatters, and at dawn and dusk; a faint
+  // glare in space. Follows the flare's view of the sun (on screen, not behind a planet).
+  updateShafts() {
+    const fx = this.post.fx, fl = this.flare;
+    const f = this.frame;
+    const sky = f && f.body.atmo ? f.skyState(this.system.root.position) : null;
+    const under = fx.water > 0;
+    const air = sky ? 0.6 + 0.5 * (1 - sky.day) : 0.12;
+    fx.shafts = under ? 0 : (fl.shaftVis || 0) * air * 1.8;
+    fx.sunX = fl.sx || 0;
+    fx.sunY = fl.sy || 0;
+    fx.sunTint.copy(this.system.sunColor || WHITE).lerp(WHITE, 0.35);
+    if (sky) fx.sunTint.lerp(SUNSET, (1 - sky.day) * 0.6);
   }
 
   updatePresentation(dt, camFwd, density, medRate) {

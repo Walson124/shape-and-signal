@@ -50,6 +50,7 @@ const DEFAULTS = {
   grain: true,
   aberration: true,
   bloom: true,
+  sunShafts: true,
   vignette: true,
   showFps: false,
   // gameplay

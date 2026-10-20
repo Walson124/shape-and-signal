@@ -7,6 +7,8 @@ export const CHANGELOG = [
       'Multiplayer: cultivators in the same star system and on the same world now see each other, on foot or in their ships, with their name and realm overhead.',
       'Press Enter to chat with everyone on your world.',
       'Set your name, or play offline, under Settings > Gameplay > Multiplayer.',
+      'Sun shafts: beams of sunlight break through trees, between towers and around anything standing against the sun, strongest at dawn and dusk (a Graphics setting, medium quality and up).',
+      'Soft shadows pool under you, other players, beasts and landing ships, so they stand on the ground instead of floating over it.',
     ],
   },
   {
