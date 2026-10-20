@@ -1,6 +1,18 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-21', version: '0.13.1',
+    title: 'Weather',
+    items: [
+      'Worlds with air now have weather that changes every few minutes: clear skies, cloud, rain and thunderstorms on green worlds, acid rain on toxic ones, snow and blizzards on ice, dust storms on deserts, ash on lava worlds.',
+      'Everyone on a world shares the same sky.',
+      'Rain soaks the ground and the city: streets and stone turn dark and glossy, and dry out slowly after.',
+      'Thunderstorms throw lightning nearby, the thunder arriving a moment later, and the charged air raises qi density by 15%.',
+      'Cloud dims the sun; rain, snow and dust close in the distance. Rain hisses and storms howl.',
+      'The HUD shows the weather where you stand.',
+    ],
+  },
+  {
     date: '2026-10-20', version: '0.13.0',
     title: 'You are not alone',
     items: [

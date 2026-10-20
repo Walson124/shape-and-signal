@@ -303,6 +303,32 @@ export class AudioEngine {
     src.connect(this.windFilter).connect(this.windGain).connect(this.sfxBus);
     src.start();
 
+    // weather: a hiss of rain, and a low howl of wind for storms
+    const rain = ctx.createBufferSource();
+    rain.buffer = this.noiseBuf;
+    rain.loop = true;
+    rain.playbackRate.value = 0.93;
+    this.rainFilter = ctx.createBiquadFilter();
+    this.rainFilter.type = 'bandpass';
+    this.rainFilter.frequency.value = 2600;
+    this.rainFilter.Q.value = 0.45;
+    this.rainGain = ctx.createGain();
+    this.rainGain.gain.value = 0;
+    rain.connect(this.rainFilter).connect(this.rainGain).connect(this.sfxBus);
+    rain.start();
+    const gust = ctx.createBufferSource();
+    gust.buffer = this.noiseBuf;
+    gust.loop = true;
+    gust.playbackRate.value = 0.71;
+    this.gustFilter = ctx.createBiquadFilter();
+    this.gustFilter.type = 'bandpass';
+    this.gustFilter.frequency.value = 380;
+    this.gustFilter.Q.value = 2.2;
+    this.gustGain = ctx.createGain();
+    this.gustGain.gain.value = 0;
+    gust.connect(this.gustFilter).connect(this.gustGain).connect(this.sfxBus);
+    gust.start();
+
     const o = ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.value = 48;
@@ -332,6 +358,24 @@ export class AudioEngine {
     this.engineFilter.frequency.setTargetAtTime(150 + boost * 600 + speed * 0.5, t, 0.15);
     this.engineOsc[0].frequency.setTargetAtTime(44 + speed * 0.05, t, 0.2);
     this.engineOsc[1].frequency.setTargetAtTime(44.6 + speed * 0.05, t, 0.2);
+  }
+
+  // rain: 0..1 how hard it falls; gust: 0..1 how hard the wind blows; muffled under cover
+  setWeather(rain, gust, time = 0) {
+    if (!this.ctx || !this.rainGain) return;
+    const t = this.ctx.currentTime;
+    this.rainGain.gain.setTargetAtTime(rain * 0.16, t, 0.6);
+    this.gustGain.gain.setTargetAtTime(gust * (0.12 + 0.08 * Math.sin(time * 0.6)), t, 0.4);
+    this.gustFilter.frequency.setTargetAtTime(300 + gust * 260 * (1 + 0.4 * Math.sin(time * 0.9)), t, 0.4);
+  }
+
+  thunder(dist) {
+    if (!this.ctx) return;
+    const delay = Math.min(4, dist / 340);
+    const near = Math.max(0.15, 1 - dist / 1600);
+    if (dist < 500) this.noise({ dur: 0.35, vol: 0.5 * near, freq: 2500, type: 'highpass', delay });
+    this.noise({ dur: 3.2, vol: 0.6 * near, freq: 240, slide: -160, delay: delay + 0.05, attack: 0.05 });
+    this.noise({ dur: 2.2, vol: 0.3 * near, freq: 90, type: 'lowpass', delay: delay + 0.4, attack: 0.2 });
   }
 
   // -------------------------------------------------------------- music --

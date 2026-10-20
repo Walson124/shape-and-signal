@@ -30,6 +30,7 @@ import { propWind } from '../world/props.js';
 import { Grass } from '../world/grass.js';
 import { Net } from '../net/net.js';
 import { ContactShadows } from '../world/contact-shadows.js';
+import { Weather, wetUpView, forceWeather } from '../world/weather.js';
 import { texPool } from '../world/texpool.js';
 import { LensFlare } from '../world/flare.js';
 import { SpaceDust } from '../world/dust.js';
@@ -56,6 +57,7 @@ const tA = new THREE.Vector3();
 const WHITE = new THREE.Color(1, 1, 1), MOONLIGHT = new THREE.Color(0.55, 0.68, 1.0), NIGHT_FOG = new THREE.Color(0.05, 0.08, 0.16);
 const GROUND_NIGHT = new THREE.Color(0x3a3020), GROUND_DAY = new THREE.Color(0x8a7a62);
 const SUNSET = new THREE.Color(1.0, 0.62, 0.32);
+const DUST_FOG = new THREE.Color(0.62, 0.42, 0.24), SNOW_FOG = new THREE.Color(0.78, 0.84, 0.92);
 const tB = new THREE.Vector3();
 const tQ = new THREE.Quaternion();
 const tM = new THREE.Matrix4();
@@ -99,6 +101,8 @@ export class Game {
     this.localRoot = new THREE.Group();
     this.grass = new Grass(this.localRoot);
     this.contactShadows = new ContactShadows(this.localRoot);
+    this.weather = new Weather(this.localRoot);
+    this.forceWeather = forceWeather; // for testing: game.forceWeather({ kind: 'rain', precip: 1, cover: 1, storm: 1 })
     this.localRoot.name = 'local';
     this.scene.add(this.localRoot);
     this.localRoot.add(this.camera);
@@ -776,6 +780,7 @@ export class Game {
     }
     this.net?.update(dt);
     if (this.system) {
+      this.updateWeather(dt);
       this.updateShafts();
       if (this.mode === 'playing' || this.mode === 'dead' || this.mode === 'cutscene') this.updateContactShadows();
     }
@@ -1237,6 +1242,8 @@ export class Game {
     let d;
     if (this.frame && this.frame.body.landable && this.env.alt !== null && this.env.alt < 3000) d = 1.2;
     else d = this.system.densityAt(this.playerWorld());
+    // thunderstorms charge the air with qi
+    if (this.frame && this.weather && this.weather.state.storm > 0) d *= 1 + 0.15 * this.weather.state.storm;
     const details = this.frame && this.frame.details;
     if (details) {
       for (const poi of details.pois) {
@@ -4071,7 +4078,7 @@ export class Game {
       k = Math.max(0, Math.min(1, (depth - 1.5) / 6));
     }
     if (this.sunBase === undefined) this.sunBase = this.system.light.intensity;
-    this.system.light.intensity = this.sunBase * (1 - 0.88 * k);
+    this.system.light.intensity = this.sunBase * (1 - 0.88 * k) * (this.weatherSun ?? 1);
     if (k > 0) {
       this.hemi.intensity *= 1 - 0.8 * k;
       this.ambient.intensity *= 1 - 0.6 * k;
@@ -4570,6 +4577,26 @@ export class Game {
       this.hemi.intensity = 0.12 + 1.4 * sky.day + 0.6 * night;
       this.hemi.color.copy(sky.color).lerp(WHITE, 0.3).lerp(MOONLIGHT, night);
       this.ambient.intensity = 0.16 + 0.3 * sky.day + 0.2 * night;
+      // weather: thick cloud dims the sun and greys the light; rain, snow and dust thicken the air
+      const wx = this.weather.state;
+      this.weatherSun = 1 - 0.7 * wx.cover * wx.cover;
+      this.hemi.intensity *= 1 - 0.25 * wx.cover * wx.cover;
+      if (wx.kind === 'dust') {
+        fog.density += 0.011 * wx.precip;
+        fog.color.lerp(DUST_FOG.clone().multiplyScalar(0.25 + 0.75 * sky.day), Math.min(1, wx.precip * 1.2));
+      } else if (wx.kind === 'snow') {
+        fog.density += (0.005 + 0.02 * wx.blizzard) * wx.precip;
+        fog.color.lerp(SNOW_FOG.clone().multiplyScalar(0.12 + 0.75 * sky.day), wx.precip * 0.7);
+      } else if (wx.kind) {
+        fog.density += 0.0035 * wx.precip;
+        fog.color.multiplyScalar(1 - 0.35 * wx.cover);
+      }
+      if (f.clouds) {
+        const cu = f.clouds.uniforms;
+        if (cu.baseCover === undefined) { cu.baseCover = cu.uCover.value; cu.baseColor = cu.uColor.value.clone(); }
+        cu.uCover.value = cu.baseCover - 0.4 * wx.cover;
+        cu.uColor.value.copy(cu.baseColor).multiplyScalar(1 - 0.5 * wx.cover * wx.cover);
+      }
       // sunlit ground bounces warm light up onto walls and undersides
       this.hemi.groundColor.copy(GROUND_NIGHT).lerp(GROUND_DAY, sky.day);
       this.scene.environmentIntensity = 0.5 + 0.45 * sky.day;
@@ -4579,6 +4606,7 @@ export class Game {
       fog.density = 0;
       this.hemi.intensity = 0.1;
       this.ambient.intensity = 0.2;
+      this.weatherSun = 1;
       this.hemi.groundColor.copy(GROUND_NIGHT);
       this.scene.environmentIntensity = 0.5;
       this.exposureTarget = 1;
@@ -4593,6 +4621,35 @@ export class Game {
   locationLabel() {
     const f = this.frame;
     return f ? `${f.body.name} · ${this.star.name}` : `${this.star.name} system`;
+  }
+
+  // Weather where you are: the falling particles, wet surfaces, lightning and the sound of it.
+  updateWeather(dt) {
+    const f = this.frame, rt = this.rt;
+    const onWorld = !!(f && f.terrain && this.localRoot.parent === f.spin && (this.mode === 'playing' || this.mode === 'dead' || this.mode === 'cutscene'));
+    const covered = !!this.inVenue || this.underground || this.post.fx.water > 0;
+    const prev = this.weather.state.label;
+    const w = this.weather.update(dt, this.time, onWorld ? f : null, this.camera.position, { hidden: covered, fog: this.scene.fog.color });
+    // which way is up, in view space, for the wet-surface shading
+    wetUpView.value.copy(this.camera.position).normalize().transformDirection(this.localRoot.matrixWorld).transformDirection(this.camera.matrixWorldInverse);
+    const rain = onWorld && !covered && (w.kind === 'rain' || w.kind === 'acid') ? w.precip : 0;
+    const gust = onWorld && !covered ? Math.max(w.blizzard, w.kind === 'dust' ? w.precip : 0, w.storm * 0.6) : 0;
+    this.sound.setWeather?.(rain * (rt.inShip ? 0.5 : 1), gust, this.time);
+    if (onWorld && w.label !== prev && prev && this.mode === 'playing') {
+      const say = { THUNDERSTORM: 'A thunderstorm rolls in. The charged air thickens the qi.', 'HEAVY RAIN': 'The rain comes down hard.', RAIN: 'It starts to rain.', 'ACID RAIN': 'Acid rain. Your body can take it; your clothes might not.', SNOW: 'Snow begins to fall.', BLIZZARD: 'A blizzard. You can barely see your hand.', 'DUST STORM': 'A dust storm sweeps in.', ASHFALL: 'Ash starts falling from the sky.', CLEAR: 'The sky clears.' }[w.label];
+      if (say) this.hud.notify(say, 'violet');
+    }
+    // thunderstorms: a bolt somewhere nearby, the sky flashes, thunder follows at the speed of sound
+    if (onWorld && !covered && this.weather.strike(dt)) {
+      const p = this.player.pos, up = tA.copy(p).normalize();
+      const e = new THREE.Vector3().crossVectors(Math.abs(up.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : Y, up).normalize();
+      const a = Math.random() * Math.PI * 2, d = 160 + Math.random() * 700;
+      const at = p.clone().addScaledVector(e, Math.cos(a) * d).addScaledVector(new THREE.Vector3().crossVectors(up, e), Math.sin(a) * d);
+      at.setLength(f.groundBelow(at));
+      this.combat.lightning(at, 0xd8e2ff, 900, up.clone());
+      this.post.fx.flash = Math.min(0.5, this.post.fx.flash + 0.28 * (1 - d / 1200));
+      this.sound.thunder?.(d);
+    }
   }
 
   // Soft shadows under you, other players, beasts and ships near the ground.
@@ -4635,7 +4692,7 @@ export class Game {
     const sky = f && f.body.atmo ? f.skyState(this.system.root.position) : null;
     const under = fx.water > 0;
     const air = sky ? 0.6 + 0.5 * (1 - sky.day) : 0.12;
-    fx.shafts = under ? 0 : (fl.shaftVis || 0) * air * 1.8;
+    fx.shafts = under ? 0 : (fl.shaftVis || 0) * air * 1.8 * (1 - 0.9 * this.weather.state.cover * this.weather.state.cover);
     fx.sunX = fl.sx || 0;
     fx.sunY = fl.sy || 0;
     fx.sunTint.copy(this.system.sunColor || WHITE).lerp(WHITE, 0.35);
@@ -4701,7 +4758,7 @@ export class Game {
     }
     const nav = rt.nav && rt.nav.kind !== 'star' ? rt.nav : null;
     this.hud.update(dt, {
-      state: s, stats: this.stats, rt, loc, density, medRate, bt: this.breakthroughStatus(), path: activePath(s),
+      state: s, stats: this.stats, rt, loc, density, medRate, weather: this.frame && this.frame.body.atmo && this.frame.body.landable ? this.weather.state.label : null, bt: this.breakthroughStatus(), path: activePath(s),
       canDodge: this.mode === 'playing' && p.mode === 'ground' && p.grounded && !rt.swimming && !rt.inShip && !rt.inVehicle && !this.placing && !this.arts.dash,
       boss: this.beasts.liveBoss, target, locked: !!rt.lock && target === rt.lock, targetDist: target ? target.pos.distanceTo(p.pos) : 0,
       nav, navDist: nav ? Math.max(0, nav.world().distanceTo(camWorld) - nav.arrive * 0.5) : 0, cruise: rt.cruise,

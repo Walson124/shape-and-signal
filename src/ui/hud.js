@@ -34,7 +34,7 @@ export class HUD {
     for (const id of ['hud', 'target', 't-name', 't-cn', 't-realm', 't-dist', 't-hp', 'boss-bar', 'boss-name', 'boss-cn', 'boss-fill', 'boss-ghost', 'trib-bar', 'trib-fill',
       'realm-name', 'realm-cn', 'stage-name', 'xp-fill', 'xp-text', 'bt-ready', 'loc-galaxy', 'loc-system', 'loc-danger', 'density', 'coins', 'essence', 'bounty-list',
       'hp-fill', 'hp-text', 'en-fill', 'en-text', 'sp-fill', 'sp-text', 'status-row', 'sword-pips', 'skills', 'speed', 'formation', 'sword-range', 'view-mode',
-      'altitude', 'alt-row', 'ore', 'speed-unit', 'move-mode', 'hull', 'hull-row', 'star-target', 'st-name', 'st-dist', 'st-threat', 'st-range',
+      'altitude', 'alt-row', 'wx-row', 'weather', 'ore', 'speed-unit', 'move-mode', 'hull', 'hull-row', 'star-target', 'st-name', 'st-dist', 'st-threat', 'st-range',
       'reticle', 'hitmark', 'lock', 'ctrl-mark', 'markers', 'dmg-layer', 'feed', 'alert', 'prompt', 'prompt-text', 'prompt-prog', 'nav-info', 'meditate', 'med-rate',
       'fps', 'banner', 'compass', 'radar']) this.el[id] = $(id);
     this.compassCtx = this.el.compass.getContext('2d');
@@ -270,6 +270,8 @@ export class HUD {
       e['star-target'].classList.add('hidden');
     }
     e.density.textContent = `×${info.density.toFixed(1)}`;
+    e['wx-row'].classList.toggle('hidden', !info.weather);
+    if (info.weather && e.weather.textContent !== info.weather) e.weather.textContent = info.weather;
     e.coins.textContent = fmt(state.coins);
     e.essence.textContent = fmt(state.essence);
     e['med-rate'].textContent = `+${fmt(info.medRate)}/S`;

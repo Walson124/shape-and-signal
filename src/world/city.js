@@ -4,6 +4,7 @@ import { TerraStreets } from './terra-streets.js';
 import { TerraBlock, inTerraBlock } from './terra-block.js';
 import { TerraArchitecture, planTerraBuilding, terraCityProfile } from './terra-architecture.js';
 import { buildSignage } from './neon-signs.js';
+import { addWetness } from './weather.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng.js';
 import { signTexture } from './textures.js';
@@ -131,6 +132,11 @@ export function buildSettlement(site, R, opts = {}) {
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x3a3f48, roughness: 0.6, metalness: 0.45 });
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x9a9890, roughness: 0.75, metalness: 0.15 });
   const streetMat = new THREE.MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.85, metalness: 0.1 });
+  // rain soaks the city: streets turn to dark mirrors, walls darken
+  addWetness(towerMat, { gloss: 0.25, darken: 0.25, key: 'tw' });
+  addWetness(wallMat, { gloss: 0.25, darken: 0.25, key: 'wl' });
+  addWetness(darkMat, { gloss: 0.2, darken: 0.2, key: 'dk' });
+  addWetness(streetMat, { gloss: 0.06, darken: 0.35, key: 'st' });
   const neonParts = { cy: [], mg: [], yl: [] };
   const towerParts = [];
   const darkParts = [];

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addWetness } from './weather.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { smoothSurface } from './geometry.js';
 import { PROP } from './terrain.js';
@@ -248,7 +249,7 @@ export function terrainMaterial(detailScale = 0.35, type = '') {
     );
   };
   mat.customProgramCacheKey = () => `terrain-relief-v5-${detailScale}-${type === 'desert' ? 'sand' : ''}`;
-  return mat;
+  return addWetness(mat, { gloss: 0.22, darken: 0.32, key: 't' });
 }
 
 // one clock for every prop material, advanced by the game each frame
@@ -282,5 +283,5 @@ vGlow = glow;
     );
   };
   mat.customProgramCacheKey = () => 'prop-glow-wind-fade-2';
-  return mat;
+  return addWetness(mat, { gloss: 0.3, darken: 0.2, key: 'p' });
 }
