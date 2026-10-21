@@ -1,6 +1,16 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-23', version: '0.14.0',
+    title: 'Step inside',
+    items: [
+      'Most city buildings can now be walked into: office blocks and apartment buildings with a lobby, a corridor and rooms off it through real doorways.',
+      'Offices hold private offices, open-plan floors of desks and monitors, meeting rooms, break rooms with kitchens and store rooms; apartment blocks hold furnished studio flats with beds, sofas, screens and kitchenettes.',
+      'Things to use inside: read office terminals (some hold rumours of sites in the wilds, or a forgotten credit chit), buy a snack from a vending machine, grab a coffee, sleep in a bed until morning, sit on a sofa to cultivate, and take the lift up to the roof.',
+      'Indoors is lit by the ceiling lights, not the sky, and the windows show the day outside.',
+    ],
+  },
+  {
     date: '2026-10-22', version: '0.13.2',
     title: 'Maps and pictures',
     items: [

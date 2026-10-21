@@ -32,6 +32,8 @@ import { Net } from '../net/net.js';
 import { ContactShadows } from '../world/contact-shadows.js';
 import { Weather, wetUpView, forceWeather } from '../world/weather.js';
 import { PhotoMode } from './photo-mode.js';
+import { terminalInbox } from './terminals.js';
+import { windowLight } from '../world/floorplan.js';
 import { texPool } from '../world/texpool.js';
 import { LensFlare } from '../world/flare.js';
 import { SpaceDust } from '../world/dust.js';
@@ -58,6 +60,7 @@ const tA = new THREE.Vector3();
 const WHITE = new THREE.Color(1, 1, 1), MOONLIGHT = new THREE.Color(0.55, 0.68, 1.0), NIGHT_FOG = new THREE.Color(0.05, 0.08, 0.16);
 const GROUND_NIGHT = new THREE.Color(0x3a3020), GROUND_DAY = new THREE.Color(0x8a7a62);
 const SUNSET = new THREE.Color(1.0, 0.62, 0.32);
+const INDOOR_CEIL = new THREE.Color(1.0, 0.96, 0.9), INDOOR_FLOOR = new THREE.Color(0.42, 0.4, 0.38);
 const DUST_FOG = new THREE.Color(0.62, 0.42, 0.24), SNOW_FOG = new THREE.Color(0.78, 0.84, 0.92);
 const tB = new THREE.Vector3();
 const tQ = new THREE.Quaternion();
@@ -2359,6 +2362,11 @@ export class Game {
     const f = this.frame;
     if (f && f.details) {
       for (const sv of f.details.services) list.push({ kind: 'service', service: sv, name: sv.name, pos: sv.pos, range: sv.range });
+      // things to use inside buildings: terminals, vending machines, beds, lifts...
+      for (const st of f.details.settlements) {
+        if (!st.fixtures || this.player.pos.distanceTo(st.group.position) > st.radius + 120) continue;
+        for (const fx of st.fixtures) list.push({ kind: 'fixture', fixture: fx, name: fx.name, pos: fx.pos, range: fx.range });
+      }
       for (const poi of f.details.pois) {
         if (poi.poi.kind === 'ruin' || poi.poi.kind === 'wreck' || poi.poi.kind === 'obelisk') list.push({ kind: 'poi', poi, name: POI_LABEL[poi.poi.kind], pos: poi.pos, range: poi.obj.range || 30 });
       }
@@ -2418,6 +2426,18 @@ export class Game {
     if (it.kind === 'tame') return `<kbd>E</kbd> TAME THE ${esc(it.name.toUpperCase())}`;
     if (it.kind === 'dismount') return null;
     if (it.kind === 'pod') return '<kbd>E</kbd> OPEN THE DELIVERY POD';
+    if (it.kind === 'fixture') {
+      const fx = it.fixture;
+      return {
+        terminal: '<kbd>E</kbd> USE THE TERMINAL',
+        vending: `<kbd>E</kbd> BUY A SNACK · ${fmt(priceFor(6, this.state.realm))} ◈`,
+        coffee: `<kbd>E</kbd> ${fx.name === 'water cooler' ? 'DRINK SOME WATER' : 'GRAB A COFFEE'}`,
+        bed: '<kbd>E</kbd> SLEEP',
+        seat: '<kbd>E</kbd> SIT AND CULTIVATE',
+        lift: '<kbd>E</kbd> TAKE THE LIFT TO THE ROOF',
+        roofLift: '<kbd>E</kbd> TAKE THE LIFT DOWN',
+      }[fx.kind] || null;
+    }
     if (it.kind === 'service' && it.service.kind === 'lore') return `<kbd>E</kbd> ACCESS THE OLD TERMINAL${this.state.lore.includes(it.service.lore) ? ' · READ' : ''}`;
     if (it.kind === 'service') return `<kbd>E</kbd> ${esc(it.name.toUpperCase())}`;
     if (it.kind === 'dock') return `<kbd>E</kbd> LAND ON ${esc(it.name.toUpperCase())}`;
@@ -2455,6 +2475,8 @@ export class Game {
       this.dismount();
     } else if (it.kind === 'pod') {
       this.openPod(it.pod);
+    } else if (it.kind === 'fixture') {
+      this.useFixture(it.fixture);
     } else if (it.kind === 'dock') {
       this.dockShip(it.station);
     } else if (it.kind === 'service' && it.service.kind === 'lore') {
@@ -2590,7 +2612,7 @@ export class Game {
     const prev = this.inVenue;
     this.inVenue = found;
     if (found && (!prev || prev.v !== found.v) && found.v.kind !== 'lobby') {
-      this.nix.once(`venue_${found.v.kind}`, `venue.${found.v.kind}`, {}, 0);
+      if (found.v.kind !== 'office' && found.v.kind !== 'residence') this.nix.once(`venue_${found.v.kind}`, `venue.${found.v.kind}`, {}, 0);
       this.hud.notify(`<b>${esc(found.v.name)}</b> <span class="cn">${found.v.cn}</span>`, 'yl');
     }
     rt.chamber = !!found && found.v.kind === 'chamber' && s.chamberUntil > s.playtime;
@@ -3777,6 +3799,98 @@ export class Game {
   }
 
   // ------------------------------------------------------------- ring --
+  // Using things inside buildings.
+  useFixture(fx) {
+    const s = this.state, rt = this.rt, st = this.stats, p = this.player;
+    const cool = (this.fixtureCool ||= new Map());
+    const ready = (t) => !cool.has(fx.id) || this.time > cool.get(fx.id) || (cool.set(fx.id, this.time + t), false);
+    if (fx.kind === 'terminal') {
+      this.readTerminal(fx);
+    } else if (fx.kind === 'vending') {
+      const price = priceFor(6, s.realm);
+      if (s.coins < price) return this.denied('Not enough coins for a snack.');
+      s.coins -= price;
+      rt.hp = Math.min(st.maxHp, rt.hp + st.maxHp * 0.3);
+      rt.energy = Math.min(st.maxEnergy, rt.energy + st.maxEnergy * 0.3);
+      this.sound.pickup();
+      this.hud.notify(`The machine thinks about it, then drops a ${['spirit-rice bar', 'can of qi cola', 'pack of beast jerky', 'jade tea'][Math.floor(Math.random() * 4)]}. <b>+30%</b> health and energy.`, 'green');
+    } else if (fx.kind === 'coffee') {
+      if (!ready(90)) return this.denied('You just had one.');
+      cool.set(fx.id, this.time + 90);
+      rt.energy = Math.min(st.maxEnergy, rt.energy + st.maxEnergy * 0.4);
+      this.sound.pickup();
+      this.hud.notify(fx.name === 'water cooler' ? 'Cold water. <b>+40%</b> energy.' : 'Strong, bitter, and exactly what you needed. <b>+40%</b> energy.', 'green');
+    } else if (fx.kind === 'bed') {
+      rt.hp = st.maxHp; rt.energy = st.maxEnergy; rt.spirit = st.maxSpirit;
+      const f = this.frame;
+      const sky = f && f.body.atmo ? f.skyState(this.system.root.position) : null;
+      let slept = false;
+      if (sky && sky.day < 0.35) {
+        // sleep until the sun is up
+        const period = Math.abs(f.body.spin?.period || 1800);
+        for (let k = 0; k < 200; k++) {
+          s.worldTime += period / 200;
+          this.system.update(0, s.worldTime, this.camera, this.playerWorld());
+          if (f.skyState(this.system.root.position).day > 0.6) break;
+        }
+        slept = true;
+      }
+      this.post.fx.flash = 0.4;
+      this.sound.reward();
+      this.hud.notify(slept ? 'You sleep through the night and wake rested. Fully healed.' : 'A short nap. Fully healed.', 'gold');
+      this.save();
+    } else if (fx.kind === 'seat') {
+      rt.medToggle = true;
+      this.hud.notify('You sit and turn your attention inward.', 'gold');
+    } else if (fx.kind === 'lift' || fx.kind === 'roofLift') {
+      const v = fx.venue;
+      const to = fx.kind === 'lift' ? v.roof : v.liftOut;
+      if (!to) return;
+      p.pos.copy(to);
+      p.vel.set(0, 0, 0);
+      p.mode = 'ground';
+      p.syncRoot();
+      this.post.fx.flash = 0.35;
+      this.sound.confirm();
+      this.hud.notify(fx.kind === 'lift' ? `The lift opens onto the roof of <b>${esc(v.name)}</b>.` : `Back down in the lobby of <b>${esc(v.name)}</b>.`, 'violet');
+    }
+  }
+
+  // An office terminal: someone's inbox, sometimes with a rumour or an unclaimed chit in it.
+  readTerminal(fx) {
+    const s = this.state, f = this.frame;
+    const read = (s.terminals ||= []);
+    let reward = null;
+    if (!read.includes(fx.id)) {
+      read.push(fx.id);
+      if (read.length > 400) read.shift();
+      const h = Math.abs(Math.sin(fx.pos.x * 0.37 + fx.pos.z * 0.71) * 1e4) % 1;
+      // a site in the wilds nobody has charted for you yet
+      const unknown = f ? (f.body.pois || []).filter((poi) => !s.discovered.includes(poi.id) && !s.rumors.includes(poi.id) && poi.kind !== 'nest') : [];
+      if (h < 0.3 && unknown.length) {
+        const here = this.player.pos.clone().normalize();
+        const best = unknown.map((poi) => ({ poi, d: new THREE.Vector3().fromArray(poi.dir).angleTo(here) * f.R })).sort((a, b) => a.d - b.d)[0];
+        s.rumors.push(best.poi.id);
+        const dir = new THREE.Vector3().fromArray(best.poi.dir);
+        const north = new THREE.Vector3(0, 1, 0).projectOnPlane(here).normalize(), east = new THREE.Vector3().crossVectors(north, here);
+        const ang = Math.atan2(dir.dot(east), dir.dot(north));
+        const compass = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'][((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
+        reward = { kind: 'rumor', label: POI_LABEL[best.poi.kind] || 'A site', dist: best.d > 1000 ? `${(best.d / 1000).toFixed(1)} km` : `${Math.round(best.d)} m`, dir: compass };
+        this.hud.notify(`A rumour: <b>${esc(reward.label)}</b>, ${reward.dist} to the ${compass}. It's on your world map (M).`, 'yl');
+      } else if (h < 0.55) {
+        reward = { kind: 'coins', amount: fmt(priceFor(25, s.realm)) };
+        s.coins += priceFor(25, s.realm);
+        this.sound.reward();
+      }
+      this.save();
+    }
+    const inbox = terminalInbox(Math.floor(Math.abs(fx.pos.x * 131 + fx.pos.z * 17)), { city: fx.venue?.name || 'the city' }, reward);
+    const body = `<div class="term"><div class="term-owner">Logged in as <b>${esc(inbox.owner)}</b> · ${esc(fx.venue?.name || '')}</div>`
+      + inbox.mails.map((m) => `<div class="term-mail${m.flag ? ' flag' : ''}"><div class="term-from">${esc(m.from)}</div><div class="term-subj">${esc(m.subject)}</div><div class="term-body">${esc(m.body)}</div></div>`).join('') + '</div>';
+    this.input.unlock();
+    this.menus.modal({ kicker: 'TERMINAL', title: 'Inbox', body, actions: [{ label: 'Log off', val: 'ok', cls: 'primary' }], wide: true }).then(() => this.resume());
+  }
+
   restInTent(e) {
     const rt = this.rt, st = this.stats;
     rt.hp = st.maxHp;
@@ -4602,6 +4716,7 @@ export class Game {
       // weather: thick cloud dims the sun and greys the light; rain, snow and dust thicken the air
       const wx = this.weather.state;
       this.weatherSun = 1 - 0.7 * wx.cover * wx.cover;
+      windowLight.setRGB(0.04 + 0.5 * sky.day, 0.06 + 0.58 * sky.day, 0.1 + 0.7 * sky.day).multiplyScalar(1 - 0.45 * wx.cover);
       this.hemi.intensity *= 1 - 0.25 * wx.cover * wx.cover;
       if (wx.kind === 'dust') {
         fog.density += 0.011 * wx.precip;
@@ -4625,6 +4740,17 @@ export class Game {
       this.scene.environmentIntensity = 0.5 + 0.45 * sky.day;
       // the eye adapts to the dark: nights open up a little instead of going black
       this.exposureTarget = 1 + 0.75 * night * night * (1 - 0.65 * (this.nearCity || 0));
+      if (this.inVenue) {
+        // indoors the light comes from the ceiling panels, not the sky and sun through the walls
+        this.hemi.color.copy(INDOOR_CEIL);
+        this.hemi.groundColor.copy(INDOOR_FLOOR);
+        this.hemi.intensity = 1.2;
+        this.ambient.intensity = 0.3;
+        this.weatherSun = 0.12;
+        this.scene.environmentIntensity = 0.35;
+        fog.density = 0;
+        this.exposureTarget = 1;
+      }
     } else {
       fog.density = 0;
       this.hemi.intensity = 0.1;
@@ -4865,7 +4991,7 @@ export class Game {
     if (f && f.details) {
       for (const st of f.details.settlements) {
         for (const v of st.venues) {
-          if (v.kind === 'lobby') continue;
+          if (v.kind === 'lobby' || v.kind === 'office' || v.kind === 'residence') continue;
           const at = v.door || v.center;
           const d = at.distanceTo(origin);
           const major = v.kind === 'hall' || v.kind === 'arena';

@@ -17,6 +17,8 @@ export const VENUES = {
   dealer: { name: 'Vehicle Dealer', cn: '车行', color: 0xff8a4a, sign: '车行 VEHICLES', desc: 'Hoverbikes, rovers and racers.' },
   arena: { name: 'Arena', cn: '竞技场', color: 0xff3c7d, sign: '竞技场 ARENA', desc: 'Fight waves of beasts for prize money.' },
   lobby: { name: 'Residential Block', cn: '住宅', color: 0x8fb8ff, sign: null, desc: '' },
+  office: { name: 'Office Block', cn: '写字楼', color: 0x8fb8ff, sign: null, desc: '' },
+  residence: { name: 'Apartment Block', cn: '公寓楼', color: 0x8fb8ff, sign: null, desc: '' },
 };
 // Order functional venues are handed out, closest to the plaza first.
 export const VENUE_ORDER = ['exchange', 'forge', 'pills', 'chamber', 'bar', 'clinic', 'home', 'food', 'dealer'];

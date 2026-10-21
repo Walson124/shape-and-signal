@@ -4,6 +4,7 @@ import { TerraStreets } from './terra-streets.js';
 import { TerraBlock, inTerraBlock } from './terra-block.js';
 import { TerraArchitecture, planTerraBuilding, terraCityProfile } from './terra-architecture.js';
 import { buildSignage } from './neon-signs.js';
+import { planFloor, buildFloor, CEIL } from './floorplan.js';
 import { addWetness } from './weather.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng.js';
@@ -119,6 +120,9 @@ export function buildSettlement(site, R, opts = {}) {
   const boxes = [];
   const services = [];
   const venues = [];
+  // things you can use inside buildings (terminals, vending machines, beds, lifts...)
+  const fixtures = [];
+  const CORR_LIFT = 2.65;
   const crowdScale = opts.crowd ?? 1;
   const drop = (x, z) => -(x * x + z * z) / (2 * Rs);
   const toLocal = (x, y, z) => up.clone().multiplyScalar(Rs + y + drop(x, z)).addScaledVector(east, x).addScaledVector(north, z);
@@ -179,7 +183,7 @@ export function buildSettlement(site, R, opts = {}) {
   const shells = [];
   const footprints = [];
   const architecturePlans = [];
-  const enterChance = outpost ? 0.55 : capital ? 0.42 : 0.38;
+  const enterChance = outpost ? 0.6 : capital ? 0.68 : 0.62;
   for (let gx = -radius; gx <= radius; gx += step) {
     for (let gz = -radius; gz <= radius; gz += step) {
       const x = gx + (r() - 0.5) * 10, z = gz + (r() - 0.5) * 10;
@@ -239,7 +243,9 @@ export function buildSettlement(site, R, opts = {}) {
   shells.sort((a, b) => a.dist - b.dist);
   const order = outpost ? ['exchange', 'food', 'home'] : VENUE_ORDER;
   shells.forEach((sh, i) => {
-    const kind = order[i] || 'lobby';
+    // past the shops, buildings are office blocks and apartments you can walk around in
+    const hk = Math.abs(Math.sin(sh.x * 12.9898 + sh.z * 78.233) * 43758.5453) % 1;
+    const kind = order[i] || (hk < 0.5 ? 'office' : 'residence');
     const v = VENUES[kind];
     // the door faces the city centre along the dominant axis
     const alongX = Math.abs(sh.x) > Math.abs(sh.z);
@@ -288,6 +294,8 @@ export function buildSettlement(site, R, opts = {}) {
     const venue = {
       kind, name: v.name, cn: v.cn, x: sh.x, z: sh.z, w: sh.w, d: sh.d, bw, bd, ry, h: sh.h, G,
       door: toLocal(fx, 0.5, fz), seed: Math.floor(r() * 1e9), interior: null, frame: toWorldXZ,
+      // a point in the building's own frame (x across the door, z inward, y up) on the planet
+      at: (lx, ly, lz) => { const [wx, wz] = toWorldXZ(lx, lz); return toLocal(wx, ly, wz); },
     };
     // a spot at the kerb outside the door (where bought vehicles are left)
     {
@@ -308,7 +316,21 @@ export function buildSettlement(site, R, opts = {}) {
       venue.sign = sign;
     }
     // furniture blocks movement even before the meshes exist
-    const lay = interiorLayout(kind, bw, bd);
+    const fplan = kind === 'office' || kind === 'residence' ? planFloor(kind, bw, bd, Math.floor(hk * 1e9) ^ (i * 7919)) : null;
+    const lay = fplan ? { boxes: fplan.colliders, service: null } : interiorLayout(kind, bw, bd);
+    if (fplan) {
+      venue.plan = fplan;
+      venue.name = fplan.name;
+      // the dropped ceiling is solid: no jumping up into the void above it
+      const [c0x, c0z] = toWorldXZ(0, 0);
+      const hx = (alongX ? bd : bw) / 2 - T, hz = (alongX ? bw : bd) / 2 - T;
+      addBox(c0x - hx, c0x + hx, CEIL, G, c0z - hz, c0z + hz, { ceil: true });
+      // the lifts go to the roof, and a lift on the roof comes back down
+      venue.roof = toLocal(sh.x, sh.h + 1.75, sh.z);
+      const [lx, lz] = toWorldXZ(CORR_LIFT, fplan.LZ - 0.8);
+      venue.liftOut = toLocal(lx, 1.7, lz);
+      fixtures.push({ kind: 'roofLift', name: 'lift down', pos: toLocal(sh.x, sh.h + 1.2, sh.z), range: 3, venue, id: `${venue.seed}:roof` });
+    }
     for (const b of lay.boxes) {
       const [cx, cz] = toWorldXZ(b.x, b.z);
       const ex = alongX ? b.d / 2 : b.w / 2, ez = alongX ? b.w / 2 : b.d / 2;
@@ -618,6 +640,7 @@ export function buildSettlement(site, R, opts = {}) {
     boxes,
     services,
     venues,
+    fixtures,
     streets,
     block,
     architecture,
@@ -768,17 +791,26 @@ export function buildSettlement(site, R, opts = {}) {
         streets?.update(pc);
         block?.update(pc);
         architecture?.update(pc);
+        let built = 0; // at most one new interior a frame, so walking down a street never hitches
         for (const v of venues) {
           if (v.noInterior || v.authored) continue;
           const d = Math.hypot(pc.x - v.x, pc.z - v.z);
-          if (!v.interior && d < 70) {
-            v.interior = buildInterior(v.kind, v.bw, v.bd, v.G - 0.3, v.seed, v.name);
+          if (!v.interior && d < 70 && built < 1) {
+            built++;
+            v.interior = v.plan ? buildFloor(v.plan) : buildInterior(v.kind, v.bw, v.bd, v.G - 0.3, v.seed, v.name);
+            if (v.plan) {
+              for (const fx of v.plan.fixtures) {
+                const [wx, wz] = v.frame(fx.x, fx.z);
+                fixtures.push({ kind: fx.kind, name: fx.name, pos: toLocal(wx, fx.y, wz), range: fx.kind === 'bed' ? 2.2 : 1.9, venue: v, id: fx.id, inside: true });
+              }
+            }
             const [cx, cz] = v.frame(0, 0);
             v.interior.group.position.set(cx, drop(cx, cz), cz);
             v.interior.group.rotation.y = v.ry;
             addCompiled(group, v.interior.group, `interior:${v.kind}`);
             interiors.add(v);
           } else if (v.interior && d > 120) {
+            for (let k = fixtures.length - 1; k >= 0; k--) if (fixtures[k].inside && fixtures[k].venue === v) fixtures.splice(k, 1);
             cancelAdd(v.interior.group);
             group.remove(v.interior.group);
             v.interior.dispose();
