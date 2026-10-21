@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { applySkin, SKIN_FOR_PLAN } from './beast-skin.js';
 
 // Sculpted, rigged and animated beasts (tools/blender/make_beasts.py), one file per
 // body plan. A beast spawns with its code-built model and switches to the animated
@@ -46,6 +47,13 @@ export function relativeSkinning(mesh) {
   };
 }
 
+// the middle of a body's three extents: about how thick it is
+function bodySize(geo) {
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const s = geo.boundingBox.getSize(new THREE.Vector3());
+  return [s.x, s.y, s.z].sort((a, b) => a - b)[1] / 2;
+}
+
 class AnimatedBeast {
   constructor(src, def, elite) {
     this.root = cloneSkinned(src.scene);
@@ -55,7 +63,13 @@ class AnimatedBeast {
       if (!o.isMesh) return;
       o.frustumCulled = false;
       const m = o.material.clone();
-      if (m.name === 'hide') { m.color.copy(tint).multiplyScalar(1.6); m.vertexColors = true; m.emissive = new THREE.Color(0x000000); this.hide = m; }
+      if (m.name === 'hide') {
+        m.color.copy(tint).multiplyScalar(1.6); m.vertexColors = true; m.emissive = new THREE.Color(0x000000); this.hide = m;
+        // scales, fur, chitin, stone or leather, sized to the body's thickness (not its length,
+        // or a serpent would get scales the size of dinner plates)
+        applySkin(m, SKIN_FOR_PLAN[planFor(def)], bodySize(o.geometry));
+      }
+      else if (m.name === 'stone') applySkin(m, 'stone', bodySize(o.geometry));
       else if (m.name === 'eye' || m.name === 'glow') { m.emissive.copy(glow); m.emissiveIntensity = 3; m.color.copy(glow); }
       else if (m.name === 'dark') { m.color.copy(tint).multiplyScalar(0.35); }
       o.material = m;
