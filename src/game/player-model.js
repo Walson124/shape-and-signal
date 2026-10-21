@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { applySkin } from './beast-skin.js';
 
 // The skinned player model and its animations (built in Blender by
 // tools/blender/make_character.py: clips retargeted from Quaternius's CC0
@@ -65,7 +66,11 @@ export class SkinnedFigure {
       if (/fparms/.test(o.name)) { o.visible = false; return; }
       const m = o.material;
       // the combat suit's piping glows in the realm colour (setGlow)
-      if (m.name === 'suit') { o.material = m.clone(); this.suit = o.material; this.suit.emissive.set(0x3ef2ff); this.suit.emissiveIntensity = 2.2; }
+      if (m.name === 'suit') {
+        o.material = m.clone(); this.suit = o.material; this.suit.emissive.set(0x3ef2ff); this.suit.emissiveIntensity = 2.2;
+        // the suit's weave and panel seams, in metres of the model
+        applySkin(this.suit, 'suit', 1);
+      }
       if (m.transparent) {
         // hair is a cut-out (sorting it as see-through flickers); brows and lashes blend
         if (/short|hair|bob|long|afro|braid|ponytail/.test(m.name || '')) { m.transparent = false; m.alphaTest = 0.5; }

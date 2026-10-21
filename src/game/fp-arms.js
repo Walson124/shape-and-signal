@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { applySkin } from './beast-skin.js';
 
 // First-person arms: the player's own suited arms in the view-model scene.
 // The view model's hand rig (viewmodel.js) still decides every pose (fists,
@@ -35,7 +36,7 @@ class Arm {
       o.frustumCulled = false;
       // only the arms-only copy of the suited body shows (the other arm is folded away below)
       if (!/fparms/.test(o.name)) o.visible = false;
-      else { o.material = o.material.clone(); this.suit = o.material; this.suit.emissive.set(0x3ef2ff); this.suit.emissiveIntensity = 2; }
+      else { o.material = o.material.clone(); this.suit = o.material; this.suit.emissive.set(0x3ef2ff); this.suit.emissiveIntensity = 2; applySkin(this.suit, 'suit', 1); }
     });
     const skinned = [];
     this.model.traverse((o) => { if (o.isSkinnedMesh) skinned.push(o); });

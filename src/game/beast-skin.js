@@ -41,8 +41,8 @@ const GLSL = /* glsl */ `
 // Patch a beast's hide material. radius: the body's size in its own units.
 export function applySkin(mat, kind, radius) {
   if (!kind) return mat;
-  const freq = { scale: 26, fur: 140, chitin: 7, stone: 9, leather: 14 }[kind] / Math.max(0.05, radius);
-  const K = { scale: 0, fur: 1, chitin: 2, stone: 3, leather: 4 }[kind];
+  const freq = { scale: 26, fur: 140, chitin: 7, stone: 9, leather: 14, suit: 32 }[kind] / Math.max(0.05, radius);
+  const K = { scale: 0, fur: 1, chitin: 2, stone: 3, leather: 4, suit: 5 }[kind];
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.bsFreq = { value: freq };
     shader.vertexShader = `varying vec3 vBsP;\nvarying vec3 vBsN;\nuniform float bsFreq;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBsP = position * bsFreq;\nvBsN = normal;');
@@ -77,6 +77,20 @@ export function applySkin(mat, kind, radius) {
             float lump = bsNoise(vBsP * 2.0) * 0.6 + bsNoise(vBsP * 5.0) * 0.4;
             bsH = crack * (0.5 + 0.5 * lump);
             diffuseColor.rgb *= (0.5 + 0.5 * crack) * (0.8 + 0.35 * lump) * (0.9 + 0.2 * id);
+          #elif ${K} == 5
+            // a combat suit: a fine hexagonal weave in slight relief, cut into panels by seams
+            vec3 v = bsVoronoi(vBsP, id);
+            float cell = smoothstep(0.0, 0.1, v.y - v.x);
+            float pid;
+            vec3 pv = bsVoronoi(vBsP * 0.11, pid);
+            float seam = smoothstep(0.0, 0.025, pv.y - pv.x);
+            // the weave only shows up close (further off it would just sparkle); seams carry further
+            float vd = length(vViewPosition);
+            float nearW = 1.0 - smoothstep(1.2, 3.5, vd), nearS = 1.0 - smoothstep(4.0, 14.0, vd);
+            cell = mix(1.0, cell, nearW);
+            seam = mix(1.0, seam, nearS * 0.85);
+            bsH = (cell * 0.6 + seam * 0.4) * nearS;
+            diffuseColor.rgb *= (0.86 + 0.14 * cell) * (0.6 + 0.4 * seam) * (0.96 + 0.08 * pid);
           #else
             // leather: folds and wrinkles, coarser on the flanks
             float w1 = abs(bsNoise(vBsP * vec3(1.0, 2.6, 1.0)) * 2.0 - 1.0);
@@ -93,12 +107,12 @@ export function applySkin(mat, kind, radius) {
           float det = dot(dx, r1);
           vec3 grad = sign(det) * (dFdx(bsH) * r1 + dFdy(bsH) * r2) / max(abs(det), 1e-6);
           float far = 1.0 - smoothstep(8.0, 45.0, length(vViewPosition));
-          float strength = ${K === 1 ? '0.018' : K === 0 ? '0.03' : '0.035'} * far;
+          float strength = ${K === 1 ? '0.018' : K === 0 ? '0.03' : K === 5 ? '0.012' : '0.035'} * (${K === 5 ? '1.0 - smoothstep(2.0, 9.0, length(vViewPosition))' : 'far'});
           vec3 bump = grad * strength;
           normal = normalize(normal - bump / max(1.0, length(bump) * 1.4));
         }`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        ${K === 0 ? 'roughnessFactor = mix(0.85, 0.42, bsH);' : K === 2 ? 'roughnessFactor = 0.32;' : K === 1 ? 'roughnessFactor = 0.95;' : ''}`)
+        ${K === 0 ? 'roughnessFactor = mix(0.85, 0.42, bsH);' : K === 2 ? 'roughnessFactor = 0.32;' : K === 1 ? 'roughnessFactor = 0.95;' : K === 5 ? 'roughnessFactor = mix(roughnessFactor, mix(0.62, 0.34, bsH), 0.8);' : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         ${K === 1 ? '// fur catches light along its edges\n        totalEmissiveRadiance += diffuseColor.rgb * pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 3.0) * 0.45;' : ''}`);
   };
