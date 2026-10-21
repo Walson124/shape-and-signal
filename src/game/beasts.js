@@ -728,7 +728,9 @@ export class BeastManager {
     if (env) {
       for (let i = this.beasts.length - 1; i >= 0; i--) {
         const b = this.beasts[i];
-        if (b.boss || b.static || b.aggro || b.tag) continue;
+        // parts of something bigger (a World-Eater's body, a titan's limbs) live and die with it,
+        // however far along its body they lie
+        if (b.boss || b.static || b.aggro || b.tag || b.owner || b.planetary) continue;
         if (b.pos.distanceTo(player.pos) > (env.despawn ?? 3000)) this.removeBeast(b);
       }
     }
