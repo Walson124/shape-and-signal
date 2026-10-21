@@ -981,6 +981,8 @@ export class Game {
     rt.invuln = Math.max(0, rt.invuln - dt);
     rt.firingT = Math.max(0, rt.firingT - dt);
     const swordDamage = st.atk * SWORD_GRADES[s.swordGrade].mult * masteryMult(s.mastery.volley || 1) * st.swordDmg;
+    // shots leave at their own speed plus the shooter's: a fast ship never outruns its bolts
+    this.combat.shooterVel = rt.inShip && this.shipObj ? this.shipObj.vel : p.vel;
     this.arts.update(dt, { alive: alive && !rt.scanner && !this.placing && rt.dodgeT <= 0, camFwd, aimPoint, aimBeast, swordDamage });
     if (alive && !rt.meditating) {
       if (inp.hit('pill1')) this.usePill('heal');

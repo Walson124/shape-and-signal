@@ -57,6 +57,9 @@ export class Combat {
 
   firePlayerBolt(origin, dir, damage, color, speed = 700, opts = {}) {
     const size = opts.size || 1;
+    // add the shooter's own speed along the shot, so it always leaves ahead of them and flies
+    // straight down the line it was aimed along (only the forward part: never slower than it was)
+    if (this.shooterVel) speed += Math.max(0, this.shooterVel.dot(dir));
     const mesh = new THREE.Mesh(this.boltGeo, this.mat(color, 3.5));
     mesh.scale.set(size, size, 9 * size);
     mesh.quaternion.setFromUnitVectors(Z, dir);

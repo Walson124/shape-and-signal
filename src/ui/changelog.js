@@ -4,6 +4,7 @@ export const CHANGELOG = [
     date: '2026-10-24', version: '0.14.1',
     title: 'Fixes',
     items: [
+      'Shots carry your own speed: a fast ship no longer outruns its bolts (they used to seem to fly backwards), and arrows, knives and bolts fired in flight leave ahead of you.',
       'World-Eaters can be hurt again: the parts of their bodies far from you were being cleared away like stray beasts, so shots passed straight through. Heart-nodes, the core and the hide all take hits now.',
       'Fixed the game freezing the moment a World-Eater woke (and during breakthrough tribulations and some techniques): a sound effect added with the weather broke the older thunder.',
     ],
