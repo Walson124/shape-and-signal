@@ -4,6 +4,9 @@ export const CHANGELOG = [
     date: '2026-10-24', version: '0.14.1',
     title: 'Fixes',
     items: [
+      'Flying ploughs through the countryside: in a ship, or under your own power at speed, you smash straight through trees and rocks (they topple behind you) instead of snagging on them.',
+      'Fly into the sea and you carry on underwater, slowed, with a splash, instead of dropping into a swim; ships no longer stall when they skim or dive into water.',
+      'Flight looks alive: hovering, your body breathes and treads the air with loose legs and drifting arms; at speed your legs trail and flutter in the wind, you bend into turns with the outside arm reaching out to balance, your head lifts to look ahead, and braking swings your legs forward.',
       'New View distance setting (Graphics): Near, Normal, Far or Max. Further means detailed ground and trees reach further out and the haze thins; it costs frame rate.',
       'You can see much further in bad weather: heavy rain now closes in at about a kilometre and a half instead of 500 m, snow at over a kilometre, and blizzards and dust storms are thick without being blindfolds.',
       'Shots carry your own speed: a fast ship no longer outruns its bolts (they used to seem to fly backwards), and arrows, knives and bolts fired in flight leave ahead of you.',

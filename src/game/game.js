@@ -1122,7 +1122,7 @@ export class Game {
     if (water && !this.rt.inVehicle) floorR = water.bedR;
     // dug holes and caves
     if (planet.digsSys && planet.digsSys.inZone(pos)) floorR = planet.digsSys.groundBelow(pos);
-    const roof = planet.collide(pos, this.rt.inShip ? 10 : this.player.radius, this.rt.inShip ? 0 : EYE);
+    const roof = planet.collide(pos, this.rt.inShip ? 10 : this.player.radius, this.rt.inShip ? 0 : EYE, this.plowing() ? this.plowOpts : null);
     if (roof && roof > floorR && D > roof - 4) floorR = roof;
     return { planet, up, floorR, inAtmo: D < planet.atmoR, alt: D - floorR - (this.rt.inShip ? 0 : EYE), D, water };
   }
@@ -1367,7 +1367,16 @@ export class Game {
     // in deep water you swim: free movement in three dimensions at swimming pace
     const water = onWorld && env.inAtmo ? env.water : null;
     const D0 = p.pos.length();
-    const swimming = !!water && D0 < water.seaR + EYE * 0.6 && water.bedR + EYE * 1.2 < water.seaR && !(canFly && p.mode === 'fly' && D0 > water.seaR + 0.5);
+    // a flyer moving fast carries on flying straight through the water (slowed, with a splash);
+    // only a slow one drops into a swim
+    const diving = canFly && p.mode === 'fly' && p.vel.lengthSq() > 12 * 12;
+    const swimming = !!water && D0 < water.seaR + EYE * 0.6 && water.bedR + EYE * 1.2 < water.seaR && !(canFly && p.mode === 'fly' && D0 > water.seaR + 0.5) && !diving;
+    const inWater = !!water && D0 < water.seaR;
+    if (water && inWater !== !!rt.flyWet && p.mode === 'fly' && !swimming) {
+      if (p.vel.lengthSq() > 12 * 12) this.particles.burst(p.pos.clone().setLength(water.seaR), new THREE.Color(1.6, 2.2, 2.6), 50, 14 + p.vel.length() * 0.08, 1.1, 0.9);
+      if (inWater) p.vel.multiplyScalar(0.7);
+    }
+    rt.flyWet = inWater;
     if (swimming && !rt.swimming) {
       p.vel.multiplyScalar(0.3);
       this.particles.burst(p.pos.clone().setLength(water.seaR), new THREE.Color(1.6, 2.2, 2.6), 30, 10, 0.8, 0.6);
@@ -1405,7 +1414,7 @@ export class Game {
     let boost = alive && (settings.get('autoSprint') ? !sprintKey : sprintKey) && manual && (p.mode === 'ground' || rt.energy > 1);
     if (p.mode === 'ground') speed = st.walk;
     else if (swimming) speed = st.walk * 0.8;
-    else if (p.mode === 'fly') speed = onWorld ? Math.min(st.flySpeed, 160 + s.realm * 60) : st.flySpeed;
+    else if (p.mode === 'fly') speed = (onWorld ? Math.min(st.flySpeed, 160 + s.realm * 60) : st.flySpeed) * (rt.flyWet ? 0.45 : 1);
     else speed = st.spaceSpeed;
     if (rt.cruise) {
       if (!alive || (manual && move.z < 0) || p.mode !== 'space' || rt.meditating) {
@@ -1496,7 +1505,7 @@ export class Game {
       }
     }
     // settlements: walls and buildings push you out
-    if (onWorld && env.D < env.planet.R + env.planet.body.amp + 400) env.planet.collide(p.pos, p.radius, EYE);
+    if (onWorld && env.D < env.planet.R + env.planet.body.amp + 400) env.planet.collide(p.pos, p.radius, EYE, this.plowing() ? this.plowOpts : null);
     // a hard landing from a War God or stronger cracks the ground
     if (onWorld && env.up) {
       const vDown = -this.prevVel.dot(env.up);
@@ -1586,10 +1595,10 @@ export class Game {
       rt.shipSub = sub;
       if (onWorld && env.water) this.particles.burst(ship.pos.clone().setLength(env.water.seaR), new THREE.Color(1.6, 2.2, 2.6), 60, 22, 1.4, 0.9);
       // hitting the water brakes you hard
-      if (sub) ship.vel.multiplyScalar(0.3);
+      if (sub) ship.vel.multiplyScalar(0.65);
       if (sub && !this.notifyGate.shipSub) { this.notifyGate.shipSub = 1; this.hud.notify('Submerged. The hull holds; the water slows you.', 'cy'); }
     }
-    if (sub) { speed = Math.min(speed, 45); rt.cruise = false; }
+    if (sub) { speed = Math.min(speed, Math.max(90, speed * 0.35)); rt.cruise = false; }
     ship.look(look.x, look.y, { up: env.inAtmo ? env.up : null });
     ship.update(dt, alive ? move : { x: 0, y: 0, z: 0 }, { up: env.up, floorR: onWorld ? env.floorR : null, speed, boost: boost && !rt.cruise, inAtmo: env.inAtmo, accel: rt.cruise ? 1.4 : sub ? 2.2 : 1.2 });
     if (rt.warpCharge > 0) {
@@ -3042,6 +3051,41 @@ export class Game {
 
   // --------------------------------------------------- destruction --
   // Attacks break nearby trees, rocks and street lamps, and scare people.
+  // Flying (in a ship, or under your own power at speed) you plough through trees and rocks
+  // instead of being stopped by them.
+  plowing() {
+    const p = this.player, rt = this.rt;
+    if (rt.inShip && this.shipObj) return !this.shipObj.landed && this.shipObj.vel.lengthSq() > 4 * 4;
+    return p.mode === 'fly' && p.vel.lengthSq() > 6 * 6;
+  }
+
+  get plowOpts() {
+    if (!this._plowOpts) {
+      this._plowOpts = {
+        onProp: (e) => {
+          const f = this.frame;
+          if (!f) return false;
+          const v = this.rt.inShip && this.shipObj ? this.shipObj.vel : this.player.vel;
+          const at = e.base.clone().addScaledVector(e.up, Math.min(e.h * 0.5, 3));
+          const broken = f.breakProps(at, e.r + 0.5, v.clone().normalize());
+          for (const b of broken) {
+            const col = b.top ? new THREE.Color(0.5, 0.48, 0.44) : new THREE.Color(0.35, 0.5, 0.25);
+            this.particles.burst(b.pos, col, 18, 12 + v.length() * 0.1, 0.8, 1.1, 1.2);
+          }
+          if (broken.length && this.time - (this.lastCrack || 0) > 0.12) {
+            this.lastCrack = this.time;
+            this.sound.explosion(at, false);
+            this.rt.shake = Math.max(this.rt.shake, 0.25);
+          }
+          // a little drag for each one you smash through
+          v.multiplyScalar(broken.length ? 0.97 : 1);
+          return true;
+        },
+      };
+    }
+    return this._plowOpts;
+  }
+
   breakAt(local, radius, dir) {
     const f = this.frame;
     if (!f || !f.body.landable || !this.env.inAtmo) return;

@@ -43,6 +43,7 @@ function relativeSkinning(mesh) {
 }
 
 const LOWER = /^(Root|pelvis|thigh_|calf_|foot_|ball_)/;
+const tQa = new THREE.Quaternion(), tQb = new THREE.Quaternion(), tQc = new THREE.Quaternion();
 // clips that only make sense on the whole body
 const FULL = new Set(['roll', 'death', 'meditate', 'drive', 'swim', 'swim_idle', 'fall', 'air', 'jump_start', 'land', 'leap', 'leap_land', 'knockback', 'fly_hover', 'fly_cruise', 'fly_dash', 'sword_heavy']);
 
@@ -82,6 +83,10 @@ export class SkinnedFigure {
     for (const mesh of skinned) relativeSkinning(mesh);
     const bones = skinned[0].skeleton.bones;
     this.pelvis = bones.find((b) => b.name === 'pelvis');
+    this.bones = Object.fromEntries(bones.map((b) => [b.name, b]));
+    // rest rotations, so turns added on top of the animation don't pile up on bones no clip keys
+    this.restQ = new Map(bones.map((b) => [b, b.quaternion.clone()]));
+    this.touched = new Set();
     // feet on the figure's floor: the hips are the figure's origin. Measured before the model
     // joins the scene: out on a planet its world matrices are millions of metres from the
     // origin, and a body made mid-game (another player) would measure its hips from there.
@@ -170,7 +175,24 @@ export class SkinnedFigure {
         for (const a of [L.upper, L.lower]) if (a.loop !== THREE.LoopRepeat) { a.setLoop(THREE.LoopRepeat, Infinity); a.clampWhenFinished = false; }
       }
     }
+    for (const b of this.touched) b.quaternion.copy(this.restQ.get(b));
+    this.touched.clear();
     this.mixer.update(dt);
+  }
+
+  // Turn a bone by angle about an axis given in the model's own space (+y up, +z the way it
+  // faces, +x its left), on top of whatever the animation set this frame. Parents first.
+  addRot(name, axis, angle) {
+    const b = this.bones?.[name];
+    if (!b || !angle) return;
+    const P = tQa.identity();
+    const chain = [];
+    for (let o = b.parent; o && o !== this.model; o = o.parent) chain.push(o);
+    for (let i = chain.length - 1; i >= 0; i--) P.multiply(chain[i].quaternion);
+    tQb.setFromAxisAngle(axis, angle);
+    tQc.copy(P).invert().multiply(tQb).multiply(P);
+    b.quaternion.premultiply(tQc);
+    this.touched.add(b);
   }
 
   // where the pelvis sits in the figure's space right now (for placing a seated body)

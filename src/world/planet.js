@@ -422,7 +422,9 @@ export class Planet {
   // Push a point out of buildings, walls, furniture, trees and rocks.
   // eye: how far the point sits above the feet (1.7 for the player).
   // Returns a roof radius if the feet rest on top of something.
-  collide(local, radius, eye = 0) {
+  // opts.onProp(e): called for a tree or rock in the way; return true to go through it
+  // (something flying fast ploughs through and topples it) instead of being pushed out
+  collide(local, radius, eye = 0, opts = null) {
     let roof = null;
     // walls and ceilings of dug holes and caves
     if (this.digsSys && this.digsSys.inZone(local)) {
@@ -487,6 +489,7 @@ export class Planet {
               tC.copy(tA).addScaledVector(e.up, -along);
               const hd = tC.length();
               if (hd >= e.r + radius) continue;
+              if (opts && opts.onProp && opts.onProp(e)) continue;
               if (e.top && feet > e.h - 0.6) {
                 roof = Math.max(roof ?? 0, e.base.length() + e.h);
               } else if (hd > 0.001) {

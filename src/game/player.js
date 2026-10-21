@@ -13,6 +13,7 @@ const tQ = new THREE.Quaternion();
 const tD = new THREE.Vector3();
 const tE = new THREE.Vector3();
 const tN = new THREE.Matrix4();
+const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new THREE.Vector3(0, 0, 1);
 const tM = new THREE.Matrix4();
 export const EYE = 1.7;
 
@@ -369,11 +370,13 @@ export class Player {
     }
     sk.setBase(base, rates);
     sk.update(dt);
+    if (this.mode !== 'ground' && !env.swimming && !env.meditating) this.flightMotion(dt, env, ss(hs, 3, 22), hs);
+    else { this.flightW = Math.max(0, (this.flightW || 0) - dt * 3); this.flyBob = 0; }
     const e = 1 - Math.exp(-dt * 5);
     this.tilt = (this.tilt || 0) + (tilt - (this.tilt || 0)) * e;
     this.bank = (this.bank || 0) + (bankWant - (this.bank || 0)) * (1 - Math.exp(-dt * 3));
     const f = this.tilt / (Math.PI / 2);
-    this.figure.position.y = THREE.MathUtils.lerp(-EYE + this.hipHeight, -0.45, f);
+    this.figure.position.y = THREE.MathUtils.lerp(-EYE + this.hipHeight, -0.45, f) + (this.flyBob || 0);
     // on foot, a runner leans into the turn and a little forward when picking up speed
     const running = this.mode === 'ground' && !airborne ? THREE.MathUtils.smoothstep(hs, 2, 7) : 0;
     const leanWant = THREE.MathUtils.clamp(-(this.turnRate || 0) * hs * 0.018, -0.24, 0.24) * running;
@@ -383,6 +386,56 @@ export class Player {
     this.pitchLean = (this.pitchLean || 0) + (THREE.MathUtils.clamp(accel * 0.012, -0.08, 0.14) * running - (this.pitchLean || 0)) * (1 - Math.exp(-dt * 4));
     // lean forward, then roll about the body's own length (the axis the flight runs along)
     this.figure.rotation.set(-this.tilt - this.pitchLean, this.bank, this.lean, 'XYZ');
+  }
+
+  // The flight poses are single held shapes; this brings them to life on the skeleton:
+  // hovering, the body breathes and treads the air, legs loose; at speed the legs trail and
+  // flutter in the wind, the body bends into its turns with the arms balancing, the head lifts
+  // to look where it's going, and braking swings the legs forward.
+  flightMotion(dt, env, k, hs) {
+    const sk = this.skin, t = env.time;
+    this.flightW = Math.min(1, (this.flightW || 0) + dt * 2.5);
+    const w = this.flightW;
+    const hover = 1 - k;
+    const bank = this.bank || 0;
+    // how hard you're speeding up or braking (smoothed)
+    const accel = this.lastFlyHs !== undefined ? (hs - this.lastFlyHs) / Math.max(dt, 1e-3) : 0;
+    this.lastFlyHs = hs;
+    this.flyAccel = (this.flyAccel || 0) + (THREE.MathUtils.clamp(accel / 60, -1, 1) - (this.flyAccel || 0)) * (1 - Math.exp(-dt * 4));
+    const brake = Math.max(0, -this.flyAccel), push = Math.max(0, this.flyAccel);
+    const wind = Math.min(1, hs / 120);
+    // legs: tread water-like in a hover; trail and flutter with speed; swing forward to brake
+    for (const [side, ph] of [[1, 0], [-1, 1.9]]) {
+      const thigh = side > 0 ? 'thigh_l' : 'thigh_r', calf = side > 0 ? 'calf_l' : 'calf_r', foot = side > 0 ? 'foot_l' : 'foot_r';
+      const tread = Math.sin(t * 1.5 + ph) * 0.22 * hover;
+      const flutter = Math.sin(t * (9 + wind * 7) + ph * 2.3) * (0.03 + 0.07 * wind) * k;
+      sk.addRot(thigh, AX, (tread + flutter - brake * 0.45 + push * 0.12) * w);
+      sk.addRot(thigh, AZ, side * (0.06 + 0.05 * Math.sin(t * 0.9 + ph)) * hover * w);
+      sk.addRot(calf, AX, (0.25 * hover + Math.max(0, Math.sin(t * 1.5 + ph + 0.8)) * 0.35 * hover - flutter * 0.6 + brake * 0.3) * w);
+      sk.addRot(foot, AX, (-0.25 * k - 0.15 * hover * Math.sin(t * 1.5 + ph)) * w);
+    }
+    // the trunk breathes, bends into the turn and bows a little when you push forward
+    const breath = Math.sin(t * 1.3) * 0.035;
+    sk.addRot('spine_01', AX, (breath * hover + push * 0.1 - brake * 0.1) * w);
+    sk.addRot('spine_02', AZ, -bank * 0.35 * w);
+    sk.addRot('spine_03', AZ, -bank * 0.2 * w);
+    sk.addRot('spine_03', AX, (breath * 0.6 * hover) * w);
+    // arms: loose and drifting in a hover; in a turn the outside arm reaches out to balance
+    for (const [side, ph] of [[1, 0.6], [-1, 2.4]]) {
+      const ua = side > 0 ? 'upperarm_l' : 'upperarm_r', la = side > 0 ? 'lowerarm_l' : 'lowerarm_r';
+      const drift = Math.sin(t * 1.1 + ph) * 0.12 * hover;
+      const balance = Math.max(0, side * bank) * 0.9 * k;
+      sk.addRot(ua, AZ, side * (drift + balance + 0.04 * Math.sin(t * 8 + ph) * wind * k) * w);
+      sk.addRot(ua, AX, (Math.sin(t * 0.8 + ph) * 0.1 * hover - brake * 0.2) * w);
+      sk.addRot(la, AX, (-0.15 * hover - Math.sin(t * 1.1 + ph) * 0.1 * hover) * w);
+    }
+    // the head lifts to look ahead when the body lies flat in flight, and turns into the bank
+    const lie = (this.tilt || 0) / (Math.PI / 2);
+    sk.addRot('neck_01', AX, -lie * 0.55 * w);
+    sk.addRot('head', AX, (-lie * 0.35 + Math.sin(t * 1.3 + 1) * 0.03 * hover) * w);
+    sk.addRot('head', AY, bank * 0.4 * w);
+    // the whole body bobs gently while hovering
+    this.flyBob = Math.sin(t * 1.6) * 0.06 * hover * w;
   }
 
   // A move the game just made: an attack, a technique, a hit taken.
