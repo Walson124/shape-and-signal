@@ -8,6 +8,7 @@ export const CHANGELOG = [
       'Offices hold private offices, open-plan floors of desks and monitors, meeting rooms, break rooms with kitchens and store rooms; apartment blocks hold furnished studio flats with beds, sofas, screens and kitchenettes.',
       'Things to use inside: read office terminals (some hold rumours of sites in the wilds, or a forgotten credit chit), buy a snack from a vending machine, grab a coffee, sleep in a bed until morning, sit on a sofa to cultivate, and take the lift up to the roof.',
       'Indoors is lit by the ceiling lights, not the sky, and the windows show the day outside.',
+      'The people in shops, offices, flats, stations and camps are real animated people now, in their own clothes and heights: receptionists standing at the desk, office workers sitting at their screens.',
       'Windows are glass: they mirror the sky, bright toward the horizon and darker where they reflect the street, and catch the light at a glancing angle.',
       'Beasts have real skin up close: wolves and bears are furred, lizards and wyrms scaled, rhinos leathery, mantises armoured in glossy chitin and golems cracked stone, all catching the light.',
       'Third person feels like a real body now: you turn to face the way you walk or run (no more sliding sideways or moonwalking backwards), lean into turns at speed, and swing round to face your target when you strike, guard or aim.',

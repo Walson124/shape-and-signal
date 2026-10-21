@@ -545,10 +545,10 @@ export function buildFloor(plan) {
       case 'tv': B('solid', 1.4, 0.5, 0.42, 0, 0.25, 0, 0x2a2c30); B('gloss', 1.25, 0.72, 0.04, 0, 1.0, 0.05, 0x101114); B('glow', 1.19, 0.66, 0.005, 0, 1.0, 0.028, pick(r, [0x3a6a9a, 0x6a3a7a, 0x2a7a6a])); break;
       case 'ceilingLight': put('glow', geoBox(it.w, 0.03, it.d), it.x, CEIL - 0.03, it.z, 0, 0x8a8680); break; // just past the bloom threshold: lit, not glaring
       case 'npc': {
-        const p = buildNPC(pick(r, [0x2a3040, 0x40283a, 0x283a40, 0x3a3a3a]), pick(r, [0x3ef2ff, 0xff3c7d, 0xffe44d]));
+        const p = buildNPC(pick(r, [0x2a3040, 0x40283a, 0x283a40, 0x3a3a3a, 0x5a4a3a, 0x3a5a6a]), pick(r, [0x3ef2ff, 0xff3c7d, 0xffe44d]), { pose: it.sit ? 'sit' : r() < 0.4 ? 'fold' : 'stand' });
         p.group.position.set(it.x, 0, it.z);
         p.group.rotation.y = it.ry || 0;
-        if (it.sit) { p.group.scale.y = 0.72; sit.push(p); }
+        if (it.sit) sit.push(p);
         g.add(p.group);
         people.push(p);
         break;
@@ -596,7 +596,7 @@ export function buildFloor(plan) {
   let t = 0;
   return {
     group: g,
-    update(dt) { t += dt; for (const p of people) p.anim(t * (sit.includes(p) ? 0.2 : 1)); },
+    update(dt) { t += dt; for (const p of people) p.anim(t); },
     dispose() {
       for (const p of people) p.dispose();
       for (const o of own) o.dispose && o.dispose();

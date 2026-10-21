@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { bevelBox } from './geometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signTexture } from './textures.js';
+import { loadPlayerModel, SkinnedFigure } from '../game/player-model.js';
 
 // Venue kinds: what each walk-in building offers and how it looks inside.
 export const VENUES = {
@@ -74,8 +75,34 @@ const NPC_GEO = (() => {
 })();
 export const npcGeometry = () => NPC_GEO;
 
-export function buildNPC(color, accent) {
+// A person: the same modelled, animated human as the player, in their own colours and
+// height, standing idle, arms folded, or seated at a desk. The simple shape below stands in
+// until the model has loaded.
+// opts.pose: 'stand' (default) | 'fold' | 'sit' (on a chair seat ~0.48 m up, hands forward)
+export function buildNPC(color, accent, opts = {}) {
   const g = new THREE.Group();
+  const pose = opts.pose || 'stand';
+  let human = null, gone = false, last = null;
+  loadPlayerModel().then((source) => {
+    if (!source || gone) return;
+    const fig = new THREE.Group();
+    const skin = new SkinnedFigure(source, fig);
+    // the model faces -z in its figure; people here face +z
+    fig.rotation.y = Math.PI;
+    skin.setGlow(new THREE.Color(accent), 0.12);
+    if (skin.suit) skin.suit.color.multiply(new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.35));
+    skin.setBase(pose === 'sit' ? { drive: 1 } : pose === 'fold' && skin.has('idle_folded') ? { idle_folded: 1 } : { idle: 1 });
+    // everyone breathes and shifts on their own time
+    skin.update(0.2);
+    skin.mixer.update(Math.random() * 4);
+    skin.update(0.01);
+    fig.position.y = pose === 'sit' ? 0.55 - skin.pelvisY() : skin.hipHeight;
+    for (const o of g.children) o.visible = false;
+    g.add(fig);
+    g.scale.setScalar(0.93 + Math.random() * 0.12);
+    human = { fig, skin };
+  });
+  const phase0 = Math.random() * 10;
   const body = new THREE.Mesh(NPC_GEO, new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.2 }));
   g.add(body);
   const visor = new THREE.Mesh(bevelBox(0.28, 0.05, 0.05), glowMat(accent, 2.6));
@@ -87,15 +114,27 @@ export function buildNPC(color, accent) {
     g.add(a);
     return a;
   });
-  const phase = Math.random() * 10;
+  const phase = phase0;
   return {
     group: g,
     anim(t) {
+      if (human) {
+        const dt = last === null ? 0 : Math.min(0.1, Math.max(0, t - last));
+        last = t;
+        human.skin.update(dt);
+        return;
+      }
       body.rotation.y = Math.sin(t * 0.5 + phase) * 0.15;
       arms[0].rotation.x = Math.sin(t * 1.3 + phase) * 0.25;
       arms[1].rotation.x = -Math.sin(t * 1.1 + phase) * 0.2;
     },
     dispose() {
+      gone = true;
+      if (human) {
+        // their own skeleton (a GPU bone texture) and clothes; the rest is shared
+        human.fig.traverse((o) => { if (o.isSkinnedMesh && o.skeleton) o.skeleton.dispose(); });
+        human.skin.suit?.dispose();
+      }
       body.material.dispose();
       visor.geometry.dispose();
       arms.forEach((a) => a.geometry.dispose());
