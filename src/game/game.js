@@ -4753,7 +4753,8 @@ export class Game {
     const fog = this.scene.fog;
     if (sky) {
       const thick = f.body.type === 'toxic' ? 2.4 : f.body.type === 'desert' ? 1.4 : 1;
-      fog.density = 0.00011 * thick * Math.pow(1 - Math.min(1, sky.alt), 2);
+      // the haze of clear air; a longer view distance thins it
+      fog.density = 0.00011 * thick * Math.pow(1 - Math.min(1, sky.alt), 2) / Math.pow(settings.get('viewDistance') || 1, 1.5);
       // night is moonlit, not black: a cool blue light the eye can still read shapes by
       const night = 1 - sky.day;
       fog.color.copy(sky.color).multiplyScalar(0.06 + 0.85 * sky.day).lerp(NIGHT_FOG, night * 0.8);

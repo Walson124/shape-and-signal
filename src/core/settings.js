@@ -65,6 +65,7 @@ const DEFAULTS = {
   hudScale: 1,
   // world detail
   terrainDetail: 1,
+  viewDistance: 1,
   propDensity: 1,
   crowds: true,
   autoQuality: true,

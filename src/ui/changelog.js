@@ -4,6 +4,7 @@ export const CHANGELOG = [
     date: '2026-10-24', version: '0.14.1',
     title: 'Fixes',
     items: [
+      'New View distance setting (Graphics): Near, Normal, Far or Max. Further means detailed ground and trees reach further out and the haze thins; it costs frame rate.',
       'You can see much further in bad weather: heavy rain now closes in at about a kilometre and a half instead of 500 m, snow at over a kilometre, and blizzards and dust storms are thick without being blindfolds.',
       'Shots carry your own speed: a fast ship no longer outruns its bolts (they used to seem to fly backwards), and arrows, knives and bolts fired in flight leave ahead of you.',
       'World-Eaters can be hurt again: the parts of their bodies far from you were being cleared away like stray beasts, so shots passed straight through. Heart-nodes, the core and the hide all take hits now.',

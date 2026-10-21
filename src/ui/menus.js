@@ -389,6 +389,7 @@ export class Menus {
         + row('Render scale', 'Lower this if the game stutters.', range('renderScale', 40, 100, 5, 100, 'pct'))
         + row('Dynamic resolution', 'Automatically trade sharpness for a steady frame rate.', tog('dynamicRes'))
         + row('Terrain detail', 'How finely the ground near you is built. Lower is faster.', seg('terrainDetail', [[0.6, 'LOW'], [1, 'NORMAL'], [1.4, 'HIGH']]))
+        + row('View distance', 'How far detailed ground and trees reach, and how far you can see through the haze. Far and Max cost frame rate.', seg('viewDistance', [[0.75, 'NEAR'], [1, 'NORMAL'], [1.35, 'FAR'], [1.7, 'MAX']]))
         + row('Trees and rocks', 'Density of vegetation and boulders.', seg('propDensity', [[0, 'OFF'], [0.5, 'SPARSE'], [1, 'FULL']]))
         + row('City crowds', 'Pedestrians walking the streets.', tog('crowds'))
         + row('Automatic quality', 'Lower the preset by itself if the frame rate stays low. Picking a preset turns this off.', tog('autoQuality'))

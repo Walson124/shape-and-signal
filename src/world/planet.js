@@ -143,7 +143,7 @@ export class Planet {
   request(node) {
     if (node.requested) return;
     node.requested = true;
-    const job = { params: this.params, face: node.face, level: node.level, x: node.x, y: node.y, res: RES, props: node.level >= this.maxLevel - (this.ctx.preset.split >= 2.4 ? 1 : 0), craters: this.cratersNear(node) };
+    const job = { params: this.params, face: node.face, level: node.level, x: node.x, y: node.y, res: RES, props: node.level >= this.maxLevel - (this.ctx.preset.split >= 2.4 || (settings.get('viewDistance') || 1) > 1.2 ? 1 : 0), craters: this.cratersNear(node) };
     texPool.run('chunk', job, { priority: () => node.dist * (1 + node.level * 0.02), cancelled: () => !node.alive }).then((out) => {
       if (!out || !node.alive) return;
       this.buildMesh(node, out);
@@ -275,7 +275,7 @@ export class Planet {
     node.dist = Math.max(0, cam.distanceTo(node.center) - node.radius);
     if (!node.ready) this.request(node);
     const visible = this.horizonVisible(node, cam, D);
-    const want = near && visible && node.level < this.maxLevel && node.dist < node.size * this.splitK * (settings.get('terrainDetail') || 1);
+    const want = near && visible && node.level < this.maxLevel && node.dist < node.size * this.splitK * (settings.get('terrainDetail') || 1) * (settings.get('viewDistance') || 1);
     if (want) {
       if (!node.children) node.children = [0, 1, 2, 3].map((k) => this.makeNode(node.face, node.level + 1, node.x * 2 + (k & 1), node.y * 2 + (k >> 1), node));
       let ready = true;
@@ -383,7 +383,7 @@ export class Planet {
       return;
     }
     node.remeshing = true;
-    const job = { params: this.params, face: node.face, level: node.level, x: node.x, y: node.y, res: RES, props: node.level >= this.maxLevel - (this.ctx.preset.split >= 2.4 ? 1 : 0), craters: this.cratersNear(node) };
+    const job = { params: this.params, face: node.face, level: node.level, x: node.x, y: node.y, res: RES, props: node.level >= this.maxLevel - (this.ctx.preset.split >= 2.4 || (settings.get('viewDistance') || 1) > 1.2 ? 1 : 0), craters: this.cratersNear(node) };
     texPool.run('chunk', job, { priority: () => -1, cancelled: () => !node.alive }).then((out) => {
       node.remeshing = false;
       if (!out || !node.alive || !node.mesh) return;
