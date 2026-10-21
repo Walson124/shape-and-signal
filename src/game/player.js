@@ -94,6 +94,7 @@ export class Player {
 
   // Place at `pos` looking toward `look`, with `up` as the vertical.
   placeAt(pos, look, up) {
+    this.useHeading = false;
     this.pos.copy(pos);
     this.vel.set(0, 0, 0);
     this.grounded = false;
@@ -108,7 +109,8 @@ export class Player {
     this.root.position.copy(this.pos);
     this.root.quaternion.copy(this.quat);
     if (this.mode === 'ground' || this.pose > 0.5) {
-      const f = this.forward(tD).projectOnPlane(this.up);
+      // on foot the body faces the way it is going (its heading), not where the camera looks
+      const f = (this.useHeading && this.heading ? tD.copy(this.heading) : this.forward(tD)).projectOnPlane(this.up);
       if (f.lengthSq() > 1e-6) {
         tN.lookAt(tE.set(0, 0, 0), f.normalize(), this.up);
         this.root.quaternion.setFromRotationMatrix(tN);
@@ -238,6 +240,32 @@ export class Player {
       }
     }
 
+    // which way the body faces on foot: toward its movement, turning at a human pace; to the
+    // camera's forward while fighting, guarding or aiming, or in first person
+    this.faceAimT = Math.max(0, (this.faceAimT || 0) - dt);
+    if (up && this.mode === 'ground') {
+      const camF = this.forward(tE).projectOnPlane(up);
+      if (camF.lengthSq() < 1e-6) camF.copy(this.localUp(tE)).negate().projectOnPlane(up);
+      camF.normalize();
+      if (!this.useHeading || !this.heading) { this.heading = (this.heading || new THREE.Vector3()).copy(camF); this.useHeading = true; this.turnRate = 0; }
+      this.heading.projectOnPlane(up).normalize();
+      const aim = env.faceAim || this.faceAimT > 0 || env.hidden;
+      const vH = tC.copy(this.vel).addScaledVector(up, -this.vel.dot(up));
+      let target = null;
+      if (aim) target = camF;
+      else if (vH.lengthSq() > 0.8 * 0.8) target = vH.normalize();
+      if (target) {
+        const ang = Math.atan2(tB.crossVectors(this.heading, target).dot(up), this.heading.dot(target));
+        const rate = aim ? 16 : 7; // radians a second
+        const step = THREE.MathUtils.clamp(ang, -rate * dt, rate * dt);
+        this.heading.applyAxisAngle(up, step).projectOnPlane(up).normalize();
+        this.turnRate = step / Math.max(dt, 1e-4);
+      } else this.turnRate = (this.turnRate || 0) * Math.exp(-dt * 8);
+    } else {
+      this.useHeading = false;
+      this.turnRate = 0;
+    }
+
     // visuals
     const speed = this.vel.length();
     const goal = env.meditating ? 1 : 0;
@@ -346,8 +374,15 @@ export class Player {
     this.bank = (this.bank || 0) + (bankWant - (this.bank || 0)) * (1 - Math.exp(-dt * 3));
     const f = this.tilt / (Math.PI / 2);
     this.figure.position.y = THREE.MathUtils.lerp(-EYE + this.hipHeight, -0.45, f);
+    // on foot, a runner leans into the turn and a little forward when picking up speed
+    const running = this.mode === 'ground' && !airborne ? THREE.MathUtils.smoothstep(hs, 2, 7) : 0;
+    const leanWant = THREE.MathUtils.clamp(-(this.turnRate || 0) * hs * 0.018, -0.24, 0.24) * running;
+    this.lean = (this.lean || 0) + (leanWant - (this.lean || 0)) * (1 - Math.exp(-dt * 6));
+    const accel = this.lastHs !== undefined ? (hs - this.lastHs) / Math.max(dt, 1e-3) : 0;
+    this.lastHs = hs;
+    this.pitchLean = (this.pitchLean || 0) + (THREE.MathUtils.clamp(accel * 0.012, -0.08, 0.14) * running - (this.pitchLean || 0)) * (1 - Math.exp(-dt * 4));
     // lean forward, then roll about the body's own length (the axis the flight runs along)
-    this.figure.rotation.set(-this.tilt, this.bank, 0, 'XYZ');
+    this.figure.rotation.set(-this.tilt - this.pitchLean, this.bank, this.lean, 'XYZ');
   }
 
   // A move the game just made: an attack, a technique, a hit taken.
@@ -370,6 +405,8 @@ export class Player {
     }[kind];
     if (!moves) return;
     const [name, speed] = moves[(this.combo = (this.combo || 0) + 1) % moves.length];
+    // strike where you're looking: the body swings round to face it for a moment
+    if (kind !== 'hit' && kind !== 'knockback') this.faceAimT = 0.9;
     // a stagger or a heavy move takes the whole body; attacks only the upper body
     sk.play(name, { speed, full: kind === 'knockback' || (kind === 'heavy' && this.mode === 'ground' && this.grounded) });
   }

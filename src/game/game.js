@@ -1440,6 +1440,7 @@ export class Game {
       time: this.time,
       shield: rt.shieldT > 0,
       hidden: !alive || this.camMode === 'first',
+      faceAim: !!(rt.guarding || rt.aiming || rt.controlling || rt.meditating),
       align: 4,
     });
     // near the surface you bob up unless you swim down on purpose
