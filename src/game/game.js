@@ -4766,14 +4766,15 @@ export class Game {
       this.weatherSun = 1 - 0.7 * wx.cover * wx.cover;
       windowLight.setRGB(0.04 + 0.5 * sky.day, 0.06 + 0.58 * sky.day, 0.1 + 0.7 * sky.day).multiplyScalar(1 - 0.45 * wx.cover);
       this.hemi.intensity *= 1 - 0.25 * wx.cover * wx.cover;
+      // how far you can see: heavy rain about 1.5 km, snow 1.3 km, a blizzard 250 m, a dust storm 400 m
       if (wx.kind === 'dust') {
-        fog.density += 0.011 * wx.precip;
+        fog.density += 0.0038 * wx.precip;
         fog.color.lerp(DUST_FOG.clone().multiplyScalar(0.25 + 0.75 * sky.day), Math.min(1, wx.precip * 1.2));
       } else if (wx.kind === 'snow') {
-        fog.density += (0.005 + 0.02 * wx.blizzard) * wx.precip;
+        fog.density += (0.0012 + 0.0048 * wx.blizzard) * wx.precip;
         fog.color.lerp(SNOW_FOG.clone().multiplyScalar(0.12 + 0.75 * sky.day), wx.precip * 0.7);
       } else if (wx.kind) {
-        fog.density += 0.0035 * wx.precip;
+        fog.density += (0.0009 + 0.0004 * wx.storm) * wx.precip;
         fog.color.multiplyScalar(1 - 0.35 * wx.cover);
       }
       if (f.clouds) {
