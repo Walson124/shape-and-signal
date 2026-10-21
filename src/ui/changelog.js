@@ -7,6 +7,7 @@ export const CHANGELOG = [
       'Most city buildings can now be walked into: office blocks and apartment buildings with a lobby, a corridor and rooms off it through real doorways.',
       'Offices hold private offices, open-plan floors of desks and monitors, meeting rooms, break rooms with kitchens and store rooms; apartment blocks hold furnished studio flats with beds, sofas, screens and kitchenettes.',
       'Things to use inside: read office terminals (some hold rumours of sites in the wilds, or a forgotten credit chit), buy a snack from a vending machine, grab a coffee, sleep in a bed until morning, sit on a sofa to cultivate, and take the lift up to the roof.',
+      'New places to go: nightclubs (a bar, a light-up dance floor, a DJ and a crowd; order a drink or dance), arcades (play the cabinets for prize money or try the claw machine), gyms (train on benches, treadmills and bags for a little experience) and 24/7 convenience stores (aisles of goods and a till that sells pills).',
       'Indoors is lit by the ceiling lights, not the sky, and the windows show the day outside.',
       'The people in shops, offices, flats, stations and camps are real animated people now, in their own clothes and heights: receptionists standing at the desk, office workers sitting at their screens.',
       'Windows are glass: they mirror the sky, bright toward the horizon and darker where they reflect the street, and catch the light at a glancing angle.',

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signTexture } from './textures.js';
 import { buildNPC } from './interiors.js';
+import { propWind } from './props.js';
 
 // Office blocks and apartment buildings you can walk into: a lobby behind the street
 // door, a corridor running back from it, and rooms off the corridor through doorways:
@@ -39,7 +40,10 @@ const pick = (r, a) => a[Math.floor(r() * a.length)];
  * A floor plan: rooms, walls (with doorways), collision boxes, fixtures.
  * kind: 'office' | 'residence'.
  */
+export const HALLS = new Set(['club', 'store', 'gym', 'arcade']);
+
 export function planFloor(kind, w, d, seed) {
+  if (HALLS.has(kind)) return planHall(kind, w, d, seed);
   const r = rng(seed);
   const X0 = -w / 2 + SHELL, X1 = w / 2 - SHELL, Z0 = -d / 2 + SHELL, Z1 = d / 2 - SHELL;
   const lobbyD = THREE.MathUtils.clamp(d * 0.3, 5, 8);
@@ -230,6 +234,126 @@ function furnish(p, r) {
   p.accent = pick(r, PALETTE.accent);
 }
 
+// ---- open halls: one big room, laid out for what it is
+const HALL_NAMES = {
+  club: ['NEON LOTUS', 'VOID', 'STARFALL', 'JADE DRAGON', 'AFTERBURN', 'NINTH HEAVEN'],
+  store: ['24/7 MART', 'QUICKSTOP', 'STARMART', 'LUCKY 8'],
+  gym: ['IRON BODY GYM', 'WAR GOD FITNESS', 'MERIDIAN STRENGTH'],
+  arcade: ['PIXEL PALACE', 'QI ARCADE', 'COIN-OP HEAVEN', 'HIGH SCORE'],
+};
+function planHall(kind, w, d, seed) {
+  const r = rng(seed);
+  const X0 = -w / 2 + SHELL, X1 = w / 2 - SHELL, Z0 = -d / 2 + SHELL, Z1 = d / 2 - SHELL;
+  const W = X1 - X0, D = Z1 - Z0;
+  const p = { kind, w, d, seed, X0, X1, Z0, Z1, LZ: Z0, walls: [], gaps: [], rooms: [], colliders: [], fixtures: [], items: [], name: pick(r, HALL_NAMES[kind]), windows: kind === 'store' || kind === 'gym',
+    accent: { club: 0xff2fa0, store: 0x2fae5a, gym: 0xff8a2a, arcade: 0x2fb8d8 }[kind] };
+  const add = (it, box) => {
+    p.items.push(it);
+    if (box) {
+      const sw = Math.abs(Math.sin(it.ry || 0)) > 0.5;
+      p.colliders.push({ x: it.x, z: it.z, w: sw ? box[1] : box[0], d: sw ? box[0] : box[1], h: box[2] });
+    }
+  };
+  const fix = (k, name, x, y, z) => p.fixtures.push({ kind: k, name, x, y, z, id: `${seed}:${p.fixtures.length}` });
+  add({ f: 'sign', x: 0, z: Z1 - 0.09, ry: Math.PI, text: p.name });
+  if (kind === 'club') {
+    p.floors = [{ x0: X0, z0: Z0 - SHELL, x1: X1, z1: Z1, hex: 0x1a1a22, pattern: 0 }];
+    p.lobbyWall = 0x1c1a24;
+    // the bar down the left wall, stools in front, bottles glowing behind
+    const barLen = Math.min(8, D - 6);
+    const bz = Z0 + 3 + barLen / 2;
+    add({ f: 'barShelf', x: X0 + 0.2, z: bz, ry: Math.PI / 2, len: barLen });
+    add({ f: 'bar', x: X0 + 1.3, z: bz, ry: Math.PI / 2, len: barLen }, [barLen, 0.7, 1.1]);
+    add({ f: 'npc', x: X0 + 0.75, z: bz, ry: Math.PI / 2, pose: 'stand' });
+    for (let k = 0; k < Math.floor(barLen / 0.9); k++) add({ f: 'stool', x: X0 + 2.15, z: Z0 + 3.4 + k * 0.9 });
+    fix('bar', 'the bar', X0 + 2.0, 1.1, bz);
+    // a stage and DJ booth at the back, the dance floor before it, light beams over it
+    const fw = Math.min(8, W - 7), fd = Math.min(7, D - 9);
+    const fz = Z1 - 3.2 - fd / 2;
+    add({ f: 'stage', x: 0, z: Z1 - 1.5, w: Math.min(6, W - 4), d: 2.4 });
+    add({ f: 'djBooth', x: 0, z: Z1 - 1.6, ry: Math.PI }, [2.2, 0.8, 1.15]);
+    add({ f: 'npc', x: 0, z: Z1 - 1.0, ry: Math.PI, pose: 'stand' });
+    add({ f: 'disco', x: 0, z: fz, w: fw, d: fd });
+    fix('dance', 'the dance floor', 0, 1, fz);
+    for (let k = 0; k < 7; k++) add({ f: 'npc', x: (r() - 0.5) * (fw - 1.2), z: fz + (r() - 0.5) * (fd - 1.2), ry: r() * 6.28, pose: 'dance' });
+    for (let k = 0; k < 4; k++) add({ f: 'beam', x: (k - 1.5) * (fw / 4), z: fz + (k % 2 ? 1 : -1) * fd * 0.25, color: pick(r, [0xff2fa0, 0x3ef2ff, 0xa86cff, 0xffb347]), tilt: (r() - 0.5) * 0.5 });
+    // booths down the right wall
+    for (let k = 0; k < Math.floor((D - 4) / 3.4); k++) {
+      const z = Z0 + 2.6 + k * 3.4;
+      if (z > fz - fd / 2 - 1.2 && X1 - 2 < fw / 2 + 1) continue;
+      add({ f: 'sofa', x: X1 - 0.5, z, ry: Math.PI / 2, color: pick(r, [0x5a1a3a, 0x2a1a4a, 0x1a3a4a]) }, [2.1, 0.9, 0.9]);
+      add({ f: 'coffeeTable', x: X1 - 1.75, z, ry: Math.PI / 2 }, [1.1, 0.6, 0.45]);
+      if (r() < 0.6) add({ f: 'npc', x: X1 - 0.75, z: z + (r() - 0.5), ry: -Math.PI / 2, pose: 'sit' });
+      fix('seat', 'booth', X1 - 0.9, 0.5, z);
+    }
+    for (const [x0, z0, x1, z1] of [[X0, Z0, X0, Z1], [X1, Z0, X1, Z1], [X0, Z1, X1, Z1]]) add({ f: 'neonStrip', x0, z0, x1, z1, y: 2.7, color: pick(r, [0xff2fa0, 0x3ef2ff, 0xa86cff]) });
+    add({ f: 'neonStrip', x0: X0, z0: Z1, x1: X1, z1: Z1, y: 0.15, color: 0x3ef2ff });
+  } else if (kind === 'store') {
+    p.floors = [{ x0: X0, z0: Z0 - SHELL, x1: X1, z1: Z1, hex: 0xe0dcd4, pattern: 0 }];
+    p.lobbyWall = 0xe8e6e0;
+    // the till by the door, aisles of shelves, drinks fridges along the back
+    add({ f: 'checkout', x: X1 - 1.6, z: Z0 + 2.2, ry: -Math.PI / 2 }, [1.0, 2.4, 1.0]);
+    add({ f: 'npc', x: X1 - 0.8, z: Z0 + 2.2, ry: -Math.PI / 2, pose: 'stand' });
+    p.service = { kind: 'pills', x: X1 - 2.6, z: Z0 + 2.2 };
+    const aisles = Math.max(1, Math.floor((W - 3) / 2.4));
+    for (let a = 0; a < aisles; a++) {
+      const x = X0 + 1.6 + a * 2.4;
+      if (x > X1 - 3.4) break;
+      const len = Math.max(2, D - 7.5);
+      add({ f: 'aisle', x, z: Z0 + 4.2 + len / 2, len }, [0.9, len, 1.7]);
+    }
+    const fl = Math.min(W - 2, 9);
+    add({ f: 'fridgeWall', x: 0, z: Z1 - 0.45, ry: Math.PI, len: fl }, [fl, 0.8, 2.1]);
+    fix('vending', 'drinks fridge', 0, 1.1, Z1 - 1.2);
+    if (r() < 0.8) add({ f: 'npc', x: X0 + 2.8, z: Z0 + 5, ry: Math.PI / 2, pose: 'stand' });
+    for (let x = X0 + 2; x < X1 - 1; x += 2.6) for (let z = Z0 + 2; z < Z1 - 1; z += 2.6) add({ f: 'ceilingLight', x, z, w: 1.6, d: 0.3 });
+  } else if (kind === 'gym') {
+    p.floors = [{ x0: X0, z0: Z0 - SHELL, x1: X1, z1: Z1, hex: 0x2a2c30, pattern: 0 }];
+    p.lobbyWall = 0x9aa0a8;
+    const racks = Math.min(3, Math.floor((D - 4) / 2.4));
+    for (let k = 0; k < racks; k++) add({ f: 'weightRack', x: X0 + 0.45, z: Z0 + 3 + k * 2.4, ry: Math.PI / 2 }, [1.8, 0.6, 1.1]);
+    for (let k = 0; k < Math.floor((D - 5) / 2.2); k++) {
+      const z = Z0 + 3 + k * 2.2;
+      add({ f: 'bench', x: X0 + 2.6, z, ry: 0 }, [0.5, 1.3, 0.5]);
+      if (k % 2 === 0) fix('train', 'bench press', X0 + 2.6, 0.8, z);
+    }
+    for (let k = 0; k < Math.floor((D - 4) / 1.6); k++) {
+      const z = Z0 + 2.4 + k * 1.6;
+      add({ f: 'treadmill', x: X1 - 1.1, z, ry: Math.PI / 2 }, [0.9, 2.0, 1.4]);
+      if (k % 2 === 1) fix('train', 'treadmill', X1 - 2.2, 1, z);
+      if (r() < 0.35) add({ f: 'npc', x: X1 - 1.1, z, ry: -Math.PI / 2, pose: 'stand' });
+    }
+    for (let k = 0; k < Math.min(3, Math.floor((W - 6) / 2)); k++) {
+      add({ f: 'bag', x: -1.5 + k * 2, z: Z1 - 1.6 }, [0.6, 0.6, 1.8]);
+      fix('bag', 'punching bag', -1.5 + k * 2, 1.2, Z1 - 2.3);
+    }
+    add({ f: 'mirror', x: 0, z: Z1 - 0.06, ry: Math.PI, w: Math.min(W - 2, 10) });
+    for (let x = X0 + 2; x < X1 - 1; x += 3) for (let z = Z0 + 2; z < Z1 - 1; z += 3) add({ f: 'ceilingLight', x, z, w: 2.2, d: 0.35 });
+  } else if (kind === 'arcade') {
+    p.floors = [{ x0: X0, z0: Z0 - SHELL, x1: X1, z1: Z1, hex: 0x2a1a3a, pattern: 2 }];
+    p.lobbyWall = 0x1a1424;
+    const rows = Math.max(1, Math.floor((W - 3) / 3));
+    let n = 0;
+    for (let row = 0; row < rows; row++) {
+      const x = X0 + 2 + row * 3;
+      if (x > X1 - 1.5) break;
+      for (let z = Z0 + 3.5; z < Z1 - 2.5; z += 1.0) {
+        for (const side of [-1, 1]) {
+          add({ f: 'cabinet', x: x + side * 0.45, z, ry: side > 0 ? -Math.PI / 2 : Math.PI / 2, color: pick(r, [0xff2fa0, 0x3ef2ff, 0xffb347, 0x5dffa8, 0xa86cff]) }, [0.8, 0.8, 1.8]);
+          if (n++ % 3 === 0) fix('arcade', 'arcade cabinet', x + side * 1.3, 1.2, z);
+        }
+      }
+    }
+    for (let k = 0; k < 2; k++) {
+      add({ f: 'claw', x: X1 - 1.0, z: Z0 + 1.6 + k * 1.5, ry: -Math.PI / 2 }, [1.0, 1.0, 2.0]);
+      fix('claw', 'claw machine', X1 - 1.9, 1.2, Z0 + 1.6 + k * 1.5);
+    }
+    for (let k = 0; k < 4; k++) add({ f: 'npc', x: X0 + 2 + Math.floor(r() * rows) * 3 + (r() < 0.5 ? -1.3 : 1.3), z: Z0 + 4 + r() * (D - 7), ry: r() * 6.28, pose: 'stand' });
+    for (const [x0, z0, x1, z1] of [[X0, Z0, X0, Z1], [X1, Z0, X1, Z1], [X0, Z1, X1, Z1]]) add({ f: 'neonStrip', x0, z0, x1, z1, y: 2.9, color: pick(r, [0xff2fa0, 0x3ef2ff, 0xa86cff, 0x5dffa8]) });
+  }
+  return p;
+}
+
 // ---------------------------------------------------------------- meshes --
 let MATS = null;
 export const windowLight = new THREE.Color(0.8, 0.9, 1.0);
@@ -267,6 +391,8 @@ function materials() {
     glow: new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2) }),
     glass: new THREE.MeshStandardMaterial({ color: 0xa8c8d8, transparent: true, opacity: 0.2, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide }),
     window: new THREE.MeshBasicMaterial({ color: windowLight }),
+    disco: discoMaterial(),
+    beam: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }),
     shade: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, alphaMap: shadeTexture(), depthWrite: false }),
     floor,
   };
@@ -288,6 +414,25 @@ function shadeTexture() {
   return t;
 }
 
+// a dance floor of light tiles that change colour to the beat
+function discoMaterial() {
+  const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uT = propWind;
+    shader.vertexShader = `varying vec2 vDP;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvDP = position.xz;');
+    shader.fragmentShader = `uniform float uT;\nvarying vec2 vDP;\n${shader.fragmentShader}`.replace('#include <color_fragment>', `#include <color_fragment>
+      vec2 c = floor(vDP / 0.8); vec2 f = fract(vDP / 0.8);
+      float beat = floor(uT * 2.2);
+      float h = fract(sin(dot(c + beat * vec2(1.3, 2.1), vec2(12.9898, 78.233))) * 43758.5453);
+      vec3 col = h < 0.25 ? vec3(1.0, 0.18, 0.62) : h < 0.5 ? vec3(0.24, 0.95, 1.0) : h < 0.7 ? vec3(0.66, 0.42, 1.0) : h < 0.85 ? vec3(1.0, 0.7, 0.28) : vec3(0.05);
+      float edge = smoothstep(0.0, 0.06, min(min(f.x, f.y), min(1.0 - f.x, 1.0 - f.y)));
+      float pulse = 0.55 + 0.45 * pow(fract(uT * 2.2), 0.4);
+      diffuseColor.rgb = col * edge * (1.0 - 0.6 * fract(uT * 2.2)) * 1.6 * pulse + vec3(0.02);`);
+  };
+  m.customProgramCacheKey = () => 'disco-floor';
+  return m;
+}
+
 function geoBox(w, h, d) { const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.deleteAttribute('uv'); return g; }
 function geoCyl(rt, rb, h, seg = 12) { const g = new THREE.CylinderGeometry(rt, rb, h, seg).toNonIndexed(); g.deleteAttribute('uv'); return g; }
 function geoSphere(r, w = 8, h = 6) { const g = new THREE.SphereGeometry(r, w, h).toNonIndexed(); g.deleteAttribute('uv'); return g; }
@@ -301,7 +446,7 @@ function paint(g, hex) {
 
 export function buildFloor(plan) {
   const M = materials();
-  const L = { solid: [], gloss: [], glow: [], glass: [], window: [], floor: [] };
+  const L = { solid: [], gloss: [], glow: [], glass: [], window: [], floor: [], disco: [], beam: [] };
   const own = [];
   const g = new THREE.Group();
   const r = rng(plan.seed ^ 0x9e37);
@@ -310,7 +455,7 @@ export function buildFloor(plan) {
     geo.translate(lx, ly, lz);
     if (ry) geo.rotateY(ry);
     geo.translate(x, y, z);
-    if (list !== 'window' && list !== 'glass') paint(geo, hex);
+    if (list !== 'window' && list !== 'glass' && list !== 'disco') paint(geo, hex);
     L[list].push(geo);
   };
   // ---- floors
@@ -323,8 +468,11 @@ export function buildFloor(plan) {
     L.floor.push(geo);
   };
   const { X0, X1, Z0, Z1, LZ } = plan;
-  floorQuad(X0, Z0 - SHELL, X1, LZ, 0xc8c2b8, 0);                      // lobby: stone (and under the door)
-  floorQuad(-CORR, LZ, CORR, Z1, 0x3a4250, 2);                         // corridor: carpet
+  if (plan.floors) for (const fl of plan.floors) floorQuad(fl.x0, fl.z0, fl.x1, fl.z1, fl.hex, fl.pattern);
+  else {
+    floorQuad(X0, Z0 - SHELL, X1, LZ, 0xc8c2b8, 0);                    // lobby: stone (and under the door)
+    floorQuad(-CORR, LZ, CORR, Z1, 0x3a4250, 2);                       // corridor: carpet
+  }
   for (const rm of plan.rooms) {
     const t = rm.type;
     const [hex, pat] = t === 'flat' ? [pick(r, [0x9a6a44, 0x7e5838, 0xb08a60]), 1] : t === 'break' ? [0xd8d4cc, 0] : t === 'storage' ? [0x8a8a86, 0] : t === 'meeting' ? [0x4a3a3a, 2] : [pick(r, [0x5a606a, 0x4a525c, 0x606058]), 2];
@@ -369,11 +517,13 @@ export function buildFloor(plan) {
       put('gloss', geoBox(alongX ? 0.05 : 0.06, 1.6, alongX ? 0.06 : 0.05), wx + off[0] * 1.5, 1.75, wz + off[2] * 1.5, 0, 0x2a2c30);
     }
   };
-  lining(X0 + 0.02, LZ, X0 + 0.02, Z1, true);
-  lining(X1 - 0.02, LZ, X1 - 0.02, Z1, true);
+  lining(X0 + 0.02, LZ, X0 + 0.02, Z1, plan.windows !== false);
+  lining(X1 - 0.02, LZ, X1 - 0.02, Z1, plan.windows !== false);
   lining(X0, Z1 - 0.02, X1, Z1 - 0.02, false);
-  lining(X0 + 0.02, Z0, X0 + 0.02, LZ, false);
-  lining(X1 - 0.02, Z0, X1 - 0.02, LZ, false);
+  if (LZ > Z0 + 0.1) {
+    lining(X0 + 0.02, Z0, X0 + 0.02, LZ, false);
+    lining(X1 - 0.02, Z0, X1 - 0.02, LZ, false);
+  }
   // doorways: a frame, and a door standing open into the room
   for (const gp of plan.gaps) {
     const s = gp.side;
@@ -543,12 +693,104 @@ export function buildFloor(plan) {
       case 'nightstand': B('solid', 0.45, 0.55, 0.42, 0, 0.28, 0, 0x5a4434); C('solid', 0.07, 0.1, 0.3, 0, 0.7, 0, 0x2a2c30, 8); C('glow', 0.14, 0.1, 0.18, 0, 0.92, 0, 0xffd8a0, 10); break;
       case 'wardrobe': B('solid', 1.2, 2.2, 0.6, 0, 1.1, 0, pick(r, PALETTE.wood)); B('solid', 0.01, 2.1, 0.61, 0, 1.1, 0, 0x2a2420); break;
       case 'tv': B('solid', 1.4, 0.5, 0.42, 0, 0.25, 0, 0x2a2c30); B('gloss', 1.25, 0.72, 0.04, 0, 1.0, 0.05, 0x101114); B('glow', 1.19, 0.66, 0.005, 0, 1.0, 0.028, pick(r, [0x3a6a9a, 0x6a3a7a, 0x2a7a6a])); break;
+      case 'bar': {
+        const len = it.len;
+        B('solid', len, 1.05, 0.6, 0, 0.53, 0, 0x2a1e1a);
+        B('gloss', len + 0.1, 0.05, 0.75, 0, 1.08, -0.05, 0x101014);
+        B('glow', len, 0.03, 0.02, 0, 0.95, -0.32, 0xff2fa0);
+        for (let k = 0; k < 6; k++) C('glass', 0.035, 0.035, 0.14, -len / 2 + 0.6 + k * (len / 6), 1.17, 0, 0, 8);
+        break;
+      }
+      case 'barShelf': {
+        const len = it.len;
+        B('solid', len, 2.2, 0.35, 0, 1.1, 0, 0x1a1418);
+        for (let k = 0; k < 3; k++) {
+          B('glow', len - 0.2, 0.02, 0.3, 0, 1.0 + k * 0.45, 0, 0x6a4a8a);
+          for (let b = -len / 2 + 0.2; b < len / 2 - 0.15; b += 0.13 + r() * 0.06) C('glow', 0.035, 0.04, 0.24 + r() * 0.1, b, 1.15 + k * 0.45, 0.02, pick(r, [0x3a7a3a, 0x7a4a1a, 0x5a2a6a, 0x2a5a7a, 0x8a7a3a]), 8);
+        }
+        break;
+      }
+      case 'stool': C('gloss', 0.03, 0.03, 0.7, 0, 0.35, 0, 0x9aa0a8, 6); C('solid', 0.2, 0.2, 0.06, 0, 0.72, 0, 0x5a1a2a, 12); C('gloss', 0.2, 0.2, 0.02, 0, 0.01, 0, 0x9aa0a8, 12); break;
+      case 'stage': B('gloss', it.w, 0.3, it.d, 0, 0.15, 0, 0x15151a); B('glow', it.w, 0.03, 0.03, 0, 0.3, -it.d / 2, 0x3ef2ff); break;
+      case 'djBooth': B('solid', 2.2, 1.0, 0.8, 0, 0.8, 0, 0x101014); B('glow', 2.0, 0.04, 0.02, 0, 1.0, -0.41, 0xa86cff);
+        for (const sx of [-0.55, 0.55]) C('gloss', 0.18, 0.18, 0.03, sx, 1.32, 0.05, 0x2a2c30, 16); B('glow', 0.5, 0.12, 0.3, 0, 1.33, 0.05, 0x3ef2ff); break;
+      case 'disco': {
+        const geo = new THREE.PlaneGeometry(it.w, it.d).rotateX(-Math.PI / 2).toNonIndexed();
+        geo.deleteAttribute('uv');
+        geo.translate(it.x, 0.035, it.z);
+        L.disco.push(geo);
+        break;
+      }
+      case 'beam': {
+        const geo = new THREE.CylinderGeometry(0.08, 1.4, CEIL - 0.1, 16, 1, true).toNonIndexed();
+        geo.deleteAttribute('uv');
+        geo.rotateZ(it.tilt || 0);
+        geo.translate(it.x, (CEIL - 0.1) / 2, it.z);
+        paint(geo, it.color);
+        L.beam.push(geo);
+        put('glow', geoBox(0.3, 0.12, 0.3), it.x, CEIL - 0.08, it.z, 0, it.color);
+        break;
+      }
+      case 'neonStrip': {
+        const len = Math.hypot(it.x1 - it.x0, it.z1 - it.z0), alongX = Math.abs(it.x1 - it.x0) > Math.abs(it.z1 - it.z0);
+        const inset = 0.1;
+        const cx = (it.x0 + it.x1) / 2 + (alongX ? 0 : -Math.sign((it.x0 + it.x1) / 2) * inset), cz = (it.z0 + it.z1) / 2 + (alongX ? -Math.sign((it.z0 + it.z1) / 2) * inset : 0);
+        put('glow', geoBox(alongX ? len : 0.04, 0.05, alongX ? 0.04 : len), cx, it.y, cz, 0, it.color);
+        break;
+      }
+      case 'checkout': B('solid', 2.4, 1.0, 0.9, 0, 0.5, 0, 0xd8d4cc); B('gloss', 2.45, 0.04, 0.95, 0, 1.02, 0, 0x3a3e44);
+        B('gloss', 0.4, 0.3, 0.05, 0.5, 1.3, 0.2, 0x15161a); B('glow', 0.36, 0.25, 0.01, 0.5, 1.3, 0.17, 0x5dffa8);
+        for (let k = 0; k < 8; k++) B('solid', 0.07, 0.12, 0.05, -0.9 + k * 0.12, 1.1, -0.35, pick(r, [0xe84a3a, 0x3ae86a, 0xe8c83a, 0x3a8ae8])); break;
+      case 'aisle': {
+        const len = it.len;
+        B('gloss', 0.12, 1.7, len, 0, 0.85, 0, 0xe8e8e4);
+        for (const side of [-1, 1]) for (let k = 0; k < 4; k++) {
+          B('gloss', 0.38, 0.02, len, side * 0.25, 0.2 + k * 0.45, 0, 0xd8d8d4);
+          for (let z = -len / 2 + 0.12; z < len / 2 - 0.1;) {
+            const pw = 0.1 + r() * 0.16, ph = 0.14 + r() * 0.2;
+            if (r() < 0.88) B('solid', 0.22, ph, pw, side * 0.27, 0.21 + k * 0.45 + ph / 2, z + pw / 2, pick(r, [0xe84a3a, 0x3ae86a, 0xe8c83a, 0x3a8ae8, 0xf0f0f0, 0xe87a2a, 0x8a3ae8, 0x2a2a2a]));
+            z += pw + 0.02;
+          }
+        }
+        break;
+      }
+      case 'fridgeWall': {
+        const len = it.len;
+        B('gloss', len, 2.1, 0.8, 0, 1.05, 0, 0xc8ccd0);
+        for (let k = 0; k < Math.floor(len / 0.9); k++) {
+          const x = -len / 2 + 0.45 + k * 0.9;
+          B('glow', 0.82, 1.7, 0.02, x, 1.05, -0.41, 0xd8ecf4);
+          for (let j = 0; j < 4; j++) for (let b = 0; b < 5; b++) C('solid', 0.035, 0.035, 0.2, x - 0.3 + b * 0.15, 0.4 + j * 0.42, -0.3, pick(r, [0xe84a3a, 0x3ae86a, 0x3a8ae8, 0xe8c83a, 0xf0f0f0]), 8);
+          put('glass', geoBox(0.84, 1.75, 0.02), it.x, 1.05, it.z, it.ry, 0, x, 0, -0.43);
+        }
+        break;
+      }
+      case 'weightRack': B('gloss', 1.8, 0.05, 0.5, 0, 0.5, 0, 0x2a2c30); B('gloss', 1.8, 0.05, 0.5, 0, 0.95, 0, 0x2a2c30);
+        for (let k = 0; k < 6; k++) for (const y of [0.6, 1.05]) { const g2 = geoCyl(0.07, 0.07, 0.36, 10); g2.rotateZ(Math.PI / 2); put('gloss', g2, it.x, 0, it.z, it.ry || 0, 0x15161a, -0.75 + k * 0.3, y, 0); } break;
+      case 'bench': B('solid', 0.32, 0.1, 1.2, 0, 0.45, 0, 0x1a1a1e); B('gloss', 0.06, 0.4, 0.06, 0, 0.22, 0.45, 0x9aa0a8); B('gloss', 0.06, 0.4, 0.06, 0, 0.22, -0.45, 0x9aa0a8);
+        B('gloss', 1.6, 0.04, 0.04, 0, 1.2, -0.45, 0x9aa0a8); for (const sx of [-0.7, 0.7]) { const g2 = geoCyl(0.2, 0.2, 0.06, 16); g2.rotateZ(Math.PI / 2); put('gloss', g2, it.x, 0, it.z, it.ry || 0, 0x15161a, sx, 1.2, -0.45); } break;
+      case 'treadmill': B('solid', 0.8, 0.18, 1.9, 0, 0.09, 0, 0x1a1a1e); B('gloss', 0.7, 0.02, 1.6, 0, 0.19, 0.1, 0x2a2a2e);
+        for (const sx of [-0.38, 0.38]) B('gloss', 0.05, 1.1, 0.05, sx, 0.65, -0.82, 0x9aa0a8);
+        B('gloss', 0.8, 0.3, 0.1, 0, 1.25, -0.85, 0x15161a); B('glow', 0.5, 0.18, 0.01, 0, 1.27, -0.79, 0x3ef2ff); break;
+      case 'bag': C('gloss', 0.01, 0.01, 0.6, 0, CEIL - 0.3, 0, 0x5a5e64, 4); C('solid', 0.22, 0.22, 1.1, 0, CEIL - 1.15, 0, pick(r, [0x7a1a1a, 0x1a1a1a, 0x1a2a5a]), 14); break;
+      case 'mirror': B('gloss', it.w, 2.0, 0.03, 0, 1.4, 0, 0xc8d8e0); break;
+      case 'cabinet': {
+        B('solid', 0.75, 1.8, 0.75, 0, 0.9, 0, 0x101014);
+        B('gloss', 0.66, 0.5, 0.02, 0, 1.35, -0.38, 0x050506);
+        B('glow', 0.6, 0.44, 0.01, 0, 1.35, -0.395, pick(r, [0x3a6aea, 0xea3a6a, 0x3aea8a, 0xeaa03a, 0x9a3aea]));
+        B('glow', 0.75, 0.16, 0.02, 0, 1.78, -0.36, it.color);
+        B('solid', 0.75, 0.08, 0.3, 0, 1.0, -0.5, 0x1a1a1e);
+        for (const sx of [-0.15, 0.15]) C('glow', 0.025, 0.025, 0.02, sx, 1.05, -0.55, pick(r, [0xff3c4a, 0x3ef2ff, 0xffe44d]), 8);
+        break;
+      }
+      case 'claw': B('solid', 1.0, 0.9, 1.0, 0, 0.45, 0, 0xd83a7a); put('glass', geoBox(0.96, 1.0, 0.96), it.x, 1.4, it.z, it.ry, 0); B('glow', 1.0, 0.12, 1.0, 0, 1.96, 0, 0x8a7a3a);
+        for (let k = 0; k < 10; k++) put('solid', geoSphere(0.09, 6, 4), it.x, 0, it.z, it.ry, pick(r, [0xff7aa8, 0x7ad8ff, 0xffe47a, 0xa87aff]), (r() - 0.5) * 0.7, 0.98, (r() - 0.5) * 0.7); break;
       case 'ceilingLight': put('glow', geoBox(it.w, 0.03, it.d), it.x, CEIL - 0.03, it.z, 0, 0x8a8680); break; // just past the bloom threshold: lit, not glaring
       case 'npc': {
-        const p = buildNPC(pick(r, [0x2a3040, 0x40283a, 0x283a40, 0x3a3a3a, 0x5a4a3a, 0x3a5a6a]), pick(r, [0x3ef2ff, 0xff3c7d, 0xffe44d]), { pose: it.sit ? 'sit' : r() < 0.4 ? 'fold' : 'stand' });
+        const p = buildNPC(pick(r, [0x2a3040, 0x40283a, 0x283a40, 0x3a3a3a, 0x5a4a3a, 0x3a5a6a, 0x6a2a4a, 0x2a5a5a]), pick(r, [0x3ef2ff, 0xff3c7d, 0xffe44d]), { pose: it.pose || (it.sit ? 'sit' : r() < 0.4 ? 'fold' : 'stand') });
         p.group.position.set(it.x, 0, it.z);
         p.group.rotation.y = it.ry || 0;
-        if (it.sit) sit.push(p);
+        if (it.sit || it.pose === 'sit') sit.push(p);
         g.add(p.group);
         people.push(p);
         break;
@@ -590,6 +832,7 @@ export function buildFloor(plan) {
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
     if (k === 'glass') mesh.renderOrder = 2;
+    if (k === 'beam') mesh.renderOrder = 3;
     g.add(mesh);
     own.push(geo);
   }

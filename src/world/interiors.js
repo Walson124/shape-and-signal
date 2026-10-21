@@ -19,6 +19,10 @@ export const VENUES = {
   arena: { name: 'Arena', cn: '竞技场', color: 0xff3c7d, sign: '竞技场 ARENA', desc: 'Fight waves of beasts for prize money.' },
   lobby: { name: 'Residential Block', cn: '住宅', color: 0x8fb8ff, sign: null, desc: '' },
   office: { name: 'Office Block', cn: '写字楼', color: 0x8fb8ff, sign: null, desc: '' },
+  club: { name: 'Nightclub', cn: '夜店', color: 0xff2fa0, sign: null, desc: '' },
+  store: { name: 'Convenience Store', cn: '便利店', color: 0x5dffa8, sign: null, desc: '' },
+  gym: { name: 'Gym', cn: '健身房', color: 0xff8a2a, sign: null, desc: '' },
+  arcade: { name: 'Arcade', cn: '游戏厅', color: 0x3ef2ff, sign: null, desc: '' },
   residence: { name: 'Apartment Block', cn: '公寓楼', color: 0x8fb8ff, sign: null, desc: '' },
 };
 // Order functional venues are handed out, closest to the plaza first.
@@ -91,7 +95,8 @@ export function buildNPC(color, accent, opts = {}) {
     fig.rotation.y = Math.PI;
     skin.setGlow(new THREE.Color(accent), 0.12);
     if (skin.suit) skin.suit.color.multiply(new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.35));
-    skin.setBase(pose === 'sit' ? { drive: 1 } : pose === 'fold' && skin.has('idle_folded') ? { idle_folded: 1 } : { idle: 1 });
+    if (pose === 'dance') skin.setBase({ jog: 1 }, { jog: 0.5 + Math.random() * 0.25 });
+    else skin.setBase(pose === 'sit' ? { drive: 1 } : pose === 'fold' && skin.has('idle_folded') ? { idle_folded: 1 } : { idle: 1 });
     // everyone breathes and shifts on their own time
     skin.update(0.2);
     skin.mixer.update(Math.random() * 4);
@@ -122,6 +127,8 @@ export function buildNPC(color, accent, opts = {}) {
         const dt = last === null ? 0 : Math.min(0.1, Math.max(0, t - last));
         last = t;
         human.skin.update(dt);
+        // dancers sway and turn on the spot
+        if (pose === 'dance') { human.fig.rotation.y = Math.PI + Math.sin(t * 1.1 + phase) * 0.9; human.fig.position.x = Math.sin(t * 2.2 + phase) * 0.06; }
         return;
       }
       body.rotation.y = Math.sin(t * 0.5 + phase) * 0.15;

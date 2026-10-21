@@ -60,7 +60,7 @@ const tA = new THREE.Vector3();
 const WHITE = new THREE.Color(1, 1, 1), MOONLIGHT = new THREE.Color(0.55, 0.68, 1.0), NIGHT_FOG = new THREE.Color(0.05, 0.08, 0.16);
 const GROUND_NIGHT = new THREE.Color(0x3a3020), GROUND_DAY = new THREE.Color(0x8a7a62);
 const SUNSET = new THREE.Color(1.0, 0.62, 0.32);
-const INDOOR_CEIL = new THREE.Color(1.0, 0.96, 0.9), INDOOR_FLOOR = new THREE.Color(0.42, 0.4, 0.38);
+const INDOOR_CEIL = new THREE.Color(1.0, 0.96, 0.9), INDOOR_FLOOR = new THREE.Color(0.42, 0.4, 0.38), INDOOR_NEON = new THREE.Color(0.75, 0.45, 1.0);
 const DUST_FOG = new THREE.Color(0.62, 0.42, 0.24), SNOW_FOG = new THREE.Color(0.78, 0.84, 0.92);
 const tB = new THREE.Vector3();
 const tQ = new THREE.Quaternion();
@@ -2436,6 +2436,12 @@ export class Game {
         bed: '<kbd>E</kbd> SLEEP',
         seat: '<kbd>E</kbd> SIT AND CULTIVATE',
         lift: '<kbd>E</kbd> TAKE THE LIFT TO THE ROOF',
+        bar: `<kbd>E</kbd> ORDER A DRINK · ${fmt(priceFor(8, this.state.realm))} ◈`,
+        dance: '<kbd>E</kbd> DANCE',
+        arcade: `<kbd>E</kbd> PLAY · ${fmt(priceFor(3, this.state.realm))} ◈`,
+        claw: `<kbd>E</kbd> TRY THE CLAW · ${fmt(priceFor(4, this.state.realm))} ◈`,
+        train: `<kbd>E</kbd> TRAIN ON THE ${fx.name.toUpperCase()}`,
+        bag: '<kbd>E</kbd> WORK THE BAG',
         roofLift: '<kbd>E</kbd> TAKE THE LIFT DOWN',
       }[fx.kind] || null;
     }
@@ -2613,7 +2619,7 @@ export class Game {
     const prev = this.inVenue;
     this.inVenue = found;
     if (found && (!prev || prev.v !== found.v) && found.v.kind !== 'lobby') {
-      if (found.v.kind !== 'office' && found.v.kind !== 'residence') this.nix.once(`venue_${found.v.kind}`, `venue.${found.v.kind}`, {}, 0);
+      if (!['office', 'residence', 'club', 'store', 'gym', 'arcade'].includes(found.v.kind)) this.nix.once(`venue_${found.v.kind}`, `venue.${found.v.kind}`, {}, 0);
       this.hud.notify(`<b>${esc(found.v.name)}</b> <span class="cn">${found.v.cn}</span>`, 'yl');
     }
     rt.chamber = !!found && found.v.kind === 'chamber' && s.chamberUntil > s.playtime;
@@ -3843,6 +3849,45 @@ export class Game {
     } else if (fx.kind === 'seat') {
       rt.medToggle = true;
       this.hud.notify('You sit and turn your attention inward.', 'gold');
+    } else if (fx.kind === 'bar') {
+      const price = priceFor(8, s.realm);
+      if (s.coins < price) return this.denied('Not enough coins for a drink.');
+      s.coins -= price;
+      rt.energy = st.maxEnergy;
+      rt.spirit = Math.min(st.maxSpirit, rt.spirit + st.maxSpirit * 0.5);
+      this.sound.pickup();
+      this.hud.notify(`The bartender slides you a ${['Void Spritz', 'Nine Heavens', 'Dragon Blood', 'Neon Plum'][Math.floor(Math.random() * 4)]}. It glows faintly. <b>Full energy</b>, half your spirit back.`, 'green');
+    } else if (fx.kind === 'dance') {
+      if (!ready(30)) return this.denied('Catch your breath first.');
+      cool.set(fx.id, this.time + 30);
+      p.act('spell');
+      rt.spirit = Math.min(st.maxSpirit, rt.spirit + st.maxSpirit * 0.3);
+      this.hud.notify(['You lose yourself in the beat for a while.', 'The crowd makes room. You have moves.', 'Someone cheers. You pretend it was for you.'][Math.floor(Math.random() * 3)], 'violet');
+    } else if (fx.kind === 'arcade' || fx.kind === 'claw') {
+      const price = priceFor(fx.kind === 'arcade' ? 3 : 4, s.realm);
+      if (s.coins < price) return this.denied('Not enough coins.');
+      s.coins -= price;
+      const roll = Math.random();
+      if (fx.kind === 'arcade') {
+        if (roll < 0.04) { const win = priceFor(60, s.realm); s.coins += win; this.sound.reward(); this.hud.notify(`<b>JACKPOT.</b> The cabinet spits out ${fmt(win)} ◈ in tickets, converted.`, 'gold'); }
+        else if (roll < 0.34) { const win = priceFor(8, s.realm); s.coins += win; this.sound.pickup(); this.hud.notify(`New high score. ${fmt(win)} ◈ in prize tickets.`, 'gold'); }
+        else this.hud.notify(['Game over. The cabinet laughs at you.', 'So close. Insert coin.', 'Your reflexes are a cultivator\'s; the joystick is not.'][Math.floor(roll * 30) % 3], 'violet');
+      } else if (roll < 0.22) {
+        const k = Math.random() < 0.6 ? 'heal' : 'energy';
+        s.pills[k]++;
+        this.sound.reward();
+        this.hud.notify(`The claw holds! A plush beast drops out, with a ${k === 'heal' ? 'Rejuvenation Pill' : 'Primal Elixir'} sewn inside.`, 'gold');
+      } else this.hud.notify('The claw drops it. Of course it does.', 'violet');
+    } else if (fx.kind === 'train' || fx.kind === 'bag') {
+      if (!ready(45)) return this.denied('Your muscles need a moment.');
+      if (rt.energy < st.maxEnergy * 0.25) return this.denied('Too tired to train. Eat or rest first.');
+      cool.set(fx.id, this.time + 45);
+      rt.energy -= st.maxEnergy * 0.25;
+      p.act(fx.kind === 'bag' ? 'punch' : 'buff');
+      const xp = this.stats.xpNeed * 0.012;
+      this.addXp(xp);
+      this.sound.confirm();
+      this.hud.notify(`A hard set on the ${esc(fx.name)}. <b>+${fmt(xp)}</b> experience.`, 'gold');
     } else if (fx.kind === 'lift' || fx.kind === 'roofLift') {
       const v = fx.venue;
       const to = fx.kind === 'lift' ? v.roof : v.liftOut;
@@ -4742,11 +4787,13 @@ export class Game {
       // the eye adapts to the dark: nights open up a little instead of going black
       this.exposureTarget = 1 + 0.75 * night * night * (1 - 0.65 * (this.nearCity || 0));
       if (this.inVenue) {
-        // indoors the light comes from the ceiling panels, not the sky and sun through the walls
-        this.hemi.color.copy(INDOOR_CEIL);
+        // indoors the light comes from the ceiling panels, not the sky and sun through the walls;
+        // clubs and arcades are dark and neon
+        const dark = this.inVenue.v.kind === 'club' || this.inVenue.v.kind === 'arcade';
+        this.hemi.color.copy(dark ? INDOOR_NEON : INDOOR_CEIL);
         this.hemi.groundColor.copy(INDOOR_FLOOR);
-        this.hemi.intensity = 1.2;
-        this.ambient.intensity = 0.3;
+        this.hemi.intensity = dark ? 0.62 : 1.2;
+        this.ambient.intensity = dark ? 0.18 : 0.3;
         this.weatherSun = 0.12;
         this.scene.environmentIntensity = 0.35;
         fog.density = 0;

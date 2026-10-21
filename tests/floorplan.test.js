@@ -43,3 +43,20 @@ test('you can walk from the street door down the corridor and into every room', 
     }
   }
 });
+
+test('clubs, stores, gyms and arcades open from the door and nothing usable is walled in', () => {
+  for (const kind of ['club', 'store', 'gym', 'arcade']) {
+    for (let seed = 1; seed < 40; seed++) {
+      const w = 16 + (seed % 6) * 2, d = 16 + (seed % 4) * 3;
+      const p = planFloor(kind, w, d, seed);
+      for (let z = p.Z0 + 0.4; z < p.Z0 + 2.2; z += 0.3) assert.ok(!blocked(p, 0, z, 0.25), `${kind} ${seed}: door blocked`);
+      assert.ok(p.fixtures.length > 0, `${kind} ${seed}: nothing to use`);
+      // somewhere you can stand within reach (1.6 m) of everything usable
+      for (const fx of p.fixtures) {
+        let ok = false;
+        for (let a = 0; a < 16 && !ok; a++) for (const rr of [0, 0.8, 1.4]) { const x = fx.x + Math.cos(a / 16 * Math.PI * 2) * rr, z = fx.z + Math.sin(a / 16 * Math.PI * 2) * rr; if (x > p.X0 + 0.3 && x < p.X1 - 0.3 && z > p.Z0 && z < p.Z1 - 0.3 && !blocked(p, x, z, 0.25)) { ok = true; break; } }
+        assert.ok(ok, `${kind} ${seed}: can't reach the ${fx.name}`);
+      }
+    }
+  }
+});

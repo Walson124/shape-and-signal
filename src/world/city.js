@@ -4,7 +4,7 @@ import { TerraStreets } from './terra-streets.js';
 import { TerraBlock, inTerraBlock } from './terra-block.js';
 import { TerraArchitecture, planTerraBuilding, terraCityProfile } from './terra-architecture.js';
 import { buildSignage } from './neon-signs.js';
-import { planFloor, buildFloor, CEIL } from './floorplan.js';
+import { planFloor, buildFloor, CEIL, HALLS } from './floorplan.js';
 import { addWetness } from './weather.js';
 import { addSkyReflection } from './glass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -248,7 +248,7 @@ export function buildSettlement(site, R, opts = {}) {
   shells.forEach((sh, i) => {
     // past the shops, buildings are office blocks and apartments you can walk around in
     const hk = Math.abs(Math.sin(sh.x * 12.9898 + sh.z * 78.233) * 43758.5453) % 1;
-    const kind = order[i] || (hk < 0.5 ? 'office' : 'residence');
+    const kind = order[i] || (hk < 0.36 ? 'office' : hk < 0.72 ? 'residence' : hk < 0.8 ? 'club' : hk < 0.87 ? 'store' : hk < 0.93 ? 'gym' : 'arcade');
     const v = VENUES[kind];
     // the door faces the city centre along the dominant axis
     const alongX = Math.abs(sh.x) > Math.abs(sh.z);
@@ -319,8 +319,8 @@ export function buildSettlement(site, R, opts = {}) {
       venue.sign = sign;
     }
     // furniture blocks movement even before the meshes exist
-    const fplan = kind === 'office' || kind === 'residence' ? planFloor(kind, bw, bd, Math.floor(hk * 1e9) ^ (i * 7919)) : null;
-    const lay = fplan ? { boxes: fplan.colliders, service: null } : interiorLayout(kind, bw, bd);
+    const fplan = kind === 'office' || kind === 'residence' || HALLS.has(kind) ? planFloor(kind, bw, bd, Math.floor(hk * 1e9) ^ (i * 7919)) : null;
+    const lay = fplan ? { boxes: fplan.colliders, service: fplan.service || null, serviceKind: fplan.service?.kind } : interiorLayout(kind, bw, bd);
     if (fplan) {
       venue.plan = fplan;
       venue.name = fplan.name;
@@ -329,10 +329,10 @@ export function buildSettlement(site, R, opts = {}) {
       const hx = (alongX ? bd : bw) / 2 - T, hz = (alongX ? bw : bd) / 2 - T;
       addBox(c0x - hx, c0x + hx, CEIL, G, c0z - hz, c0z + hz, { ceil: true });
       // the lifts go to the roof, and a lift on the roof comes back down
-      venue.roof = toLocal(sh.x, sh.h + 1.75, sh.z);
+      if (!HALLS.has(kind)) venue.roof = toLocal(sh.x, sh.h + 1.75, sh.z);
       const [lx, lz] = toWorldXZ(CORR_LIFT, fplan.LZ - 0.8);
       venue.liftOut = toLocal(lx, 1.7, lz);
-      fixtures.push({ kind: 'roofLift', name: 'lift down', pos: toLocal(sh.x, sh.h + 1.2, sh.z), range: 3, venue, id: `${venue.seed}:roof` });
+      if (!HALLS.has(kind)) fixtures.push({ kind: 'roofLift', name: 'lift down', pos: toLocal(sh.x, sh.h + 1.2, sh.z), range: 3, venue, id: `${venue.seed}:roof` });
     }
     for (const b of lay.boxes) {
       const [cx, cz] = toWorldXZ(b.x, b.z);
@@ -341,7 +341,7 @@ export function buildSettlement(site, R, opts = {}) {
     }
     if (lay.service) {
       const [sx, sz] = toWorldXZ(lay.service.x, lay.service.z);
-      services.push({ kind, name: v.name, pos: toLocal(sx, 1.6, sz), range: 4.5, venue, city: site.name });
+      services.push({ kind: lay.serviceKind || kind, name: venue.name || v.name, pos: toLocal(sx, 1.6, sz), range: 4.5, venue, city: site.name });
     }
     venues.push(venue);
   });
