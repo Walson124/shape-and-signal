@@ -6,6 +6,7 @@ import { TerraArchitecture, planTerraBuilding, terraCityProfile } from './terra-
 import { buildSignage } from './neon-signs.js';
 import { planFloor, buildFloor, CEIL } from './floorplan.js';
 import { addWetness } from './weather.js';
+import { addSkyReflection } from './glass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng.js';
 import { signTexture } from './textures.js';
@@ -138,6 +139,8 @@ export function buildSettlement(site, R, opts = {}) {
   const streetMat = new THREE.MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.85, metalness: 0.1 });
   // rain soaks the city: streets turn to dark mirrors, walls darken
   addWetness(towerMat, { gloss: 0.25, darken: 0.25, key: 'tw' });
+  // the dark panes in the facade texture are glass: they mirror the sky
+  addSkyReflection(towerMat, { mask: '1.0 - smoothstep(0.035, 0.11, dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)))', strength: 0.85, key: 'tw' });
   addWetness(wallMat, { gloss: 0.25, darken: 0.25, key: 'wl' });
   addWetness(darkMat, { gloss: 0.2, darken: 0.2, key: 'dk' });
   addWetness(streetMat, { gloss: 0.06, darken: 0.35, key: 'st' });

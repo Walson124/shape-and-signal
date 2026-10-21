@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addSkyReflection } from './glass.js';
 import { mulberry32 } from '../core/rng.js';
 
 let cache;
@@ -84,5 +85,8 @@ export function blockMaterials() {
     };
     material.customProgramCacheKey = () => 'concourse-baked-light-v1';
   }
+  // windows and glass mirror the sky
+  addSkyReflection(materials.window, { strength: 0.8, key: 'bw' });
+  addSkyReflection(materials.glass, { strength: 0.9, key: 'bg' });
   return materials;
 }
