@@ -136,7 +136,7 @@ export class AudioEngine {
   tone({ freq = 440, type = 'sine', dur = 0.15, vol = 0.2, slide = 0, attack = 0.004, delay = 0, pos = null, filter = 0, bus = null, detune = 0 }) {
     if (!this.ctx) return;
     const ctx = this.ctx;
-    const t = ctx.currentTime + delay;
+    const t = ctx.currentTime + (Number.isFinite(delay) ? Math.max(0, delay) : 0);
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.type = type;
@@ -164,7 +164,8 @@ export class AudioEngine {
   noise({ dur = 0.3, vol = 0.3, freq = 1200, q = 0.8, type = 'lowpass', slide = 0, delay = 0, pos = null, attack = 0.002, bus = null }) {
     if (!this.ctx) return;
     const ctx = this.ctx;
-    const t = ctx.currentTime + delay;
+    // a bad delay would make Web Audio throw and stop the frame: treat it as none
+    const t = ctx.currentTime + (Number.isFinite(delay) ? Math.max(0, delay) : 0);
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const f = ctx.createBiquadFilter();
@@ -369,9 +370,10 @@ export class AudioEngine {
     this.gustFilter.frequency.setTargetAtTime(300 + gust * 260 * (1 + 0.4 * Math.sin(time * 0.9)), t, 0.4);
   }
 
-  thunder(dist) {
+  // storm thunder from a lightning strike dist metres away (arrives later the further it is)
+  stormThunder(dist) {
     if (!this.ctx) return;
-    const delay = Math.min(4, dist / 340);
+    const delay = Number.isFinite(dist) ? Math.min(4, Math.max(0, dist) / 340) : 0;
     const near = Math.max(0.15, 1 - dist / 1600);
     if (dist < 500) this.noise({ dur: 0.35, vol: 0.5 * near, freq: 2500, type: 'highpass', delay });
     this.noise({ dur: 3.2, vol: 0.6 * near, freq: 240, slide: -160, delay: delay + 0.05, attack: 0.05 });

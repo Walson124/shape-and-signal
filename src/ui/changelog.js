@@ -1,6 +1,13 @@
 // What changed and when, newest first. Shown on the title screen.
 export const CHANGELOG = [
   {
+    date: '2026-10-24', version: '0.14.1',
+    title: 'Fixes',
+    items: [
+      'Fixed the game freezing the moment a World-Eater woke (and during breakthrough tribulations and some techniques): a sound effect added with the weather broke the older thunder.',
+    ],
+  },
+  {
     date: '2026-10-23', version: '0.14.0',
     title: 'Step inside',
     items: [

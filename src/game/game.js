@@ -4848,7 +4848,7 @@ export class Game {
       at.setLength(f.groundBelow(at));
       this.combat.lightning(at, 0xd8e2ff, 900, up.clone());
       this.post.fx.flash = Math.min(0.5, this.post.fx.flash + 0.28 * (1 - d / 1200));
-      this.sound.thunder?.(d);
+      this.sound.stormThunder?.(d);
     }
   }
 
