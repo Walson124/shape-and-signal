@@ -122,6 +122,10 @@ export class BoardView {
   bind() {
     const g = this.grid;
     g.addEventListener('contextmenu', (e) => e.preventDefault());
+    // taps are handled on pointerup, so the browser's own touch handling isn't needed here;
+    // cancelling it stops iOS Safari zooming on quick double taps (it doesn't always honour
+    // touch-action) without touching scrolling or pinch zoom
+    g.addEventListener('touchend', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
     let touch = null; // { i, x, y, timer, fired }
     let pressed = -1;
     const press = (i) => {
