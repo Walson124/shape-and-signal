@@ -2,12 +2,35 @@
 
 Small games and group tools that run in the browser. Open a tab, send a link, play together. No accounts.
 
+**Live: [shape-and-signal.walson124.workers.dev](https://shape-and-signal.walson124.workers.dev)**
+
 | App | Path | What it is |
 | --- | --- | --- |
 | Hub | `/` | The front page linking to everything |
 | **Whereform** | `/whereform/` | Daily geography game: name the country from the signals it leaves behind |
 | **Minesweeper Duel** | `/mines/` | Real-time Minesweeper races for 2–4 players, plus solo practice |
-| **Whereto** | `/whereto/` | Like when2meet, but for places: everyone marks the spots that work on a map, and the group overlap picks the place |
+| **Whereto** | `/whereto/` | Like when2meet, but for places: everyone shades the areas that work for them on a map, and the group overlap picks the place |
+
+![The Shape & Signal hub](docs/screenshots/hub.png)
+
+**Whereto:** four friends shade where they'd go in Italy; the heat map and ranking show the area that works for everyone.
+
+![Whereto: a group trip plan on the real map](docs/screenshots/whereto.jpg)
+
+**Minesweeper Duel:** a race on separate boards, with the opponent's board filling in live on the right.
+
+![Minesweeper Duel mid-race](docs/screenshots/mines.png)
+
+**Whereform:** today's first place, with three starting signals and five more to unlock.
+
+![Whereform round](docs/screenshots/whereform.jpg)
+
+## Tech
+
+- **Front end:** Vite multi-page build; plain JavaScript for the hub, Minesweeper Duel and Whereto, React for Whereform. Maps are drawn with d3-geo (SVG) and MapLibre GL (vector tiles from OpenFreeMap / OpenStreetMap).
+- **Back end:** one Cloudflare Worker serving the static build plus two kinds of Durable Objects: a `MinesRoom` per match (WebSockets, server-authoritative moves, reconnects) and a `Plan` per Whereto plan (SQLite-backed storage, self-deleting after 60 days idle).
+- **Shared logic:** the Minesweeper rules (`src/mines/core.js`) run in both the browser and the Worker, so the server replays every move with the same code the player sees.
+- **Tests:** `npm test` (Node's test runner) covers board generation, match flow, plan validation and the shading/overlap maths.
 
 ## Run it
 
