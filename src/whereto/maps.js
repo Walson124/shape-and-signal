@@ -9,11 +9,15 @@ import usUrl from 'us-atlas/states-albers-10m.json?url';
 // (`d`, an SVG path), a point (`cx`, `cy`) or a box (`x`, `y`, `w`, `h`, in map units).
 // Spot ids are what people's marks are stored under, so they must never change.
 
+// `geo` isn't a built-in drawing like the rest: it's the real, zoomable map (geo-view.js)
+// where people shade areas. `cities` and `office` are kept so older plans still open, but
+// aren't offered for new ones.
 export const BUILTINS = {
-  world: { label: 'World · countries', blurb: 'Pick countries. Good for big trips.', kinds: ['travel'] },
-  cities: { label: 'World · cities', blurb: '120+ popular destinations.', kinds: ['travel'] },
+  geo: { label: 'Real map', blurb: 'Zoom anywhere and shade any area: regions, cities, neighbourhoods.', kinds: ['travel', 'meet', 'other'] },
+  world: { label: 'World · countries', blurb: 'Pick whole countries.', kinds: ['travel'] },
+  cities: { label: 'World · cities', blurb: '120+ popular destinations.', kinds: ['travel'], hidden: true },
   usa: { label: 'United States', blurb: 'Pick states. Road trips, reunions.', kinds: ['travel', 'meet'] },
-  office: { label: 'Sample office', blurb: 'A floor plan with rooms. Try it, then upload yours.', kinds: ['meet'] },
+  office: { label: 'Sample office', blurb: 'A floor plan with rooms. Try it, then upload yours.', kinds: ['meet'], hidden: true },
 };
 
 const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -166,8 +170,8 @@ export const gridName = (c, r) => `${c < 26 ? COLS[c] : COLS[Math.floor(c / 26) 
 export function imageMap(map, imageUrl) {
   const { w, h } = map;
   let spots;
-  if (map.spots?.length) {
-    spots = map.spots.map((s) => ({ id: s.id, name: s.name, x: s.x * w, y: s.y * h, w: s.w * w, h: s.h * h }));
+  if (map.spots?.length || map.shade) {
+    spots = (map.spots || []).map((s) => ({ id: s.id, name: s.name, x: s.x * w, y: s.y * h, w: s.w * w, h: s.h * h }));
   } else {
     const { cols, rows } = map.grid;
     const cw = w / cols, ch = h / rows;

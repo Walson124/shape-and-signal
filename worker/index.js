@@ -44,7 +44,7 @@ async function plans(request, env, url) {
       const res = await env.PLANS.get(env.PLANS.idFromName(id)).fetch('https://plan/create', {
         method: 'POST', body: JSON.stringify({ plan: v.plan, image: v.image }),
       });
-      if (res.ok) return json(200, { id });
+      if (res.ok) return json(200, { id, key: (await res.json()).key });
     }
     return json(500, { error: "Couldn't save the plan. Try again." });
   }

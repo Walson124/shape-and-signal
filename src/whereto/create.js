@@ -1,15 +1,17 @@
 import { esc, toast } from '../platform/shell.js';
 import { BUILTINS, gridName } from './maps.js';
-import { api, rememberPlan, recentPlans, KIND } from './common.js';
+import { api, rememberPlan, recentPlans, forgetPlan, deletePlan, KIND } from './common.js';
+import { searchPlaces } from './geocode.js';
 
-// The "new plan" page: what kind of plan, a name, and a map (built in, or an uploaded
-// picture with spots drawn on it or a grid over it).
+// The "new plan" page: what kind of plan, a name, and a map: the real map (people shade
+// areas), a built-in one, or an uploaded picture with spots drawn on it, a grid over it, or
+// free shading.
 
 const $ = (id) => document.getElementById(id);
 const MAX_SIDE = 1600;
 const MAX_CHARS = 1_400_000;
 
-const state = { kind: 'travel', map: 'world', img: null, editMode: 'spots', spots: [], cols: 16, sel: null, touchedTitle: false };
+const state = { kind: 'travel', map: 'geo', img: null, editMode: 'spots', spots: [], cols: 16, sel: null, touchedTitle: false, view: null };
 let spotSeq = 0;
 
 export function showCreate() {
@@ -31,7 +33,7 @@ function renderKinds() {
     if (!b) return;
     state.kind = b.dataset.kind;
     // steer the map to something that fits, unless they've uploaded one
-    if (!state.img) state.map = { travel: 'world', meet: 'office', other: 'upload' }[state.kind];
+    if (!state.img) state.map = 'geo';
     paint();
     renderMaps();
   };
@@ -40,7 +42,7 @@ function renderKinds() {
 
 function renderMaps() {
   const box = $('maps');
-  const opts = [...Object.entries(BUILTINS), ['upload', { label: 'Upload your own', blurb: 'Floor plans, campus maps, anything.' }]];
+  const opts = [...Object.entries(BUILTINS).filter(([, m]) => !m.hidden), ['upload', { label: 'Upload your own', blurb: 'Floor plans, campus maps, anything.' }]];
   box.innerHTML = opts.map(([id, m]) => `
     <button type="button" data-map="${id}" aria-pressed="${state.map === id}" class="${id === 'upload' ? 'up' : ''} ${m.kinds && !m.kinds.includes(state.kind) ? 'dim' : ''}">
       <span class="mthumb m-${id}" aria-hidden="true"></span>
@@ -53,6 +55,23 @@ function renderMaps() {
     renderMaps();
   };
   $('upload').classList.toggle('hidden', state.map !== 'upload');
+  $('geo-start').classList.toggle('hidden', state.map !== 'geo');
+}
+
+// the real map can start zoomed in on a place
+$('geo-find').addEventListener('click', findStart);
+$('geo-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); findStart(); } });
+async function findStart() {
+  const q = $('geo-q').value.trim();
+  const out = $('geo-picked');
+  if (!q) { state.view = null; out.textContent = 'The map will start on the whole world.'; return; }
+  out.textContent = 'Searching…';
+  let found = [];
+  try { found = await searchPlaces(q); } catch { /* offline */ }
+  if (!found.length) { state.view = null; out.textContent = `Couldn't find "${q}". The map will start on the whole world.`; return; }
+  const [w, s, e, n] = found[0].bbox;
+  state.view = [Math.max(-180, w), Math.max(-85, s), Math.min(180, e), Math.min(85, n)];
+  out.textContent = `Starts at: ${found[0].name}`;
 }
 
 // ------------------------------------------------------------------ upload + editor
@@ -116,7 +135,9 @@ function renderEditor() {
   $('spot-list').classList.toggle('hidden', grid);
   $('edit-help').textContent = grid
     ? 'People will paint squares of this grid. Use this when there are no clear rooms or areas.'
-    : 'Drag on the picture to draw a box around each spot (a room, a building, an area), then name it below.';
+    : state.editMode === 'shade'
+      ? 'People will shade any part of the picture with a brush. Optional: draw and name boxes (rooms, buildings) so Whereto can name the best area.'
+      : 'Drag on the picture to draw a box around each spot (a room, a building, an area), then name it below.';
   const stage = $('stage');
   stage.style.aspectRatio = `${w} / ${h}`;
   let overlay = '';
@@ -192,7 +213,7 @@ function selectSpot(id) {
 
 function renderSpotList() {
   const list = $('spot-list');
-  if (!state.spots.length) { list.innerHTML = '<li class="empty muted small">No spots yet. Drag on the picture to add one.</li>'; return; }
+  if (!state.spots.length) { list.innerHTML = `<li class="empty muted small">No spots yet. Drag on the picture to add one${state.editMode === 'shade' ? ' (optional)' : ''}.</li>`; return; }
   list.innerHTML = state.spots.map((s, i) => `
     <li data-id="${s.id}" class="${s.id === state.sel ? 'sel' : ''}">
       <span class="mono muted">${i + 1}</span>
@@ -232,13 +253,18 @@ $('create-form').addEventListener('submit', async (e) => {
   if (state.map === 'upload') {
     if (!state.img) { fail('Upload a picture of your map, or pick one of ours.'); return; }
     const { url, w, h } = state.img;
-    if (state.editMode === 'spots') {
+    if (state.editMode === 'shade') {
+      const named = state.spots.map((s, i) => ({ ...s, name: s.name.trim() || `Spot ${i + 1}` }));
+      map = { type: 'image', img: url, w, h, spots: named, shade: true };
+    } else if (state.editMode === 'spots') {
       if (!state.spots.length) { fail('Draw at least one spot on the picture, or switch to "Paint a grid".'); return; }
       const named = state.spots.map((s, i) => ({ ...s, name: s.name.trim() || `Spot ${i + 1}` }));
       map = { type: 'image', img: url, w, h, spots: named };
     } else {
       map = { type: 'image', img: url, w, h, spots: [], grid: { cols: state.cols, rows: rowsFor(state.cols) } };
     }
+  } else if (state.map === 'geo') {
+    map = { type: 'geo', view: state.view };
   } else {
     map = { type: 'builtin', id: state.map };
   }
@@ -246,8 +272,8 @@ $('create-form').addEventListener('submit', async (e) => {
   btn.disabled = true;
   btn.textContent = 'Creating…';
   try {
-    const { id } = await api('POST', '/api/plan', { title, note: $('note').value.trim(), kind: state.kind, map });
-    rememberPlan(id, title);
+    const { id, key } = await api('POST', '/api/plan', { title, note: $('note').value.trim(), kind: state.kind, map });
+    rememberPlan(id, title, key);
     location.href = `?p=${id}`;
   } catch (ex) {
     fail(ex.message);
@@ -259,5 +285,25 @@ $('create-form').addEventListener('submit', async (e) => {
 function renderRecent() {
   const list = recentPlans();
   $('recent').classList.toggle('hidden', !list.length);
-  $('recent-list').innerHTML = list.map((p) => `<li><a href="?p=${encodeURIComponent(p.id)}">${esc(p.title)}</a> <span class="muted small">${new Date(p.at).toLocaleDateString()}</span></li>`).join('');
+  $('recent-list').innerHTML = list.map((p) => `<li>
+    <a href="?p=${encodeURIComponent(p.id)}">${esc(p.title)}</a>
+    <span class="muted small">${p.key ? 'yours · ' : ''}${new Date(p.at).toLocaleDateString()}</span>
+    ${p.key
+    ? `<button type="button" class="linkish danger small" data-del="${esc(p.id)}">Delete</button>`
+    : `<button type="button" class="linkish small" data-hide="${esc(p.id)}" aria-label="Remove from this list">Remove</button>`}
+  </li>`).join('');
 }
+
+$('recent-list').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del]')?.dataset.del;
+  const hide = e.target.closest('[data-hide]')?.dataset.hide;
+  if (hide) { forgetPlan(hide); renderRecent(); return; }
+  if (!del) return;
+  const p = recentPlans().find((x) => x.id === del);
+  if (!confirm(`Delete "${p?.title || 'this plan'}" for everyone? This can't be undone.`)) return;
+  try { await deletePlan(del); toast('Plan deleted'); } catch (ex) {
+    // already gone (expired or deleted elsewhere): just tidy the list
+    if (ex.status === 404) forgetPlan(del); else { toast(ex.message, 3500); return; }
+  }
+  renderRecent();
+});

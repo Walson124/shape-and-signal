@@ -36,14 +36,20 @@ The server (`worker/mines-match.js`, one `MinesRoom` Durable Object per code) ho
 
 ## Whereto
 
-Make a plan (a trip, a meetup or anything else), pick a map and share the link (`/whereto/?p=<id>`). Everyone enters a name (with an optional password that stops others editing their picks) and paints spots as *Works* or *If needed*, by clicking or dragging across them like when2meet. The **Everyone** view shades each spot by how many people can do it, outlines spots that work for the whole group, and ranks the best spots. Spots everyone can do come first, then those more people can do, then those with more "works". Hover or tap a person to see their picks. Pages poll every few seconds, so new answers show up live.
+Make a plan (a trip, a meetup or anything else), pick a map and share the link (`/whereto/?p=<id>`). Everyone enters a name (with an optional password that stops others editing their picks) and marks what works for them as *Works* or *If needed*. Pages poll every few seconds, so new answers show up live. Hover or tap a person to see their picks.
+
+There are two ways to mark a map:
+
+- **Shade areas** (the real map, or a picture with *Free shading*): paint any area with a brush, from half a continent down to a neighbourhood. The brush stays the same size on screen, so zooming in gives finer detail; Undo and Erase fix mistakes. The **Everyone** view is a heat map of where people's shading overlaps. The best areas are the biggest patches covered by the most people (then by the most "works"); a dashed circle marks the chosen one, and hovering shows who shaded each place. On the real map, areas are named from OpenStreetMap (Nominatim), e.g. "Around Kyoto, Japan"; on a picture, by the named box they fall in.
+- **Pick spots** (countries, US states, or a picture with drawn boxes or a grid): click or drag across spots like when2meet. Spots everyone can do come first, then those more people can do, then those with more "works".
 
 Maps:
 
-- **World · countries**, **World · cities** (120+ popular destinations), **United States** (states), and a **sample office** floor plan.
-- **Your own picture:** a floor plan, a campus map, a screenshot. You either draw named boxes on it (rooms, buildings, areas) or lay a grid over it for people to paint. Pictures are scaled down in the browser to keep them under about 1 MB.
+- **Real map:** OpenFreeMap vector tiles (OpenStreetMap data, free, no key) drawn with MapLibre, with a place search. A plan can start zoomed in on a place.
+- **World · countries** and **United States** (states). (Older plans on the retired **World · cities** and **sample office** maps still open.)
+- **Your own picture:** a floor plan, a campus map, a screenshot. Draw named boxes on it, lay a grid over it, or let people shade it freely. Pictures are scaled down in the browser to keep them under about 1 MB.
 
-Each plan is a `Plan` Durable Object (`worker/plan.js`) storing the plan, its picture and the responses. Validation lives in `worker/plan-protocol.js` and ranking in `src/whereto/score.js`.
+Each plan is a `Plan` Durable Object (`worker/plan.js`) storing the plan, its picture and the responses. Plans nobody opens for 60 days delete themselves, and whoever made a plan can delete it (their browser keeps a delete key). Validation lives in `worker/plan-protocol.js`, spot ranking in `src/whereto/score.js`, and the shading maths in `src/whereto/shade.js`.
 
 ## Code map (platform)
 
@@ -52,7 +58,7 @@ Each plan is a `Plan` Durable Object (`worker/plan.js`) storing the plan, its pi
 | `index.html`, `src/hub/` | The hub page |
 | `src/platform/` | Shared look (light/dark tokens), top bar, toast, remembered player name |
 | `mines/`, `src/mines/` | Minesweeper Duel page, rules, board view, room connection |
-| `whereto/`, `src/whereto/` | Whereto page: create flow and upload editor, plan view, maps, map view, ranking |
+| `whereto/`, `src/whereto/` | Whereto page: create flow and upload editor, plan view, maps, map views (SVG and the real map), shading, ranking |
 | `whereform/`, `src/whereform/`, `scripts/` | Whereform page, game, content pack and data scripts |
 | `worker/` | Cloudflare Worker: static files, Minesweeper rooms, Whereto plans |
 

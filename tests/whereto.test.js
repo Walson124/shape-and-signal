@@ -32,7 +32,7 @@ test('uploaded maps need a real picture and either spots or a grid', () => {
 
 test('responses keep only valid marks', () => {
   const r = validateResponse({ name: ' Sam ', marks: { c392: 2, 'p:tokyo': 1, bad: 3, 'no spaces': 2 } });
-  assert.deepEqual(r, { ok: true, name: 'Sam', marks: { c392: 2, 'p:tokyo': 1 }, password: '' });
+  assert.deepEqual(r, { ok: true, name: 'Sam', marks: { c392: 2, 'p:tokyo': 1 }, strokes: [], password: '' });
   assert.equal(validateResponse({ name: '', marks: {} }).ok, false);
 });
 

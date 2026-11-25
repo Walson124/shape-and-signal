@@ -37,6 +37,7 @@
 .m-cities { background-image: radial-gradient(circle at 22% 38%, var(--accent) 3px, transparent 4px), radial-gradient(circle at 48% 30%, var(--accent) 3px, transparent 4px), radial-gradient(circle at 70% 52%, var(--accent) 3px, transparent 4px), radial-gradient(circle at 35% 70%, var(--accent) 3px, transparent 4px), radial-gradient(circle at 84% 34%, var(--accent) 3px, transparent 4px), radial-gradient(ellipse 40% 34% at 50% 50%, #9fc5b8 60%, transparent 62%); }
 .m-usa { background-image: linear-gradient(90deg, transparent 24%, var(--line) 24% 25%, transparent 25% 49%, var(--line) 49% 50%, transparent 50% 74%, var(--line) 74% 75%, transparent 75%), radial-gradient(ellipse 42% 32% at 50% 50%, #b9c9e8 70%, transparent 72%); }
 .m-office { background-image: linear-gradient(var(--line-strong) 2px, transparent 2px), linear-gradient(90deg, var(--line-strong) 2px, transparent 2px); background-size: 33% 50%; background-position: -2px -2px; }
+.m-geo { background-image: linear-gradient(115deg, transparent 47%, color-mix(in srgb, var(--warn) 70%, #fff) 47% 50%, transparent 50%), linear-gradient(25deg, transparent 58%, #fff 58% 60%, transparent 60%), radial-gradient(ellipse 30% 40% at 40% 55%, color-mix(in srgb, var(--accent) 45%, transparent) 60%, transparent 62%), linear-gradient(#e6efe3, #dfe9f2); }
 .m-upload { display: grid; place-items: center; border-style: dashed; }
 .m-upload::after { content: '+'; font-size: 30px; color: var(--muted); }
 
@@ -68,6 +69,10 @@
 .recent { margin-top: 28px; }
 .recent h3 { font-size: 16px; }
 .recent ul { padding-left: 18px; display: grid; gap: 4px; }
+.recent li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.recent li .linkish { font-size: 13px; color: var(--muted); }
+.linkish.danger { color: var(--danger, #d93036); }
+.keep-note { text-align: center; margin: 28px 0 0; }
 
 /* ---- plan */
 .plan-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 8px 0 16px; }
@@ -169,3 +174,29 @@
   .legend { margin-left: 0; }
   .verdict { padding: 12px 14px; }
 }
+.btn.danger { color: var(--danger, #d93036); }
+
+/* ---- shading: the real map, the shade canvas and the brush controls */
+.shade-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.mapview.shade .spot, .mapview.shade .spot:hover { stroke-dasharray: 5 4; cursor: inherit; }
+.mapview.shade.paintable[data-tool='paint'] svg { cursor: crosshair; }
+.geoview { position: relative; overflow: hidden; touch-action: none; }
+.geoview .geo-map { position: absolute; inset: 0; }
+.geoview.painting .maplibregl-canvas-container { cursor: crosshair; }
+.geoview .maplibregl-ctrl-bottom-right { z-index: 3; }
+.geoview .maplibregl-ctrl-attrib { font-size: 10.5px; }
+.geo-search { position: absolute; top: 10px; left: 10px; z-index: 4; width: min(320px, calc(100% - 20px)); }
+.geo-search input { width: 100%; height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; box-shadow: var(--shadow); }
+.geo-results { list-style: none; margin: 6px 0 0; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); max-height: 240px; overflow: auto; }
+.geo-results li { padding: 6px 8px; font-size: 13.5px; }
+.geo-results button { all: unset; cursor: pointer; display: block; width: 100%; }
+.geo-results button:hover { color: var(--accent); }
+.brush-ctl { display: inline-flex; gap: 6px; align-items: center; }
+.brush-ctl .seg button { min-width: 34px; display: inline-grid; place-items: center; }
+.brush-ctl .seg i { display: block; width: var(--d); height: var(--d); border-radius: 50%; background: var(--ink-2); }
+.geo-start { margin-top: 14px; }
+.geo-start .row { display: flex; gap: 8px; }
+.geo-start .row .input { flex: 1; min-width: 0; }
+/* the map tiles are light; dim and invert them for dark mode */
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .geoview .maplibregl-canvas { filter: invert(0.92) hue-rotate(180deg) brightness(0.95) contrast(0.9); } }
+:root[data-theme='dark'] .geoview .maplibregl-canvas { filter: invert(0.92) hue-rotate(180deg) brightness(0.95) contrast(0.9); }

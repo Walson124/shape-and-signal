@@ -1,14 +1,18 @@
 import { esc } from '../platform/shell.js';
+import { ShadeLayer } from './shade-layer.js';
 
 // An SVG map you can zoom (wheel, pinch, buttons), pan (drag in "move" mode or with the
 // right/middle button) and paint: press on a spot and drag across others to give them all
 // the same mark, like painting times in when2meet.
+// With opts.brush, painting is freehand shading instead (see shade.js): stored points are
+// fractions of the map's width and height, and brush radii a fraction of its width.
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const MAX_ZOOM = 14;
 
 export class MapView {
-  // opts: { onPaintStart(id) -> value, onPaint(id, value), onHover(id|null, x, y), onClick(id) }
+  // opts: { onPaintStart(id) -> value, onPaint(id, value), onHover(id|null, x, y), onClick(id),
+  //         brush?: { start(x, y), move(x, y), end(), cancel() } }
   constructor(root, def, opts = {}) {
     this.root = root;
     this.def = def;
@@ -54,8 +58,62 @@ export class MapView {
         return `<text x="${s.x + s.w / 2}" y="${s.y + s.h / 2}" font-size="${fs.toFixed(1)}" text-anchor="middle" dominant-baseline="central">${esc(s.name)}</text>`;
       }).join('');
     }
+    if (opts.brush) {
+      root.classList.add('shade');
+      this.layer = new ShadeLayer(root);
+      this.scene = null;
+      new ResizeObserver(() => this.redraw()).observe(root);
+    }
     this.bind();
     this.apply();
+  }
+
+  // ---- freehand shading (opts.brush)
+
+  // CSS px per map unit at the current zoom, and the map's offset inside the root
+  frame() {
+    const r = this.svg.getBoundingClientRect(), root = this.root.getBoundingClientRect();
+    const s = Math.min(r.width / this.def.w, r.height / this.def.h);
+    const ox = r.left - root.left + (r.width - this.def.w * s) / 2, oy = r.top - root.top + (r.height - this.def.h * s) / 2;
+    return { s, ox, oy };
+  }
+  toScreen = (fx, fy) => {
+    const f = this.frame();
+    return [f.ox + (this.tx + this.k * fx * this.def.w) * f.s, f.oy + (this.ty + this.k * fy * this.def.h) * f.s];
+  };
+  radiusPx = (st) => st.r * this.def.w * this.k * this.frame().s;
+  brushRadius(px) { return px / (this.def.w * this.k * this.frame().s); }
+  surfaceAt(clientX, clientY) {
+    const p = this.toMap(clientX, clientY);
+    const x = (p.x - this.tx) / this.k / this.def.w, y = (p.y - this.ty) / this.k / this.def.h;
+    return [Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y))];
+  }
+  show(scene) { this.scene = scene; this.redraw(); }
+  redraw() {
+    if (!this.layer || this.raf) return;
+    this.raf = requestAnimationFrame(() => {
+      this.raf = 0;
+      const r = this.root.getBoundingClientRect();
+      this.layer.fit(r.width, r.height);
+      const sc = this.scene || {};
+      let marker = null;
+      if (sc.marker) {
+        // plane units for pictures: x as a fraction of the width, y as fraction-of-width too
+        const aspect = this.def.h / this.def.w;
+        const [x, y] = this.toScreen(sc.marker.plane[0], sc.marker.plane[1] / aspect);
+        marker = { x, y, r: this.radiusPx({ r: sc.marker.r }), color: sc.marker.color };
+      }
+      this.layer.draw({ ...sc, marker, toScreen: this.toScreen, radiusPx: this.radiusPx });
+    });
+  }
+  // zoom to plane bounds [x0, y0, x1, y1] (fractions of the width)
+  focusPlane(b) {
+    const { w, h } = this.def;
+    const bx = b[0] * w, by = b[1] * w, bw = (b[2] - b[0]) * w, bh = (b[3] - b[1]) * w;
+    this.k = Math.min(MAX_ZOOM, Math.max(1, Math.min(w / (bw * 2.2 + 1), h / (bh * 2.2 + 1))));
+    this.tx = w / 2 - (bx + bw / 2) * this.k;
+    this.ty = h / 2 - (by + bh / 2) * this.k;
+    this.apply(true);
   }
 
   setTool(tool) { this.tool = tool; this.root.dataset.tool = tool; }
@@ -96,6 +154,11 @@ export class MapView {
     this.vp.style.transition = animate ? 'transform 0.35s ease' : '';
     this.vp.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.k})`;
     this.root.style.setProperty('--k', this.k);
+    if (this.layer) {
+      // follow the CSS transition when animating
+      this.redraw();
+      if (animate) { const until = performance.now() + 400; const step = () => { this.redraw(); if (performance.now() < until) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+    }
     if (this.def.pointR) {
       const r = this.def.pointR / Math.sqrt(this.k);
       for (const el of this.els.values()) el.setAttribute('r', r.toFixed(2));
@@ -150,6 +213,7 @@ export class MapView {
       this.svg.setPointerCapture(e.pointerId);
       if (pointers.size === 2) {
         // two fingers: pinch-zoom and pan, and undo nothing painted (paint starts on move)
+        if (drag?.kind === 'brush') this.opts.brush.cancel();
         drag = null;
         const [a, b] = [...pointers.values()];
         pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: this.k, tx: this.tx, ty: this.ty, mid: this.toMap((a.x + b.x) / 2, (a.y + b.y) / 2) };
@@ -157,6 +221,12 @@ export class MapView {
       }
       const id = this.spotAt(e.clientX, e.clientY);
       const wantsPaint = this.paintable && this.tool === 'paint' && e.button === 0;
+      if (wantsPaint && this.opts.brush) {
+        if (e.pointerType === 'touch') { drag = { kind: 'bmaybe', x: e.clientX, y: e.clientY }; return; }
+        drag = { kind: 'brush' };
+        this.opts.brush.start(...this.surfaceAt(e.clientX, e.clientY));
+        return;
+      }
       if (wantsPaint && e.pointerType === 'touch') {
         // a touch could be a pan or a paint: decide once it moves (or lifts)
         drag = { kind: 'maybe', id, x: e.clientX, y: e.clientY, start: this.toMap(e.clientX, e.clientY), tx: this.tx, ty: this.ty };
@@ -185,6 +255,12 @@ export class MapView {
         this.apply();
         return;
       }
+      if (drag?.kind === 'bmaybe') {
+        if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+        this.opts.brush.start(...this.surfaceAt(drag.x, drag.y));
+        drag = { kind: 'brush' };
+      }
+      if (drag?.kind === 'brush') { this.opts.brush.move(...this.surfaceAt(e.clientX, e.clientY)); return; }
       if (!drag) {
         if (e.pointerType !== 'touch') {
           const id = this.spotAt(e.clientX, e.clientY);
@@ -217,7 +293,13 @@ export class MapView {
     const end = (e) => {
       pointers.delete(e.pointerId);
       if (pinch) { if (pointers.size < 2) pinch = null; drag = null; return; }
-      if (drag?.kind === 'maybe' && drag.id) {
+      if (drag?.kind === 'bmaybe') {
+        // a tap: a single dab
+        this.opts.brush.start(...this.surfaceAt(drag.x, drag.y));
+        this.opts.brush.end();
+      } else if (drag?.kind === 'brush') {
+        if (e.type === 'pointercancel') this.opts.brush.cancel(); else this.opts.brush.end();
+      } else if (drag?.kind === 'maybe' && drag.id) {
         // a tap
         const value = this.opts.onPaintStart?.(drag.id);
         this.opts.onPaint?.(drag.id, value);

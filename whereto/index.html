@@ -19,7 +19,7 @@
     <main id="create" class="page hidden">
       <section class="intro">
         <h1>Find a place that works for everyone.</h1>
-        <p class="muted">Like when2meet, but for places. Make a plan, send the link, and everyone marks the spots that work for them. Whereto shows where the group overlaps.</p>
+        <p class="muted">Like when2meet, but for places. Make a plan, send the link, and everyone shades the areas that work for them. Whereto shows where the group overlaps.</p>
       </section>
 
       <form id="create-form" class="card create-card" novalidate onsubmit="event.preventDefault()">
@@ -42,6 +42,13 @@
           <h2><span class="num">3</span>Pick a map</h2>
           <div class="maps" id="maps"></div>
 
+          <div id="geo-start" class="geo-start">
+            <label class="field"><span>Start the map at <span class="muted">(optional)</span></span>
+              <span class="row"><input id="geo-q" class="input" placeholder="A country, region or city, e.g. Japan" /><button type="button" class="btn" id="geo-find">Find</button></span>
+            </label>
+            <p class="muted small" id="geo-picked">The map will start on the whole world.</p>
+          </div>
+
           <div id="upload" class="upload hidden">
             <label class="drop" id="drop">
               <input type="file" id="file" accept="image/*" hidden />
@@ -54,6 +61,7 @@
                 <div class="seg" id="edit-mode">
                   <button type="button" data-v="spots" aria-pressed="true">Draw spots</button>
                   <button type="button" data-v="grid" aria-pressed="false">Paint a grid</button>
+                  <button type="button" data-v="shade" aria-pressed="false">Free shading</button>
                 </div>
                 <span class="spacer"></span>
                 <button type="button" class="btn small ghost" id="replace-img">Change picture</button>
@@ -92,6 +100,7 @@
         <div class="plan-share">
           <button class="btn" id="copy-plan">Copy link</button>
           <a class="btn ghost" href="./">New plan</a>
+          <button class="btn ghost danger hidden" id="delete-plan" type="button">Delete plan</button>
         </div>
       </section>
 
@@ -109,6 +118,14 @@
               <button type="button" data-tool="maybe" class="tool maybe"><i></i><span id="lbl-maybe">If needed</span></button>
               <button type="button" data-tool="erase" class="tool erase"><i></i>Erase</button>
               <button type="button" data-tool="move" class="tool move" title="Drag to move the map">✋ Move</button>
+              <span class="brush-ctl hidden" id="brush-ctl">
+                <span class="seg small" id="brush-size" aria-label="Brush size">
+                  <button type="button" data-size="9" title="Small brush"><i style="--d:6px"></i></button>
+                  <button type="button" data-size="20" title="Medium brush"><i style="--d:11px"></i></button>
+                  <button type="button" data-size="40" title="Large brush"><i style="--d:17px"></i></button>
+                </span>
+                <button type="button" class="tool" id="undo" title="Undo your last stroke">↶ Undo</button>
+              </span>
             </div>
             <div class="legend hidden" id="legend"><span>Fewer</span><i></i><span>Everyone</span></div>
           </div>
@@ -134,7 +151,7 @@
           </section>
 
           <section class="card side-card">
-            <h2>Best spots</h2>
+            <h2 id="ranking-title">Best spots</h2>
             <ol id="ranking" class="ranking"></ol>
           </section>
 
@@ -145,6 +162,7 @@
           </section>
         </aside>
       </div>
+      <p class="keep-note muted small">Plans delete themselves after 60 days without a visit.</p>
       <div id="tip" class="tip hidden" role="tooltip"></div>
     </main>
 
