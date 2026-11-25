@@ -1,0 +1,22 @@
+{
+  // Cloudflare Worker for Shape & Signal: serves dist/ (the hub, Whereform, Minesweeper Duel,
+  // Whereto) and runs Minesweeper Duel matches (/api/mines) and Whereto plans (/api/plan),
+  // each a Durable Object.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shape-and-signal",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-11",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "MINES", "class_name": "MinesRoom" },
+      { "name": "PLANS", "class_name": "Plan" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["MinesRoom", "Plan"] }
+  ]
+}

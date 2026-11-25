@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minesweeper Duel</title>
+    <meta name="description" content="Real-time Minesweeper races for 2-4 players. Share a code, ready up, first to clear the board wins." />
+    <meta property="og:title" content="Minesweeper Duel" />
+    <meta property="og:description" content="Race your friends to clear a Minesweeper board, live." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="topbar"></header>
+    <div id="netbar" class="netbar hidden"></div>
+
+    <!-- ===================================================== HOME -->
+    <main id="home" class="page">
+      <section class="intro">
+        <h1>Minesweeper Duel</h1>
+        <p class="muted">Race 1 to 3 friends to clear a board. The first player to open every safe cell wins.</p>
+      </section>
+      <div class="home-grid">
+        <section class="card panel">
+          <h2>Play with friends</h2>
+          <label class="field"><span>Your name</span><input id="name" class="input" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam" /></label>
+          <button id="create" class="btn primary big">Create a room</button>
+          <div class="or"><span>or join with a code</span></div>
+          <form id="join-form" class="join-row" onsubmit="event.preventDefault()">
+            <input id="code" class="input mono" maxlength="8" placeholder="CODE" autocapitalize="characters" autocomplete="off" spellcheck="false" />
+            <button class="btn big" type="submit">Join</button>
+          </form>
+        </section>
+        <section class="card panel">
+          <h2>Practice solo</h2>
+          <p class="muted small">Same boards, no opponents. Your best times are saved on this device.</p>
+          <div class="seg" id="solo-preset"></div>
+          <button id="solo" class="btn big">Start practice</button>
+          <dl id="bests" class="bests"></dl>
+        </section>
+      </div>
+      <section class="howto">
+        <h3>How to play</h3>
+        <ul>
+          <li><b>Click</b> a cell to open it. <b>Right-click</b> (or long-press on touch) to flag a mine. Hover a cell and press <kbd>Space</kbd> to flag it.</li>
+          <li>Click an open number when its mines are all flagged to open everything around it.</li>
+          <li>Every board starts with an open area, so nobody has to guess their first click.</li>
+          <li><b>Same board</b>: everyone gets the same mines. <b>Separate boards</b>: everyone gets a different board with the same size and mine count.</li>
+          <li>Hitting a mine either <b>freezes you for 5 seconds</b> or <b>knocks you out</b>, whichever the host picked.</li>
+        </ul>
+      </section>
+    </main>
+
+    <!-- ===================================================== LOBBY -->
+    <main id="lobby" class="page hidden">
+      <section class="card panel lobby-head">
+        <div>
+          <div class="muted small">Room code</div>
+          <div id="room-code" class="room-code mono"></div>
+        </div>
+        <div class="lobby-share">
+          <button id="copy-link" class="btn">Copy invite link</button>
+          <button id="share-link" class="btn hidden">Share</button>
+        </div>
+      </section>
+      <div class="lobby-grid">
+        <section class="card panel">
+          <h2>Players</h2>
+          <ol id="players" class="players"></ol>
+        </section>
+        <section class="card panel">
+          <h2>Settings <span id="host-note" class="muted small"></span></h2>
+          <div class="setting"><span>Board</span><div class="seg" id="cfg-preset"></div></div>
+          <div class="setting"><span>Mines</span><div class="seg" id="cfg-boards">
+            <button data-v="same">Same board</button><button data-v="different">Separate boards</button>
+          </div></div>
+          <div class="setting"><span>Hit a mine</span><div class="seg" id="cfg-onmine">
+            <button data-v="stun">Freeze 5 s</button><button data-v="out">You're out</button>
+          </div></div>
+          <p id="cfg-blurb" class="muted small"></p>
+        </section>
+      </div>
+      <section class="lobby-foot">
+        <button id="leave" class="btn ghost">Leave room</button>
+        <span id="lobby-status" class="muted"></span>
+        <button id="ready" class="btn primary big">Ready</button>
+      </section>
+    </main>
+
+    <!-- ===================================================== GAME -->
+    <main id="game" class="page game hidden">
+      <div class="game-main">
+        <div class="hud">
+          <div class="stat"><span class="muted">Time</span><b id="timer" class="mono">0:00.0</b></div>
+          <div class="stat"><span class="muted">Mines left</span><b id="left" class="mono">0</b></div>
+          <div class="stat grow"><span class="muted">Cleared</span><div class="bar"><i id="my-bar"></i></div></div>
+          <button id="flag-mode" class="btn small" aria-pressed="false" title="Tap to flag instead of open">🚩 Flag mode</button>
+        </div>
+        <div id="board-wrap" class="board-wrap">
+          <div id="countdown" class="board-over hidden"><span></span></div>
+          <div id="stun" class="board-over stun hidden"><b>Frozen</b><span class="mono"></span></div>
+        </div>
+        <div id="emotes" class="emotes"></div>
+      </div>
+      <aside id="opps" class="opps"></aside>
+
+      <div id="result" class="result hidden">
+        <div class="card result-card">
+          <h2 id="result-title"></h2>
+          <p id="result-sub" class="muted"></p>
+          <table id="result-table" class="result-table"></table>
+          <div class="result-actions">
+            <button id="result-lobby" class="btn">Settings</button>
+            <button id="result-again" class="btn primary">Play again</button>
+          </div>
+          <p id="result-wait" class="muted small"></p>
+          <button id="result-close" class="btn ghost small">Look at the board</button>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="../src/mines/app.js"></script>
+  </body>
+</html>

@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -21,9 +22,11 @@
     "typescript": "latest",
     "vite": "latest",
     "world-atlas": "^2.0.2",
-    "zod": "^4.6.2"
+    "zod": "^4.6.2",
+    "us-atlas": "3.0.1"
   },
   "devDependencies": {
-    "playwright-core": "^1.63.0"
+    "playwright-core": "^1.63.0",
+    "wrangler": "4.40.0"
   }
 }

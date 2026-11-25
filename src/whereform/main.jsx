@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { feature, neighbors as topologyNeighbors } from 'topojson-client';
 import { geoArea, geoCentroid, geoContains, geoNaturalEarth1, geoPath } from 'd3-geo';
 import world from 'world-atlas/countries-110m.json';
-import { ArrowRight, Banknote, CarFront, Check, CircleHelp, Compass, Database, ExternalLink, Languages, Landmark, MapPin, Maximize2, Phone, RotateCcw, Ruler, Share2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowRight, Banknote, LayoutGrid, CarFront, Check, CircleHelp, Compass, Database, ExternalLink, Languages, Landmark, MapPin, Maximize2, Phone, RotateCcw, Ruler, Share2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import places from './data/places.json';
 import sources from './data/sources.json';
 import './styles.css';
@@ -159,7 +159,7 @@ function distanceToCountry(coordinates, country) {
 }
 
 function Header({ onHome, onHow, onSources }) {
-  return <header className="site-header"><button className="brand" onClick={onHome}>{logo()}<span>SHAPE<span>/</span>SIGNAL</span></button><div className="header-status"><span /> WHEREFORM / VERIFIED DATA</div><div className="header-actions"><button className="header-text-button" onClick={onSources}><Database size={17} /> SOURCES</button><button className="icon-button" onClick={onHow} aria-label="How to play"><CircleHelp size={21} /></button></div></header>;
+  return <header className="site-header"><button className="brand" onClick={onHome}>{logo()}<span>SHAPE<span>/</span>SIGNAL</span></button><div className="header-status"><span /> WHEREFORM / VERIFIED DATA</div><div className="header-actions"><a className="header-text-button header-link" href="../" aria-label="All games"><LayoutGrid size={17} /> ALL GAMES</a><button className="header-text-button" onClick={onSources}><Database size={17} /> SOURCES</button><button className="icon-button" onClick={onHow} aria-label="How to play"><CircleHelp size={21} /></button></div></header>;
 }
 
 function HowModal({ onClose }) {

@@ -70,6 +70,6 @@ const records = countries.map(([iso]) => {
   };
 });
 
-await mkdir(new URL('../src/data/', import.meta.url), { recursive: true });
-await writeFile(new URL('../src/data/places.json', import.meta.url), `${JSON.stringify({ schemaVersion: 1, generatedAt: retrievedAt, records }, null, 2)}\n`);
+await mkdir(new URL('../src/whereform/data/', import.meta.url), { recursive: true });
+await writeFile(new URL('../src/whereform/data/places.json', import.meta.url), `${JSON.stringify({ schemaVersion: 1, generatedAt: retrievedAt, records }, null, 2)}\n`);
 console.log(`Wrote ${records.length} source-backed place records.`);

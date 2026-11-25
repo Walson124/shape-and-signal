@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.log
 *-check.png
+.wrangler/
+artifacts/

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Whereto</title>
+    <meta name="description" content="Like when2meet, but for places. Share a map, everyone marks where works for them, and Whereto finds the spot that suits the whole group." />
+    <meta property="og:title" content="Whereto" />
+    <meta property="og:description" content="Find a place that works for everyone: trips, meeting rooms, or your own map." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="topbar"></header>
+
+    <!-- ===================================================== CREATE -->
+    <main id="create" class="page hidden">
+      <section class="intro">
+        <h1>Find a place that works for everyone.</h1>
+        <p class="muted">Like when2meet, but for places. Make a plan, send the link, and everyone marks the spots that work for them. Whereto shows where the group overlaps.</p>
+      </section>
+
+      <form id="create-form" class="card create-card" novalidate onsubmit="event.preventDefault()">
+        <div class="step">
+          <h2><span class="num">1</span>What are you planning?</h2>
+          <div class="kinds" id="kinds">
+            <button type="button" data-kind="travel"><span class="kicon">✈️</span><b>A trip</b><span class="muted">Where should we go?</span></button>
+            <button type="button" data-kind="meet"><span class="kicon">🏢</span><b>A meetup</b><span class="muted">Which room or place?</span></button>
+            <button type="button" data-kind="other"><span class="kicon">📍</span><b>Something else</b><span class="muted">Any map, any spots</span></button>
+          </div>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">2</span>Name it</h2>
+          <label class="field"><span>Plan name</span><input id="title" class="input" maxlength="80" required /></label>
+          <label class="field"><span>Note <span class="muted">(optional)</span></span><textarea id="note" class="input" maxlength="280" rows="2" placeholder="Dates, budget, anything people should know"></textarea></label>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">3</span>Pick a map</h2>
+          <div class="maps" id="maps"></div>
+
+          <div id="upload" class="upload hidden">
+            <label class="drop" id="drop">
+              <input type="file" id="file" accept="image/*" hidden />
+              <span class="drop-icon">🗺️</span>
+              <b>Upload a picture of your map</b>
+              <span class="muted">A floor plan, campus map, a screenshot of a city… PNG or JPG.</span>
+            </label>
+            <div id="editor" class="editor hidden">
+              <div class="editor-bar">
+                <div class="seg" id="edit-mode">
+                  <button type="button" data-v="spots" aria-pressed="true">Draw spots</button>
+                  <button type="button" data-v="grid" aria-pressed="false">Paint a grid</button>
+                </div>
+                <span class="spacer"></span>
+                <button type="button" class="btn small ghost" id="replace-img">Change picture</button>
+              </div>
+              <p class="muted small" id="edit-help"></p>
+              <div class="editor-stage" id="stage"></div>
+              <div id="grid-ctl" class="grid-ctl hidden">
+                <label>Grid size <input type="range" id="grid-cols" min="4" max="40" value="16" /></label>
+                <span class="mono" id="grid-size"></span>
+              </div>
+              <ol id="spot-list" class="spot-list"></ol>
+            </div>
+          </div>
+        </div>
+
+        <div class="create-foot">
+          <p id="create-error" class="error hidden" role="alert"></p>
+          <button class="btn primary big" id="create-btn" type="submit">Create plan</button>
+        </div>
+      </form>
+
+      <section id="recent" class="recent hidden">
+        <h3>Your recent plans</h3>
+        <ul id="recent-list"></ul>
+      </section>
+    </main>
+
+    <!-- ===================================================== PLAN -->
+    <main id="plan" class="page wide hidden">
+      <section class="plan-head">
+        <div class="plan-title">
+          <span class="pill" id="plan-kind"></span>
+          <h1 id="plan-name"></h1>
+          <p id="plan-note" class="muted"></p>
+        </div>
+        <div class="plan-share">
+          <button class="btn" id="copy-plan">Copy link</button>
+          <a class="btn ghost" href="./">New plan</a>
+        </div>
+      </section>
+
+      <section id="verdict" class="verdict card"></section>
+
+      <div class="plan-body">
+        <section class="map-pane card">
+          <div class="map-bar">
+            <div class="seg" id="view-mode">
+              <button type="button" data-v="mine">Your picks</button>
+              <button type="button" data-v="group">Everyone</button>
+            </div>
+            <div class="tools" id="tools">
+              <button type="button" data-tool="yes" class="tool yes"><i></i><span id="lbl-yes">Works</span></button>
+              <button type="button" data-tool="maybe" class="tool maybe"><i></i><span id="lbl-maybe">If needed</span></button>
+              <button type="button" data-tool="erase" class="tool erase"><i></i>Erase</button>
+              <button type="button" data-tool="move" class="tool move" title="Drag to move the map">✋ Move</button>
+            </div>
+            <div class="legend hidden" id="legend"><span>Fewer</span><i></i><span>Everyone</span></div>
+          </div>
+          <div class="map-stage" id="map-stage"><div class="loading muted">Loading map…</div></div>
+          <div class="map-foot muted small" id="map-foot"></div>
+        </section>
+
+        <aside class="side">
+          <section class="card side-card" id="me-card">
+            <h2 id="me-title">Add your picks</h2>
+            <form id="signin" class="signin" onsubmit="event.preventDefault()">
+              <label class="field"><span>Your name</span><input id="me-name" class="input" maxlength="24" autocomplete="nickname" required /></label>
+              <label class="field"><span>Password <span class="muted">(optional, stops others editing your picks)</span></span><input id="me-pw" class="input" type="password" maxlength="64" autocomplete="off" /></label>
+              <button class="btn primary">Start picking</button>
+              <p id="signin-error" class="error hidden" role="alert"></p>
+            </form>
+            <div id="me-box" class="me-box hidden">
+              <p class="small">Signed in as <b id="me-who"></b>. <button class="linkish" id="me-switch" type="button">Not you?</button></p>
+              <p class="small muted" id="me-help"></p>
+              <div class="me-stats"><span class="pill good" id="me-yes"></span><span class="pill warn" id="me-maybe"></span><span class="save-state small muted" id="save-state"></span></div>
+              <div class="me-actions"><button type="button" class="btn small ghost" id="me-clear">Clear my picks</button><button type="button" class="btn small ghost" id="me-forget">Remove me</button></div>
+            </div>
+          </section>
+
+          <section class="card side-card">
+            <h2>Best spots</h2>
+            <ol id="ranking" class="ranking"></ol>
+          </section>
+
+          <section class="card side-card">
+            <h2>People <span class="muted small" id="people-count"></span></h2>
+            <p class="small muted">Hover or tap someone to see their picks.</p>
+            <ul id="people" class="people"></ul>
+          </section>
+        </aside>
+      </div>
+      <div id="tip" class="tip hidden" role="tooltip"></div>
+    </main>
+
+    <main id="missing" class="page hidden">
+      <section class="intro"><h1>That plan doesn't exist</h1><p class="muted">Check the link, or start a new plan.</p><p><a class="btn primary" href="./">New plan</a></p></section>
+    </main>
+
+    <script type="module" src="../src/whereto/app.js"></script>
+  </body>
+</html>

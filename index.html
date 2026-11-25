@@ -3,13 +3,62 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f1eee6" />
-    <meta name="description" content="Whereform — recognize real places from the shapes and signals they leave behind." />
+    <title>Shape &amp; Signal</title>
+    <meta name="description" content="Small games and group tools that run in your browser: race a friend at Minesweeper, find a place that works for everyone with Whereto, or name the country in Whereform." />
+    <meta property="og:title" content="Shape &amp; Signal" />
+    <meta property="og:description" content="Small games and group tools that run in your browser." />
+    <meta property="og:type" content="website" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>Shape / Signal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <header class="topbar"></header>
+    <main class="hub">
+      <section class="hero">
+        <p class="eyebrow">Games &amp; tools for friends</p>
+        <h1>Open a tab, send a link, play together.</h1>
+        <p class="lede">Quick games you can race a friend at, and planners that settle "so where are we going?" No accounts, nothing to install.</p>
+      </section>
+
+      <section class="apps" aria-label="Apps">
+        <a class="app" href="./whereform/" style="--app: var(--whereform)">
+          <div class="thumb" id="thumb-whereform" aria-hidden="true"></div>
+          <div class="app-body">
+            <div class="app-tags"><span class="pill">Game</span><span class="pill">Daily</span><span class="pill">Solo</span></div>
+            <h2>Whereform</h2>
+            <p>Five real countries a day, described only by the signals they leave behind: neighbours, area, language, currency and more. Reveal clues if you're stuck, then tap it on the map. Faster guesses score more.</p>
+            <div class="modes"><span>Daily set</span><span>Free play</span></div>
+            <span class="go">Play today's set <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+
+        <a class="app" href="./mines/" style="--app: var(--mines)">
+          <div class="thumb" id="thumb-mines" aria-hidden="true"></div>
+          <div class="app-body">
+            <div class="app-tags"><span class="pill">Game</span><span class="pill">2–4 players</span><span class="pill">Real time</span></div>
+            <h2>Minesweeper Duel</h2>
+            <p>Race friends to clear a board. Play the same board or each your own, same size and mine count. First to clear it wins.</p>
+            <span class="go">Play <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+
+        <a class="app" href="./whereto/" style="--app: var(--whereto)">
+          <div class="thumb" id="thumb-whereto" aria-hidden="true"></div>
+          <div class="app-body">
+            <div class="app-tags"><span class="pill">Planner</span><span class="pill">Groups</span></div>
+            <h2>Whereto</h2>
+            <p>Like when2meet, but for places. Share a map, everyone marks where works for them, and Whereto shows the spot that suits the whole group.</p>
+            <div class="modes"><span>Where to travel</span><span>Where to meet</span><span>Your own map</span></div>
+            <span class="go">Start a plan <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+
+      </section>
+
+      <footer class="foot muted">More games on the way.</footer>
+    </main>
+    <script type="module" src="./src/hub/hub.js"></script>
   </body>
 </html>

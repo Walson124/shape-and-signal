@@ -15,7 +15,7 @@ const record = z.object({
   status: z.literal('source-verified'), provenance: z.array(sourceRef).min(2),
 });
 const dataset = z.object({ schemaVersion: z.literal(1), generatedAt: z.string().datetime(), records: z.array(record).min(20) });
-const raw = JSON.parse(await readFile(new URL('../src/data/places.json', import.meta.url), 'utf8'));
+const raw = JSON.parse(await readFile(new URL('../src/whereform/data/places.json', import.meta.url), 'utf8'));
 const parsed = dataset.parse(raw);
 const ids = parsed.records.flatMap((item) => [item.id, item.iso2, item.worldAtlasId]);
 if (new Set(ids).size !== ids.length) throw new Error('Duplicate place identifiers detected.');
